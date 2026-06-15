@@ -24,7 +24,7 @@ import {
     Sparkles,
     Info,
 } from "lucide-react";
-import { ID } from "appwrite";
+import { ID, Permission, Role } from "appwrite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -97,12 +97,12 @@ export default function AskQuestionPage() {
     }, [user, router]);
 
     // Title character count progress
-    const titleProgress = Math.min((title.length / 150) * 100, 100);
+    const titleProgress = Math.min((title.length / 100) * 100, 100);
     const titleQuality =
         title.length < 15 ? "too short" :
         title.length < 30 ? "okay" :
-        title.length < 80 ? "good" :
-        title.length < 150 ? "great" : "too long";
+        title.length < 60 ? "good" :
+        title.length < 100 ? "great" : "too long";
 
     const titleQualityColor =
         titleQuality === "too short" ? "text-zinc-500" :
@@ -207,7 +207,12 @@ export default function AskQuestionPage() {
         setError("");
 
         try {
-            let attachmentId = "none";
+            const docData: any = {
+                title: title.trim(),
+                content: content.trim(),
+                authorId: user.$id,
+                tags,
+            };
 
             if (attachment) {
                 const stored = await storage.createFile(
@@ -215,16 +220,17 @@ export default function AskQuestionPage() {
                     ID.unique(),
                     attachment
                 );
-                attachmentId = stored.$id;
+                docData.attachmentId = stored.$id;
             }
 
-            const doc = await databases.createDocument(db, questionCollection, ID.unique(), {
-                title: title.trim(),
-                content: content.trim(),
-                authorId: user.$id,
-                tags,
-                attachmentId,
+            const res = await fetch("/api/question", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(docData),
             });
+
+            const doc = await res.json();
+            if (!res.ok) throw new Error(doc.error || "Failed to create question");
 
             setSuccess(true);
             setTimeout(() => {
@@ -367,7 +373,7 @@ export default function AskQuestionPage() {
                                                 value={title}
                                                 onChange={(e) => setTitle(e.target.value)}
                                                 placeholder="e.g. How do I debounce a search input in React with hooks?"
-                                                maxLength={150}
+                                                maxLength={100}
                                                 className="h-12 rounded-xl border-white/10 bg-white/[0.04] text-base text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                                 onKeyDown={(e) => {
                                                     if (e.key === "Enter") nextStep();
@@ -393,7 +399,7 @@ export default function AskQuestionPage() {
                                                     </span>
                                                 </div>
                                                 <span className="text-xs text-zinc-600">
-                                                    {title.length}/150
+                                                    {title.length}/100
                                                 </span>
                                             </div>
 
