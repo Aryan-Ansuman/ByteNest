@@ -1,11 +1,20 @@
 import React from "react";
+import EditProfileClient from "./EditProfileClient";
+import { users } from "@/models/server/config";
+import { UserPrefs } from "@/store/Auth";
 
-const Page = () => {
+const Page = async ({ params }: { params: { userId: string; userSlug: string } }) => {
+    const user = await users.get<UserPrefs>(params.userId);
+
     return (
-        <div className="container mx-auto space-y-4 px-4 pb-20 pt-32">
-            <h1>Edit</h1>
-            <h2>Homework</h2>
-        </div>
+        <EditProfileClient
+            userId={params.userId}
+            userSlug={params.userSlug}
+            initialName={user.name}
+            initialEmail={user.email}
+            initialReputation={user.prefs?.reputation ?? 0}
+            createdAt={user.$createdAt}
+        />
     );
 };
 
