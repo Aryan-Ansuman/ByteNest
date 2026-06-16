@@ -1,10 +1,9 @@
-import Pagination from "@/components/Pagination";
-import QuestionCard from "@/components/QuestionCard";
 import { answerCollection, db, questionCollection, voteCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
 import React from "react";
+import QuestionsClient, { QuestionItem } from "./QuestionsClient";
 
 const Page = async ({
     params,
@@ -13,57 +12,67 @@ const Page = async ({
     params: { userId: string; userSlug: string };
     searchParams: { page?: string };
 }) => {
-    searchParams.page ||= "1";
+    const limit = 20;
+    const currentPage = Math.max(1, Number(searchParams.page ?? "1"));
 
-    const queries = [
+    // 1. Fetch the user for display name
+    const user = await users.get<UserPrefs>(params.userId);
+
+    // 2. Fetch paginated questions by this user
+    const questions = await databases.listDocuments(db, questionCollection, [
         Query.equal("authorId", params.userId),
         Query.orderDesc("$createdAt"),
-        Query.offset((+searchParams.page - 1) * 25),
-        Query.limit(25),
-    ];
+        Query.offset((currentPage - 1) * limit),
+        Query.limit(limit),
+    ]);
 
-    const questions = await databases.listDocuments(db, questionCollection, queries);
-
-    questions.documents = await Promise.all(
-        questions.documents.map(async ques => {
-            const [author, answers, votes] = await Promise.all([
-                users.get<UserPrefs>(ques.authorId),
-                databases.listDocuments(db, answerCollection, [
-                    Query.equal("questionId", ques.$id),
-                    Query.limit(1), // for optimization
+    // 3. Enrich each question with answer count and net vote count
+    const enriched: QuestionItem[] = await Promise.all(
+        questions.documents.map(async (q) => {
+            const [upvotes, downvotes, answers] = await Promise.all([
+                databases.listDocuments(db, voteCollection, [
+                    Query.equal("type", "question"),
+                    Query.equal("typeId", q.$id),
+                    Query.equal("voteStatus", "upvoted"),
+                    Query.limit(1),
                 ]),
                 databases.listDocuments(db, voteCollection, [
                     Query.equal("type", "question"),
-                    Query.equal("typeId", ques.$id),
-                    Query.limit(1), // for optimization
+                    Query.equal("typeId", q.$id),
+                    Query.equal("voteStatus", "downvoted"),
+                    Query.limit(1),
+                ]),
+                databases.listDocuments(db, answerCollection, [
+                    Query.equal("questionId", q.$id),
+                    Query.limit(1),
                 ]),
             ]);
 
             return {
-                ...ques,
+                $id: q.$id,
+                title: q.title as string,
+                content: q.content as string,
+                tags: (q.tags as string[]) ?? [],
+                $createdAt: q.$createdAt,
+                $updatedAt: q.$updatedAt,
+                authorId: q.authorId as string,
+                totalVotes: upvotes.total - downvotes.total,
                 totalAnswers: answers.total,
-                totalVotes: votes.total,
-                author: {
-                    $id: author.$id,
-                    reputation: author.prefs.reputation,
-                    name: author.name,
-                },
+                hasAcceptedAnswer: false,
             };
         })
     );
 
     return (
-        <div className="px-4">
-            <div className="mb-4">
-                <p>{questions.total} questions</p>
-            </div>
-            <div className="mb-4 max-w-3xl space-y-6">
-                {questions.documents.map(ques => (
-                    <QuestionCard key={ques.$id} ques={ques} />
-                ))}
-            </div>
-            <Pagination total={questions.total} limit={25} />
-        </div>
+        <QuestionsClient
+            questions={enriched}
+            total={questions.total}
+            currentPage={currentPage}
+            limit={limit}
+            profileName={user.name}
+            userId={params.userId}
+            userSlug={params.userSlug}
+        />
     );
 };
 
