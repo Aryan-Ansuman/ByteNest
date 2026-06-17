@@ -84,12 +84,6 @@ interface ProfileData {
 
 type Tab = "overview" | "questions" | "answers" | "votes";
 
-const sidebarItems = [
-    { label: "Home", icon: HomeIcon, href: "/" },
-    { label: "Questions", icon: Tags, href: "/questions" },
-    { label: "Profile", icon: UserRound, href: "#" },
-    { label: "Bookmarks", icon: Bookmark, href: "#" },
-];
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Overview", icon: <BarChart3 className="size-4" /> },
@@ -126,136 +120,69 @@ export default function UserProfileClient({ profile }: { profile: ProfileData })
             : { label: "Expert", color: "text-amber-400", bg: "bg-amber-900/30" };
 
     return (
-        <div className="min-h-screen bg-[#080808] text-zinc-100">
-            <TopNav />
+        <>
+            {/* ── Profile Hero ── */}
+            <ProfileHero
+                profile={profile}
+                isOwnProfile={isOwnProfile}
+                reputationLevel={reputationLevel}
+            />
 
-            <div className="mx-auto flex max-w-[1440px]">
-                {/* ── Desktop Sidebar ── */}
-                <aside className="fixed left-0 top-16 hidden h-[calc(100vh-4rem)] w-60 border-r border-white/10 bg-[#080808] px-4 py-6 lg:block">
-                    <nav className="space-y-1">
-                        {sidebarItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-zinc-500 transition duration-200 hover:bg-white/[0.05] hover:text-zinc-100"
-                                >
-                                    <Icon className="size-4" />
-                                    <span>{item.label}</span>
-                                </Link>
-                            );
-                        })}
-                    </nav>
+            {/* ── Stats Row ── */}
+            <StatsRow profile={profile} />
 
-                    {/* Tag expertise sidebar */}
-                    {tagFrequency.length > 0 && (
-                        <div className="mt-8">
-                            <p className="mb-3 px-3 text-xs font-medium uppercase tracking-widest text-zinc-600">
-                                Top Tags
-                            </p>
-                            {tagFrequency.map(([tag, count]) => (
-                                <Link
-                                    key={tag}
-                                    href={`/questions?tag=${tag}`}
-                                    className="flex h-8 items-center justify-between gap-2 rounded-lg px-3 text-xs text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300"
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <Hash className="size-3 text-[#a7c8b3]/60" />
-                                        {tag}
-                                    </span>
-                                    <span className="text-zinc-700">{count}×</span>
-                                </Link>
-                            ))}
-                        </div>
+            {/* ── Tab Bar ── */}
+            <div className="mt-8 flex items-center gap-0 border-b border-white/10">
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                            "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition duration-200",
+                            activeTab === tab.id
+                                ? "text-[#a7c8b3]"
+                                : "text-zinc-500 hover:text-zinc-300"
+                        )}
+                    >
+                        {tab.icon}
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        {activeTab === tab.id && (
+                            <motion.div
+                                layoutId="profile-tab-indicator"
+                                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#a7c8b3]"
+                                transition={{ duration: 0.18, ease: "easeOut" }}
+                            />
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* ── Tab Panels ── */}
+            <div className="mt-6">
+                <AnimatePresence mode="wait">
+                    {activeTab === "overview" && (
+                        <TabPanel key="overview">
+                            <OverviewTab profile={profile} tagFrequency={tagFrequency} />
+                        </TabPanel>
                     )}
-                </aside>
-
-                {/* ── Main Content ── */}
-                <main className="w-full px-4 pb-24 pt-8 md:px-8 lg:ml-60 lg:px-12">
-                    <div className="mx-auto max-w-4xl">
-
-                        {/* ── Profile Hero ── */}
-                        <ProfileHero
-                            profile={profile}
-                            isOwnProfile={isOwnProfile}
-                            reputationLevel={reputationLevel}
-                        />
-
-                        {/* ── Stats Row ── */}
-                        <StatsRow profile={profile} />
-
-                        {/* ── Tab Bar ── */}
-                        <div className="mt-8 flex items-center gap-0 border-b border-white/10">
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={cn(
-                                        "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition duration-200",
-                                        activeTab === tab.id
-                                            ? "text-[#a7c8b3]"
-                                            : "text-zinc-500 hover:text-zinc-300"
-                                    )}
-                                >
-                                    {tab.icon}
-                                    <span className="hidden sm:inline">{tab.label}</span>
-                                    {activeTab === tab.id && (
-                                        <motion.div
-                                            layoutId="profile-tab-indicator"
-                                            className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#a7c8b3]"
-                                            transition={{ duration: 0.18, ease: "easeOut" }}
-                                        />
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* ── Tab Panels ── */}
-                        <div className="mt-6">
-                            <AnimatePresence mode="wait">
-                                {activeTab === "overview" && (
-                                    <TabPanel key="overview">
-                                        <OverviewTab profile={profile} tagFrequency={tagFrequency} />
-                                    </TabPanel>
-                                )}
-                                {activeTab === "questions" && (
-                                    <TabPanel key="questions">
-                                        <QuestionsTab questions={profile.questions} total={profile.totalQuestions} />
-                                    </TabPanel>
-                                )}
-                                {activeTab === "answers" && (
-                                    <TabPanel key="answers">
-                                        <AnswersTab answers={profile.answers} total={profile.totalAnswers} />
-                                    </TabPanel>
-                                )}
-                                {activeTab === "votes" && (
-                                    <TabPanel key="votes">
-                                        <VotesTab votes={profile.votes} total={profile.totalVotes} />
-                                    </TabPanel>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
-                </main>
+                    {activeTab === "questions" && (
+                        <TabPanel key="questions">
+                            <QuestionsTab questions={profile.questions} total={profile.totalQuestions} />
+                        </TabPanel>
+                    )}
+                    {activeTab === "answers" && (
+                        <TabPanel key="answers">
+                            <AnswersTab answers={profile.answers} total={profile.totalAnswers} />
+                        </TabPanel>
+                    )}
+                    {activeTab === "votes" && (
+                        <TabPanel key="votes">
+                            <VotesTab votes={profile.votes} total={profile.totalVotes} />
+                        </TabPanel>
+                    )}
+                </AnimatePresence>
             </div>
-
-            {/* ── Mobile Bottom Nav ── */}
-            <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-2xl border border-white/10 bg-[#101010]/90 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
-                {sidebarItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                        <Link
-                            key={item.label}
-                            href={item.href}
-                            className="flex size-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-100"
-                        >
-                            <Icon className="size-4" />
-                        </Link>
-                    );
-                })}
-            </div>
-        </div>
+        </>
     );
 }
 
@@ -799,45 +726,3 @@ function EmptySlate({ message }: { message: string }) {
     );
 }
 
-function TopNav() {
-    return (
-        <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#080808]/85 backdrop-blur-xl">
-            <div className="mx-auto grid h-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 md:gap-6 md:px-6 lg:grid-cols-[240px_minmax(320px,720px)_auto]">
-                <Link href="/" className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-[#a7c8b3]">
-                        B
-                    </span>
-                    <span className="hidden text-sm font-semibold text-zinc-100 sm:inline">
-                        ByteNest
-                    </span>
-                </Link>
-
-                <div className="relative mx-auto w-full max-w-2xl">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
-                    <Input
-                        aria-label="Search questions"
-                        placeholder="Search questions, tags, or authors"
-                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition duration-200 hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                                window.location.href = `/questions?search=${encodeURIComponent(
-                                    e.currentTarget.value.trim()
-                                )}`;
-                            }
-                        }}
-                    />
-                </div>
-
-                <Button
-                    asChild
-                    className="h-10 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-3 text-sm font-medium text-[#08100b] shadow-none transition duration-200 hover:bg-[#b4d6bf] md:px-4"
-                >
-                    <Link href="/questions/ask">
-                        <Plus className="size-4" />
-                        <span className="hidden sm:inline">Ask Question</span>
-                    </Link>
-                </Button>
-            </div>
-        </header>
-    );
-}

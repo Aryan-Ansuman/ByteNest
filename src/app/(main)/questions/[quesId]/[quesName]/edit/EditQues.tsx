@@ -52,12 +52,7 @@ const TAG_SUGGESTIONS = [
     "testing", "deployment", "prisma", "graphql", "websocket",
 ];
 
-const sidebarItems = [
-    { label: "Home", icon: HomeIcon, href: "/" },
-    { label: "Tags", icon: Tags, href: "/questions?tag=" },
-    { label: "Profile", icon: UserRound, href: "/users" },
-    { label: "Bookmarks", icon: Bookmark, href: "#" },
-];
+
 
 type ActiveTab = "edit" | "preview";
 
@@ -270,78 +265,8 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
         titleQuality === "great" ? "text-emerald-400" : "text-red-400";
 
     return (
-        <div className="min-h-screen bg-[#080808] text-zinc-100">
-            {/* ── Top Nav ── */}
-            <TopNav />
-
-            <div className="mx-auto flex max-w-[1440px]">
-                {/* ── Sidebar ── */}
-                <aside className="fixed left-0 top-16 hidden h-[calc(100vh-4rem)] w-60 border-r border-white/10 bg-[#080808] px-4 py-6 lg:block">
-                    <nav className="space-y-1">
-                        {sidebarItems.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                                <Link
-                                    key={item.label}
-                                    href={item.href}
-                                    className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-zinc-500 transition duration-200 hover:bg-white/[0.05] hover:text-zinc-100"
-                                >
-                                    <Icon className="size-4" />
-                                    <span>{item.label}</span>
-                                </Link>
-                            );
-                        })}
-                    </nav>
-
-                    {/* Edit tips */}
-                    <div className="mt-8 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                        <div className="mb-3 flex items-center gap-2">
-                            <Info className="size-4 text-[#a7c8b3]" />
-                            <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-                                Edit tips
-                            </span>
-                        </div>
-                        <ul className="space-y-2 text-xs text-zinc-500">
-                            <li className="flex gap-2">
-                                <span className="text-[#a7c8b3]">›</span>
-                                Fix typos, add details, or clarify the problem
-                            </li>
-                            <li className="flex gap-2">
-                                <span className="text-[#a7c8b3]">›</span>
-                                Keep the original intent of the question
-                            </li>
-                            <li className="flex gap-2">
-                                <span className="text-[#a7c8b3]">›</span>
-                                Update tags if the topic changed
-                            </li>
-                            <li className="flex gap-2">
-                                <span className="text-[#a7c8b3]">›</span>
-                                Add new code snippets or error messages
-                            </li>
-                        </ul>
-                    </div>
-
-                    {/* Change summary */}
-                    {changedFields.length > 0 && (
-                        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-amber-500/70">
-                                Pending changes
-                            </p>
-                            <ul className="space-y-1">
-                                {changedFields.map((f) => (
-                                    <li key={f} className="flex items-center gap-2 text-xs text-amber-400/80">
-                                        <span className="size-1.5 rounded-full bg-amber-400/60" />
-                                        {f}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </aside>
-
-                {/* ── Main ── */}
-                <main className="w-full px-4 pb-24 pt-8 md:px-8 lg:ml-60 lg:px-12">
-                    <div className="mx-auto max-w-3xl">
+        <div className="w-full">
+            <div className="mx-auto max-w-3xl">
 
                         {/* ── Header ── */}
                         <div className="mb-8">
@@ -784,62 +709,10 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                             </div>
                         </div>
                     </div>
-                </main>
-            </div>
-
-            {/* Mobile Nav */}
-            <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-2xl border border-white/10 bg-[#101010]/90 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
-                {sidebarItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                        <Link
-                            key={item.label}
-                            href={item.href}
-                            className="flex size-10 items-center justify-center rounded-xl text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-100"
-                        >
-                            <Icon className="size-4" />
-                        </Link>
-                    );
-                })}
-            </div>
         </div>
     );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function TopNav() {
-    return (
-        <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#080808]/85 backdrop-blur-xl">
-            <div className="mx-auto grid h-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 md:gap-6 md:px-6 lg:grid-cols-[240px_minmax(320px,720px)_auto]">
-                <Link href="/" className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-[#a7c8b3]">
-                        B
-                    </span>
-                    <span className="hidden text-sm font-semibold text-zinc-100 sm:inline">ByteNest</span>
-                </Link>
-
-                <div className="relative mx-auto w-full max-w-2xl">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
-                    <Input
-                        placeholder="Search questions, tags, or authors"
-                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
-                    />
-                </div>
-
-                <Button
-                    asChild
-                    className="h-10 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-3 text-sm font-medium text-[#08100b] shadow-none transition hover:bg-[#b4d6bf] md:px-4"
-                >
-                    <Link href="/questions/ask">
-                        <Plus className="size-4" />
-                        <span className="hidden sm:inline">Ask Question</span>
-                    </Link>
-                </Button>
-            </div>
-        </header>
-    );
-}
 
 function SectionCard({ icon, title, description, badge, badgeColor, children }: { icon: React.ReactNode, title: string, description: string, badge?: string, badgeColor?: "red" | "amber", children: React.ReactNode }) {
     return (

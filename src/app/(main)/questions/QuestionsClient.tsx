@@ -5,23 +5,17 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-    Bookmark,
     Clock3,
     Flame,
-    HomeIcon,
     MessageSquare,
     Plus,
     Search,
-    Tags,
-    UserRound,
     ChevronLeft,
     ChevronRight,
     MessageCircle,
-    ArrowUp,
     Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
@@ -56,13 +50,6 @@ interface Props {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const sidebarItems = [
-    { label: "Home", icon: HomeIcon, href: "/" },
-    { label: "Tags", icon: Tags, href: "/questions?tag=" },
-    { label: "Profile", icon: UserRound, href: "/users" },
-    { label: "Bookmarks", icon: Bookmark, href: "#" },
-];
-
 const filters = [
     { label: "Newest", icon: Clock3 },
     { label: "Most Voted", icon: Flame },
@@ -84,7 +71,6 @@ export default function QuestionsClient({
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    const [search, setSearch] = React.useState(initialSearch);
     const [activeFilter, setActiveFilter] = React.useState(initialFilter);
     const [isTransitioning, setIsTransitioning] = React.useState(false);
 
@@ -109,11 +95,6 @@ export default function QuestionsClient({
         setTimeout(() => setIsTransitioning(false), 300);
     };
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        navigate({ search: search || undefined, page: "1" });
-    };
-
     const handleFilterChange = (f: string) => {
         setActiveFilter(f);
     };
@@ -123,252 +104,120 @@ export default function QuestionsClient({
     };
 
     return (
-        <div className="min-h-screen bg-[#080808] text-zinc-100">
-            {/* ── Top Nav ── */}
-            <TopNav
-                search={search}
-                onSearchChange={setSearch}
-                onSearchSubmit={handleSearch}
-            />
+        <>
+            {/* ── Page Header ── */}
+            <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    {initialTag ? (
+                        <div className="mb-1 flex items-center gap-2">
+                            <Tag className="size-3.5 text-[#a7c8b3]" />
+                            <span className="text-sm font-medium text-[#a7c8b3]">
+                                #{initialTag}
+                            </span>
+                            <Link
+                                href="/questions"
+                                className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+                            >
+                                clear
+                            </Link>
+                        </div>
+                    ) : (
+                        <p className="text-sm font-medium text-[#a7c8b3]">Questions</p>
+                    )}
+                    <h1 className="mt-1 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
+                        {initialSearch
+                            ? `Results for "${initialSearch}"`
+                            : initialTag
+                            ? `Tagged: ${initialTag}`
+                            : "All Questions"}
+                    </h1>
+                    <p className="mt-1 text-sm text-zinc-500">
+                        {total.toLocaleString()} question{total !== 1 ? "s" : ""}
+                    </p>
+                </div>
 
-            <div className="mx-auto flex max-w-[1440px]">
-                {/* ── Desktop Sidebar ── */}
-                <DesktopSidebar />
+                {/* ── Filter Tabs ── */}
+                <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                    {filters.map((f) => (
+                        <FilterTab
+                            key={f.label}
+                            filter={f}
+                            isActive={activeFilter === f.label}
+                            onClick={() => handleFilterChange(f.label)}
+                        />
+                    ))}
+                </div>
+            </section>
 
-                {/* ── Main Content ── */}
-                <main className="w-full px-4 pb-20 pt-8 md:px-8 lg:ml-60 lg:px-12">
-                    <div className="mx-auto max-w-4xl">
-                        {/* ── Page Header ── */}
-                        <section className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                            <div>
-                                {initialTag ? (
-                                    <div className="mb-1 flex items-center gap-2">
-                                        <Tag className="size-3.5 text-[#a7c8b3]" />
-                                        <span className="text-sm font-medium text-[#a7c8b3]">
-                                            #{initialTag}
-                                        </span>
-                                        <Link
-                                            href="/questions"
-                                            className="text-xs text-zinc-500 hover:text-zinc-300 underline"
-                                        >
-                                            clear
-                                        </Link>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm font-medium text-[#a7c8b3]">Questions</p>
-                                )}
-                                <h1 className="mt-1 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-                                    {initialSearch
-                                        ? `Results for "${initialSearch}"`
-                                        : initialTag
-                                        ? `Tagged: ${initialTag}`
-                                        : "All Questions"}
-                                </h1>
-                                <p className="mt-1 text-sm text-zinc-500">
-                                    {total.toLocaleString()} question{total !== 1 ? "s" : ""}
-                                </p>
-                            </div>
+            {/* ── Search hint when active ── */}
+            {initialSearch && (
+                <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                    <Search className="size-4 text-zinc-500" />
+                    <span className="text-sm text-zinc-400">
+                        Searching for{" "}
+                        <span className="font-medium text-zinc-200">
+                            &ldquo;{initialSearch}&rdquo;
+                        </span>
+                    </span>
+                    <button
+                        onClick={() => {
+                            navigate({ search: undefined, page: "1" });
+                        }}
+                        className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 underline"
+                    >
+                        clear
+                    </button>
+                </div>
+            )}
 
-                            {/* ── Filter Tabs ── */}
-                            <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
-                                {filters.map((f) => (
-                                    <FilterTab
-                                        key={f.label}
-                                        filter={f}
-                                        isActive={activeFilter === f.label}
-                                        onClick={() => handleFilterChange(f.label)}
-                                    />
-                                ))}
-                            </div>
-                        </section>
+            {/* ── Question List ── */}
+            <section className="space-y-3">
+                <AnimatePresence initial={false} mode="wait">
+                    {isTransitioning ? (
+                        <motion.div
+                            key="skeletons"
+                            className="space-y-3"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            {Array.from({ length: 5 }).map((_, i) => (
+                                <CardSkeleton key={i} />
+                            ))}
+                        </motion.div>
+                    ) : displayedQuestions.length === 0 ? (
+                        <EmptyState search={initialSearch} tag={initialTag} />
+                    ) : (
+                        <motion.div
+                            key={`${activeFilter}-${initialSearch}-${currentPage}`}
+                            className="space-y-3"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.18, ease: "easeOut" }}
+                        >
+                            {displayedQuestions.map((q) => (
+                                <QuestionCard key={q.$id} question={q} />
+                            ))}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </section>
 
-                        {/* ── Search hint when active ── */}
-                        {initialSearch && (
-                            <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
-                                <Search className="size-4 text-zinc-500" />
-                                <span className="text-sm text-zinc-400">
-                                    Searching for{" "}
-                                    <span className="font-medium text-zinc-200">
-                                        &ldquo;{initialSearch}&rdquo;
-                                    </span>
-                                </span>
-                                <button
-                                    onClick={() => {
-                                        setSearch("");
-                                        navigate({ search: undefined, page: "1" });
-                                    }}
-                                    className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 underline"
-                                >
-                                    clear
-                                </button>
-                            </div>
-                        )}
-
-                        {/* ── Question List ── */}
-                        <section className="space-y-3">
-                            <AnimatePresence initial={false} mode="wait">
-                                {isTransitioning ? (
-                                    <motion.div
-                                        key="skeletons"
-                                        className="space-y-3"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.15 }}
-                                    >
-                                        {Array.from({ length: 5 }).map((_, i) => (
-                                            <CardSkeleton key={i} />
-                                        ))}
-                                    </motion.div>
-                                ) : displayedQuestions.length === 0 ? (
-                                    <EmptyState search={initialSearch} tag={initialTag} />
-                                ) : (
-                                    <motion.div
-                                        key={`${activeFilter}-${initialSearch}-${currentPage}`}
-                                        className="space-y-3"
-                                        initial={{ opacity: 0, y: 8 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -4 }}
-                                        transition={{ duration: 0.18, ease: "easeOut" }}
-                                    >
-                                        {displayedQuestions.map((q) => (
-                                            <QuestionCard key={q.$id} question={q} />
-                                        ))}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </section>
-
-                        {/* ── Pagination ── */}
-                        {totalPages > 1 && (
-                            <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={handlePageChange}
-                            />
-                        )}
-                    </div>
-                </main>
-            </div>
-
-            {/* ── Mobile Bottom Nav ── */}
-            <MobileNav />
-        </div>
+            {/* ── Pagination ── */}
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                />
+            )}
+        </>
     );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function TopNav({
-    search,
-    onSearchChange,
-    onSearchSubmit,
-}: {
-    search: string;
-    onSearchChange: (v: string) => void;
-    onSearchSubmit: (e: React.FormEvent) => void;
-}) {
-    return (
-        <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#080808]/85 backdrop-blur-xl">
-            <div className="mx-auto grid h-full max-w-[1440px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 md:gap-6 md:px-6 lg:grid-cols-[240px_minmax(320px,720px)_auto]">
-                <Link href="/" className="flex items-center gap-3">
-                    <span className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-[#a7c8b3]">
-                        B
-                    </span>
-                    <span className="hidden text-sm font-semibold text-zinc-100 sm:inline">
-                        ByteNest
-                    </span>
-                </Link>
-
-                <form onSubmit={onSearchSubmit} className="relative mx-auto w-full max-w-2xl">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
-                    <Input
-                        aria-label="Search questions"
-                        placeholder="Search questions, tags, or authors"
-                        value={search}
-                        onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition duration-200 ease-out hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
-                    />
-                </form>
-
-                <Button
-                    asChild
-                    className="h-10 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-3 text-sm font-medium text-[#08100b] shadow-none transition duration-200 ease-out hover:bg-[#b4d6bf] md:px-4"
-                >
-                    <Link href="/questions/ask">
-                        <Plus className="size-4" />
-                        <span className="hidden sm:inline">Ask Question</span>
-                    </Link>
-                </Button>
-            </div>
-        </header>
-    );
-}
-
-function DesktopSidebar() {
-    return (
-        <aside className="fixed left-0 top-16 hidden h-[calc(100vh-4rem)] w-60 border-r border-white/10 bg-[#080808] px-4 py-6 lg:block">
-            <nav className="space-y-1">
-                {sidebarItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = item.label === "Questions" || item.href === "/questions";
-                    return (
-                        <Link
-                            key={item.label}
-                            href={item.href}
-                            className={cn(
-                                "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm text-zinc-500 transition duration-200 ease-out hover:bg-white/[0.05] hover:text-zinc-100",
-                                isActive && "border border-white/10 bg-white/[0.07] text-zinc-100"
-                            )}
-                        >
-                            <Icon
-                                className={cn("size-4", isActive && "text-[#a7c8b3]")}
-                            />
-                            <span>{item.label}</span>
-                        </Link>
-                    );
-                })}
-            </nav>
-
-            {/* Tag cloud shortcut */}
-            <div className="mt-8">
-                <p className="mb-3 px-3 text-xs font-medium uppercase tracking-widest text-zinc-600">
-                    Popular Tags
-                </p>
-                {["javascript", "react", "next.js", "typescript", "css"].map((tag) => (
-                    <Link
-                        key={tag}
-                        href={`/questions?tag=${tag}`}
-                        className="flex h-8 items-center gap-2 rounded-lg px-3 text-xs text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300"
-                    >
-                        <Tag className="size-3 text-[#a7c8b3]/60" />
-                        {tag}
-                    </Link>
-                ))}
-            </div>
-        </aside>
-    );
-}
-
-function MobileNav() {
-    return (
-        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-2xl border border-white/10 bg-[#101010]/90 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
-            {sidebarItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                    <Link
-                        key={item.label}
-                        href={item.href}
-                        aria-label={item.label}
-                        className="flex size-10 items-center justify-center rounded-xl text-zinc-500 transition duration-200 ease-out hover:bg-white/[0.06] hover:text-zinc-100"
-                    >
-                        <Icon className="size-4" />
-                    </Link>
-                );
-            })}
-        </div>
-    );
-}
 
 function FilterTab({
     filter,
