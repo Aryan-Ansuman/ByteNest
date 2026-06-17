@@ -77,13 +77,18 @@ export const useAuthStore = create<IAuthStore>()(
           
           return { success: true}
 
-        } catch (error) {
+        } catch (error: any) {
+          if (error?.message?.includes("Creation of a session is prohibited when a session is active")) {
+            try {
+              await account.deleteSession("current");
+              return await get().login(email, password);
+            } catch (_) {}
+          }
 
           console.log(error)
           return {
             success: false,
             error: error instanceof AppwriteException ? error: null,
-            
           }
         }
       },
@@ -92,12 +97,18 @@ export const useAuthStore = create<IAuthStore>()(
         try {
           await account.create(ID.unique(), email, password, name)
           return {success: true}
-        } catch (error) {
+        } catch (error: any) {
+          if (error?.message?.includes("Creation of a session is prohibited when a session is active")) {
+            try {
+              await account.deleteSession("current");
+              return await get().createAccount(name, email, password);
+            } catch (_) {}
+          }
+
           console.log(error)
           return {
             success: false,
             error: error instanceof AppwriteException ? error: null,
-            
           }
         }
       },
