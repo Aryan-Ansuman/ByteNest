@@ -16,6 +16,12 @@ import QuestionDetailPage from "./_components/QuestionDetailPage";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// Maximum votes we ever expect on a single item.
+// Appwrite's `total` field is accurate regardless of `limit`,
+// but using a realistic ceiling makes the intent explicit and
+// keeps the code correct if that behaviour ever changes.
+const VOTE_LIMIT = 5000;
+
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
     const [question, answers, upvotes, downvotes, comments] = await Promise.all([
         databases.getDocument(db, questionCollection, params.quesId),
@@ -27,13 +33,13 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             Query.equal("typeId", params.quesId),
             Query.equal("type", "question"),
             Query.equal("voteStatus", "upvoted"),
-            Query.limit(1), // for optimization
+            Query.limit(VOTE_LIMIT),
         ]),
         databases.listDocuments(db, voteCollection, [
             Query.equal("typeId", params.quesId),
             Query.equal("type", "question"),
             Query.equal("voteStatus", "downvoted"),
-            Query.limit(1), // for optimization
+            Query.limit(VOTE_LIMIT),
         ]),
         databases.listDocuments(db, commentCollection, [
             Query.equal("type", "question"),
@@ -92,13 +98,13 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                         Query.equal("typeId", answer.$id),
                         Query.equal("type", "answer"),
                         Query.equal("voteStatus", "upvoted"),
-                        Query.limit(1), // for optimization
+                        Query.limit(VOTE_LIMIT),
                     ]),
                     databases.listDocuments(db, voteCollection, [
                         Query.equal("typeId", answer.$id),
                         Query.equal("type", "answer"),
                         Query.equal("voteStatus", "downvoted"),
-                        Query.limit(1), // for optimization
+                        Query.limit(VOTE_LIMIT),
                     ]),
                 ]);
 
