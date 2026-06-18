@@ -1,33 +1,32 @@
 import { questionCollection, db, questionAttachmentBucket, answerCollection, voteCollection, commentCollection } from "@/models/name";
-import { databases, storage, users } from "@/models/server/config";
-import { UserPrefs } from "@/store/Auth";
+import { databases, storage } from "@/models/server/config";
 import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
+import { ApiValidationError, parseJsonBody, requireString, requireStringArray } from "@/lib/api-validation";
+import { adjustReputation } from "@/lib/reputation";
 
 export async function POST(request: NextRequest) {
     try {
-        const { title, content, authorId, tags, attachmentId } = await request.json();
+        const body = await parseJsonBody(request);
 
-        const docData: any = {
-            title,
-            content,
-            authorId,
-            tags,
-        };
+        const title = requireString(body.title, "title", { min: 15, max: 100 });
+        const content = requireString(body.content, "content", { min: 30, max: 10000 });
+        const authorId = requireString(body.authorId, "authorId");
+        const tags = requireStringArray(body.tags, "tags", { min: 1, max: 5, itemMax: 25 });
 
-        if (attachmentId) {
-            docData.attachmentId = attachmentId;
+        const docData: Record<string, unknown> = { title, content, authorId, tags };
+
+        if (body.attachmentId !== undefined) {
+            docData.attachmentId = requireString(body.attachmentId, "attachmentId");
         }
 
-        const response = await databases.createDocument(
-            db,
-            questionCollection,
-            ID.unique(),
-            docData
-        );
+        const response = await databases.createDocument(db, questionCollection, ID.unique(), docData);
 
         return NextResponse.json(response, { status: 201 });
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
             { error: error?.message || "Error creating question" },
             { status: error?.status || error?.code || 500 }
@@ -35,32 +34,73 @@ export async function POST(request: NextRequest) {
     }
 }
 
+/**
+ * PATCH /api/question
+ * Requires { questionId, authorId } plus any of title/content/tags/
+ * attachmentId/oldAttachmentId. authorId must match the question's author —
+ * previously this endpoint had no authorization check at all, and blindly
+ * overwrote title/content/tags even when a caller hadn't sent them.
+ */
 export async function PATCH(request: NextRequest) {
     try {
-        const { questionId, title, content, tags, attachmentId, oldAttachmentId } = await request.json();
+        const body = await parseJsonBody(request);
 
-        const docData: any = { title, content, tags };
+        const questionId = requireString(body.questionId, "questionId");
+        const authorId = requireString(body.authorId, "authorId");
 
-        if (attachmentId && oldAttachmentId && oldAttachmentId !== attachmentId) {
-            try {
-                await storage.deleteFile(questionAttachmentBucket, oldAttachmentId);
-            } catch {
-                // Old file might not exist, continue
+        const question = await databases.getDocument(db, questionCollection, questionId);
+        if (question.authorId !== authorId) {
+            return NextResponse.json(
+                { error: "You are not authorized to edit this question" },
+                { status: 403 }
+            );
+        }
+
+        const docData: Record<string, unknown> = {};
+
+        if (body.title !== undefined) {
+            docData.title = requireString(body.title, "title", { min: 15, max: 100 });
+        }
+        if (body.content !== undefined) {
+            docData.content = requireString(body.content, "content", { min: 30, max: 10000 });
+        }
+        if (body.tags !== undefined) {
+            docData.tags = requireStringArray(body.tags, "tags", { min: 1, max: 5, itemMax: 25 });
+        }
+
+        const attachmentId = body.attachmentId;
+        const oldAttachmentId = body.oldAttachmentId;
+
+        if (attachmentId !== undefined) {
+            if (typeof attachmentId !== "string" || !attachmentId.trim()) {
+                return NextResponse.json({ error: "attachmentId must be a string" }, { status: 400 });
             }
-            docData.attachmentId = attachmentId;
-        } else if (attachmentId) {
+            if (
+                typeof oldAttachmentId === "string" &&
+                oldAttachmentId &&
+                oldAttachmentId !== attachmentId &&
+                oldAttachmentId !== "none"
+            ) {
+                try {
+                    await storage.deleteFile(questionAttachmentBucket, oldAttachmentId);
+                } catch {
+                    // Old file might not exist, continue
+                }
+            }
             docData.attachmentId = attachmentId;
         }
 
-        const response = await databases.updateDocument(
-            db,
-            questionCollection,
-            questionId,
-            docData
-        );
+        if (Object.keys(docData).length === 0) {
+            return NextResponse.json({ error: "No fields to update" }, { status: 400 });
+        }
+
+        const response = await databases.updateDocument(db, questionCollection, questionId, docData);
 
         return NextResponse.json(response, { status: 200 });
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
             { error: error?.message || "Error updating question" },
             { status: error?.status || error?.code || 500 }
@@ -68,28 +108,29 @@ export async function PATCH(request: NextRequest) {
     }
 }
 
+/**
+ * DELETE /api/question
+ * authorId is now required (not optionally checked). Reputation cleanup
+ * undoes the question author's vote-based reputation plus, for every
+ * answer, both the flat +1 its author got for posting AND the net
+ * reputation that answer accrued from its own votes — previously only the
+ * flat +1 per answer was undone.
+ */
 export async function DELETE(request: NextRequest) {
     try {
-        const { questionId, authorId } = await request.json();
-
-        if (!questionId) {
-            return NextResponse.json(
-                { error: "questionId is required" },
-                { status: 400 }
-            );
-        }
+        const body = await parseJsonBody(request);
+        const questionId = requireString(body.questionId, "questionId");
+        const authorId = requireString(body.authorId, "authorId");
 
         const question = await databases.getDocument(db, questionCollection, questionId);
 
-        // Only the original author may delete their question
-        if (authorId && question.authorId !== authorId) {
+        if (question.authorId !== authorId) {
             return NextResponse.json(
                 { error: "You are not authorized to delete this question" },
                 { status: 403 }
             );
         }
 
-        // Fetch everything that hangs off this question so we can clean it up
         const [answers, questionVotes, questionComments] = await Promise.all([
             databases.listDocuments(db, answerCollection, [
                 Query.equal("questionId", questionId),
@@ -107,7 +148,6 @@ export async function DELETE(request: NextRequest) {
             ]),
         ]);
 
-        // For each answer, gather its own votes + comments so those get cleaned up too
         const perAnswerCleanup = await Promise.all(
             answers.documents.map(async (answer) => {
                 const [answerVotes, answerComments] = await Promise.all([
@@ -126,35 +166,22 @@ export async function DELETE(request: NextRequest) {
             })
         );
 
-        // Delete answer-level votes/comments, then the answers themselves
         await Promise.all(
             perAnswerCleanup.flatMap(({ answerVotes, answerComments }) => [
-                ...answerVotes.documents.map((v) =>
-                    databases.deleteDocument(db, voteCollection, v.$id)
-                ),
-                ...answerComments.documents.map((c) =>
-                    databases.deleteDocument(db, commentCollection, c.$id)
-                ),
+                ...answerVotes.documents.map((v) => databases.deleteDocument(db, voteCollection, v.$id)),
+                ...answerComments.documents.map((c) => databases.deleteDocument(db, commentCollection, c.$id)),
             ])
         );
 
         await Promise.all(
-            perAnswerCleanup.map(({ answer }) =>
-                databases.deleteDocument(db, answerCollection, answer.$id)
-            )
+            perAnswerCleanup.map(({ answer }) => databases.deleteDocument(db, answerCollection, answer.$id))
         );
 
-        // Delete question-level votes and comments
         await Promise.all([
-            ...questionVotes.documents.map((v) =>
-                databases.deleteDocument(db, voteCollection, v.$id)
-            ),
-            ...questionComments.documents.map((c) =>
-                databases.deleteDocument(db, commentCollection, c.$id)
-            ),
+            ...questionVotes.documents.map((v) => databases.deleteDocument(db, voteCollection, v.$id)),
+            ...questionComments.documents.map((c) => databases.deleteDocument(db, commentCollection, c.$id)),
         ]);
 
-        // Delete the attachment file, if any
         if (question.attachmentId && question.attachmentId !== "none") {
             try {
                 await storage.deleteFile(questionAttachmentBucket, question.attachmentId);
@@ -163,38 +190,39 @@ export async function DELETE(request: NextRequest) {
             }
         }
 
-        // Adjust reputation: undo the +1 each answer author earned, and
-        // any reputation the question author gained from votes on this question.
-        const upvoteCount = questionVotes.documents.filter((v) => v.voteStatus === "upvoted").length;
-        const downvoteCount = questionVotes.documents.filter((v) => v.voteStatus === "downvoted").length;
-        const netQuestionReputation = upvoteCount - downvoteCount;
+        const netVotes = (docs: { voteStatus?: unknown }[]) =>
+            docs.filter((v) => v.voteStatus === "upvoted").length -
+            docs.filter((v) => v.voteStatus === "downvoted").length;
 
-        const reputationAdjustments: Promise<any>[] = [];
+        // Map of authorId -> total reputation they gained from things being
+        // deleted here, so we subtract it exactly once per author even if
+        // they wrote multiple answers.
+        const toRemoveByAuthor = new Map<string, number>();
 
-        if (netQuestionReputation !== 0) {
-            reputationAdjustments.push(
-                (async () => {
-                    const prefs = await users.getPrefs<UserPrefs>(question.authorId);
-                    await users.updatePrefs<UserPrefs>(question.authorId, {
-                        reputation: Number(prefs.reputation) - netQuestionReputation,
-                    });
-                })()
-            );
+        // Question author loses net votes on the question
+        const qNet = netVotes(questionVotes.documents);
+        if (qNet !== 0) {
+            toRemoveByAuthor.set(question.authorId as string, qNet);
         }
 
-        const answerAuthorIds = Array.from(new Set(answers.documents.map((a) => a.authorId as string)));
-        reputationAdjustments.push(
-            ...answerAuthorIds.map(async (id) => {
-                const prefs = await users.getPrefs<UserPrefs>(id);
-                await users.updatePrefs<UserPrefs>(id, {
-                    reputation: Number(prefs.reputation) - 1,
-                });
-            })
-        );
+        // Answer authors lose the +1 for posting, plus any net votes on their answers
+        for (const { answer, answerVotes } of perAnswerCleanup) {
+            const aAuthor = answer.authorId as string;
+            const aNet = netVotes(answerVotes.documents);
+            const totalRepLoss = 1 + aNet; // +1 for posting, plus net votes
+
+            const current = toRemoveByAuthor.get(aAuthor) ?? 0;
+            toRemoveByAuthor.set(aAuthor, current + totalRepLoss);
+        }
+
+        const reputationAdjustments = Array.from(toRemoveByAuthor.entries()).map(([aId, amount]) => {
+            return adjustReputation(aId, -amount).catch((err) => {
+                console.error("[question/DELETE] reputation adjustment failed", { authorId: aId, amount, error: err });
+            });
+        });
 
         await Promise.all(reputationAdjustments);
 
-        // Finally, delete the question itself
         const response = await databases.deleteDocument(db, questionCollection, questionId);
 
         return NextResponse.json(
@@ -202,6 +230,9 @@ export async function DELETE(request: NextRequest) {
             { status: 200 }
         );
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
             { error: error?.message || "Error deleting question" },
             { status: error?.status || error?.code || 500 }

@@ -1,28 +1,40 @@
 import { answerCollection, db, questionCollection, voteCollection, commentCollection } from "@/models/name";
-import { databases, users } from "@/models/server/config";
+import { databases } from "@/models/server/config";
 import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
-import { UserPrefs } from "@/store/Auth";
+import { ApiValidationError, parseJsonBody, requireString } from "@/lib/api-validation";
+import { adjustReputation } from "@/lib/reputation";
 
 export async function POST(request: NextRequest) {
     try {
-        const { questionId, answer, authorId } = await request.json();
+        const body = await parseJsonBody(request);
+
+        const questionId = requireString(body.questionId, "questionId");
+        const content = requireString(body.answer, "answer", { max: 10000 });
+        const authorId = requireString(body.authorId, "authorId");
+
+        // Make sure the question still exists before attaching an answer to
+        // it (and before handing out reputation for it).
+        try {
+            await databases.getDocument(db, questionCollection, questionId);
+        } catch {
+            return NextResponse.json({ error: "This question no longer exists" }, { status: 404 });
+        }
 
         const response = await databases.createDocument(db, answerCollection, ID.unique(), {
-            content: answer,
+            content,
             authorId,
             questionId,
             isAccepted: false,
         });
 
-        // Increase author reputation
-        const prefs = await users.getPrefs<UserPrefs>(authorId);
-        await users.updatePrefs(authorId, {
-            reputation: Number(prefs.reputation) + 1,
-        });
+        await adjustReputation(authorId, 1);
 
         return NextResponse.json(response, { status: 201 });
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
             { error: error?.message || "Error creating answer" },
             { status: error?.status || error?.code || 500 }
@@ -32,29 +44,22 @@ export async function POST(request: NextRequest) {
 
 /**
  * PATCH /api/answer
- *
- * Two operations depending on the payload:
- *
- * 1. Accept/unaccept an answer (isAccepted toggle):
- *    { answerId, questionId, requesterId, accept: boolean }
- *    - Only the question author may call this.
- *    - Ensures at most one accepted answer per question by clearing any
- *      previously accepted answer first.
- *
- * 2. (Reserved) Any other answer field updates can be added here.
+ * Accept/unaccept an answer: { answerId, questionId, requesterId, accept }.
+ * Only the question author may call this.
  */
 export async function PATCH(request: NextRequest) {
     try {
-        const { answerId, questionId, requesterId, accept } = await request.json();
+        const body = await parseJsonBody(request);
 
-        if (!answerId || !questionId || !requesterId || typeof accept !== "boolean") {
-            return NextResponse.json(
-                { error: "answerId, questionId, requesterId, and accept (boolean) are required" },
-                { status: 400 }
-            );
+        const answerId = requireString(body.answerId, "answerId");
+        const questionId = requireString(body.questionId, "questionId");
+        const requesterId = requireString(body.requesterId, "requesterId");
+
+        if (typeof body.accept !== "boolean") {
+            return NextResponse.json({ error: "accept (boolean) is required" }, { status: 400 });
         }
+        const accept = body.accept;
 
-        // Verify the requester is the question author — only they may accept answers.
         const question = await databases.getDocument(db, questionCollection, questionId);
         if (question.authorId !== requesterId) {
             return NextResponse.json(
@@ -63,12 +68,11 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
-        // If accepting, first unaccept any currently accepted answer on this question.
         if (accept) {
             const alreadyAccepted = await databases.listDocuments(db, answerCollection, [
                 Query.equal("questionId", questionId),
                 Query.equal("isAccepted", true),
-                Query.limit(5), // guard against data corruption producing multiple
+                Query.limit(5),
             ]);
 
             await Promise.all(
@@ -86,6 +90,9 @@ export async function PATCH(request: NextRequest) {
 
         return NextResponse.json({ data: updated }, { status: 200 });
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
             { error: error?.message || "Error updating answer" },
             { status: error?.status || error?.code || 500 }
@@ -95,37 +102,29 @@ export async function PATCH(request: NextRequest) {
 
 /**
  * DELETE /api/answer
+ * Requires { answerId, authorId } and verifies authorId owns the answer —
+ * previously this endpoint didn't check ownership at all.
  *
- * Transactional delete with best-effort rollback:
- * 1. Snapshot the author's current reputation before touching anything.
- * 2. Delete the answer document.
- * 3. Delete related votes and comments.
- * 4. Decrement reputation.
- *
- * If step 4 fails after step 2 has already succeeded, the document is gone
- * but reputation is wrong. We roll back by re-creating a minimal answer
- * record so the reputation delta can be retried, and return a 500 so the
- * client knows something went wrong. This is best-effort given Appwrite's
- * lack of multi-document transactions — a proper reconciliation job is the
- * only truly safe fix at scale, but this prevents silent drift.
+ * Reputation cleanup now undoes both the flat +1 the author got for posting
+ * the answer AND the net reputation the answer accrued from its own votes;
+ * previously only the +1 was undone, so a heavily-upvoted answer's
+ * reputation contribution survived its own deletion.
  */
 export async function DELETE(request: NextRequest) {
     try {
-        const { answerId } = await request.json();
+        const body = await parseJsonBody(request);
+        const answerId = requireString(body.answerId, "answerId");
+        const authorId = requireString(body.authorId, "authorId");
 
-        if (!answerId) {
-            return NextResponse.json({ error: "answerId is required" }, { status: 400 });
+        const answer = await databases.getDocument(db, answerCollection, answerId);
+
+        if (answer.authorId !== authorId) {
+            return NextResponse.json(
+                { error: "You are not authorized to delete this answer" },
+                { status: 403 }
+            );
         }
 
-        // ── 1. Read everything we need before mutating ──────────────────
-        const answer = await databases.getDocument(db, answerCollection, answerId);
-        const authorId = answer.authorId as string;
-
-        // Snapshot reputation before we touch anything so we can roll back.
-        const prefsSnapshot = await users.getPrefs<UserPrefs>(authorId);
-        const reputationBefore = Number(prefsSnapshot.reputation ?? 0);
-
-        // Collect related votes and comments.
         const [votes, comments] = await Promise.all([
             databases.listDocuments(db, voteCollection, [
                 Query.equal("type", "answer"),
@@ -139,37 +138,24 @@ export async function DELETE(request: NextRequest) {
             ]),
         ]);
 
-        // ── 2. Delete the answer document ───────────────────────────────
+        const netVoteReputation =
+            votes.documents.filter((v) => v.voteStatus === "upvoted").length -
+            votes.documents.filter((v) => v.voteStatus === "downvoted").length;
+
         await databases.deleteDocument(db, answerCollection, answerId);
 
-        // ── 3. Delete related votes and comments (fire-and-forget errors) ─
-        // These are non-critical — orphan votes/comments don't affect UX
-        // materially, and retrying the whole DELETE would fail because the
-        // answer document is already gone.
         await Promise.allSettled([
-            ...votes.documents.map((v) =>
-                databases.deleteDocument(db, voteCollection, v.$id)
-            ),
-            ...comments.documents.map((c) =>
-                databases.deleteDocument(db, commentCollection, c.$id)
-            ),
+            ...votes.documents.map((v) => databases.deleteDocument(db, voteCollection, v.$id)),
+            ...comments.documents.map((c) => databases.deleteDocument(db, commentCollection, c.$id)),
         ]);
 
-        // ── 4. Decrement reputation — with rollback on failure ───────────
         try {
-            const freshPrefs = await users.getPrefs<UserPrefs>(authorId);
-            await users.updatePrefs<UserPrefs>(authorId, {
-                reputation: Number(freshPrefs.reputation ?? 0) - 1,
-            });
+            await adjustReputation(answer.authorId, -(1 + netVoteReputation));
         } catch (repError: any) {
-            // The document is deleted but reputation wasn't decremented.
-            // Log clearly so an admin/reconciliation job can detect the drift.
             console.error(
-                "[answer/DELETE] reputation decrement failed after document deletion",
-                { answerId, authorId, reputationBefore, error: repError?.message }
+                "[answer/DELETE] reputation adjustment failed after document deletion",
+                { answerId, authorId: answer.authorId, error: repError?.message }
             );
-            // Return a partial-success response so the client knows the answer
-            // is gone (safe to remove from UI) but something else went wrong.
             return NextResponse.json(
                 {
                     data: { $id: answerId },
@@ -184,8 +170,11 @@ export async function DELETE(request: NextRequest) {
             { status: 200 }
         );
     } catch (error: any) {
+        if (error instanceof ApiValidationError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
-            { message: error?.message || "Error deleting the answer" },
+            { error: error?.message || "Error deleting the answer" },
             { status: error?.status || error?.code || 500 }
         );
     }
