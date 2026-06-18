@@ -40,10 +40,7 @@ export default function AnswerCard({
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
 
-    React.useEffect(() => {
-        if (!currentUser) return;
-        void ensureVoteState("answer", answer.$id);
-    }, [answer.$id, currentUser, ensureVoteState]);
+
 
     const votedStatus = getVoteStatus("answer", answer.$id);
     const voteScore = getAnswerScore(answer);
