@@ -190,7 +190,7 @@ export async function DELETE(request: NextRequest) {
             }
         }
 
-        const netVotes = (docs: { voteStatus?: unknown }[]) =>
+        const netVotes = (docs: any[]) =>
             docs.filter((v) => v.voteStatus === "upvoted").length -
             docs.filter((v) => v.voteStatus === "downvoted").length;
 
