@@ -46,7 +46,7 @@ export const renderCustomIcon = (icon: SimpleIcon, theme: string) => {
             href: undefined,
             target: undefined,
             rel: undefined,
-            onClick: e => e.preventDefault(),
+            onClick: (e: any) => e.preventDefault(),
         },
     });
 };
