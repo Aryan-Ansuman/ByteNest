@@ -10,6 +10,7 @@ import { databases, users } from "@/models/server/config";
 import { storage } from "@/models/client/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
+import { cookies, headers } from "next/headers";
 import React from "react";
 import QuestionDetailPage from "./_components/QuestionDetailPage";
 import slugify from "@/utils/slugify";
@@ -19,18 +20,46 @@ export const revalidate = 0;
 
 const VOTE_LIMIT = 5000;
 
+// Known search engine crawlers, social link-unfurlers, and SEO bots — these
+// should never count as a "view" no matter how often they hit the page.
+const BOT_USER_AGENT_PATTERN =
+    /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|slackbot|twitterbot|discordbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|vkshare|w3c_validator|baiduspider|yandexbot|duckduckbot|ahrefsbot|semrushbot|mj12bot|petalbot|skypeuripreview|redditbot|applebot/i;
+
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
-    // ── Fetch the question, increment its view count, and kick off every
-    // other independent fetch in parallel (including the author — issue #5). ──
+    // ── Fetch the question once. We do NOT blindly write an incremented view
+    // count on every load anymore — see the view-dedup block below. ──
     const existingQuestion = await databases.getDocument(db, questionCollection, params.quesId);
-    const incrementedViews = Number(existingQuestion.views ?? 0) + 1;
+
+    // ── View-count dedup ──────────────────────────────────────────────────
+    // Problems being solved:
+    //   1. Refreshing the page repeatedly shouldn't add a new view each time.
+    //   2. Search crawlers / link-unfurlers (Slack, Discord, Twitter, etc.)
+    //      shouldn't count as views at all.
+    //   3. We should avoid writing to the DB on every single read — only
+    //      write when we actually intend to count a new view, which also
+    //      shrinks (though doesn't fully eliminate) the read-then-write race
+    //      window. A fully atomic counter would require either a native
+    //      increment operation (not exposed by this SDK) or a separate
+    //      append-only "view events" collection — out of scope here, but
+    //      gating writes like this removes the vast majority of redundant
+    //      writes that caused the original bug.
+    const cookieStore = cookies();
+    const viewCookieName = `bn_viewed_${params.quesId}`;
+    const alreadyViewedThisSession = cookieStore.get(viewCookieName)?.value === "1";
+
+    const userAgent = headers().get("user-agent") ?? "";
+    const isBot = BOT_USER_AGENT_PATTERN.test(userAgent);
+
+    const shouldIncrementView = !alreadyViewedThisSession && !isBot;
 
     const tags = ((existingQuestion.tags as string[]) ?? []).filter(Boolean);
 
     const [question, author, answers, upvotes, downvotes, comments, similar] = await Promise.all([
-        databases.updateDocument(db, questionCollection, params.quesId, {
-            views: incrementedViews,
-        }),
+        shouldIncrementView
+            ? databases.updateDocument(db, questionCollection, params.quesId, {
+                  views: Number(existingQuestion.views ?? 0) + 1,
+              })
+            : Promise.resolve(existingQuestion),
         users.get<UserPrefs>(existingQuestion.authorId),
         databases.listDocuments(db, answerCollection, [
             Query.orderDesc("$createdAt"),
@@ -67,14 +96,14 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             : Promise.resolve({ documents: [] as any[], total: 0 }),
     ]);
 
-    // Issue #3: use the shared slugify utility so links match the rest of the app.
+    // Use the shared slugify utility so links match the rest of the app.
     const similarQuestions = similar.documents.map((q) => ({
         title: q.title as string,
         href: `/questions/${q.$id}/${slugify(q.title as string)}`,
         answers: (q as any).totalAnswers ?? 0,
     }));
 
-    // ── Issue #4: collapse the N+1 avalanche. ──
+    // ── Collapse the N+1 avalanche. ──
     // Instead of, per answer: author fetch -> comments fetch -> per-comment author
     // fetch -> upvotes -> downvotes (each serialized inside a nested Promise.all),
     // batch by *kind* of fetch across all answers/comments at once, deduping
@@ -181,16 +210,30 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         : "";
 
     return (
-        <QuestionDetailPage
-            question={question}
-            author={author}
-            answers={answers as any}
-            upvotes={upvotes}
-            downvotes={downvotes}
-            comments={comments as any}
-            attachmentUrl={attachmentUrl}
-            similarQuestions={similarQuestions}
-        />
+        <>
+            {shouldIncrementView && (
+                // Marks this question as "viewed" client-side so a refresh (or
+                // re-fetch by the same browser) doesn't count again. Bots and
+                // link-unfurlers generally don't execute this script, but they're
+                // already excluded above via the User-Agent check.
+                <script
+                    suppressHydrationWarning
+                    dangerouslySetInnerHTML={{
+                        __html: `document.cookie = "${viewCookieName}=1; path=/; max-age=86400; samesite=lax";`,
+                    }}
+                />
+            )}
+            <QuestionDetailPage
+                question={question}
+                author={author}
+                answers={answers as any}
+                upvotes={upvotes}
+                downvotes={downvotes}
+                comments={comments as any}
+                attachmentUrl={attachmentUrl}
+                similarQuestions={similarQuestions}
+            />
+        </>
     );
 };
 
