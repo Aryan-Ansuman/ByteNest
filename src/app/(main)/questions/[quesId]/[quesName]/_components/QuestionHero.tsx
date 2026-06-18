@@ -8,6 +8,7 @@ import {
     ArrowDown,
     ArrowUp,
     Bookmark,
+    Check,
     MoreHorizontal,
     Share2,
     Sparkles,
@@ -17,10 +18,10 @@ import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
 import {
-    Author,
     formatCount,
     useQuestionDetail,
 } from "./QuestionDetailContext";
+import { Avatar } from "./shared";
 
 const MarkdownPreview = dynamic(
     () => import("@uiw/react-md-editor").then((module) => module.default.Markdown),
@@ -46,7 +47,6 @@ export default function QuestionHero() {
         questionVoteScore,
         getVoteStatus,
         voteQuestion,
-        currentUser,
     } = useQuestionDetail();
 
     const [copied, setCopied] = React.useState(false);
@@ -85,7 +85,8 @@ export default function QuestionHero() {
                         <ArrowDown className="size-5" />
                     </button>
                 </div>
-                
+
+                {/* The only bookmark control — removed the duplicate that lived in the header action row */}
                 <button
                     onClick={() => setBookmarked(!bookmarked)}
                     className={cn(
@@ -126,13 +127,11 @@ export default function QuestionHero() {
                             ))}
                         </div>
 
+                        {/* Header actions — bookmark removed from here, kept share + more */}
                         <div className="flex items-center gap-2">
                             <button onClick={handleShareCopy} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.06]">
                                 {copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
                                 Share
-                            </button>
-                            <button className="flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-300 transition hover:bg-white/[0.06]">
-                                <Bookmark className="size-4" />
                             </button>
                             <button className="flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-300 transition hover:bg-white/[0.06]">
                                 <MoreHorizontal className="size-4" />
@@ -146,7 +145,7 @@ export default function QuestionHero() {
                 </div>
 
                 {attachmentUrl ? (
-                    <div className="relative mt-6 aspect-video max-h-[400px] overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-2">
+                    <div className="relative mt-6 h-[400px] max-h-[400px] overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-2">
                         <Image
                             src={attachmentUrl}
                             alt="Question attachment"
@@ -165,7 +164,7 @@ export default function QuestionHero() {
 
                     <div className="flex items-center gap-3">
                         <span className="text-[13px] text-zinc-500">Edited {convertDateToRelativeTime(new Date(question.$updatedAt))}</span>
-                        
+
                         <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] p-1.5 pr-4">
                             <Avatar name={author.name} />
                             <div className="flex flex-col">
@@ -179,14 +178,5 @@ export default function QuestionHero() {
                 </div>
             </div>
         </article>
-    );
-}
-
-function Avatar({ name }: { name: string }) {
-    const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
-    return (
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[linear-gradient(135deg,#2D2D2D,#1A1A1A)] text-xs font-medium text-zinc-300">
-            {initials}
-        </span>
     );
 }

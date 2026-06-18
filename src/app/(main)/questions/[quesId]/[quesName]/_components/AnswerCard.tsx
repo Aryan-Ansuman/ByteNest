@@ -19,20 +19,7 @@ import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
 import { AnswerDoc, formatCount, useQuestionDetail } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
-
-const MarkdownPreview = dynamic(
-    () => import("@uiw/react-md-editor").then((module) => module.default.Markdown),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="space-y-3 p-4">
-                <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.08]" />
-                <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.06]" />
-            </div>
-        ),
-    }
-);
+import { Avatar, ConfirmDialog } from "./shared";
 
 export default function AnswerCard({
     answer,
@@ -51,6 +38,7 @@ export default function AnswerCard({
     } = useQuestionDetail();
 
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+    const [isDeleting, setIsDeleting] = React.useState(false);
 
     React.useEffect(() => {
         if (!currentUser) return;
@@ -65,6 +53,13 @@ export default function AnswerCard({
         const url = `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`;
         await navigator.clipboard.writeText(url);
         toast.success("Answer link copied");
+    };
+
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        const deleted = await deleteAnswer(answer.$id);
+        setIsDeleting(false);
+        if (deleted) setDeleteDialogOpen(false);
     };
 
     return (
@@ -130,16 +125,6 @@ export default function AnswerCard({
                                 <span className="flex items-center gap-1 font-medium">
                                     <span className="text-[#CFE8D5]">●</span> {formatCount(answer.author.reputation)} rep
                                 </span>
-                                {answer.author.reputation > 100 && (
-                                    <span className="flex items-center gap-1 font-medium">
-                                        <span className="text-yellow-500">●</span> 42
-                                    </span>
-                                )}
-                                {answer.author.reputation > 500 && (
-                                    <span className="flex items-center gap-1 font-medium">
-                                        <span className="text-zinc-300">●</span> 118
-                                    </span>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -162,15 +147,12 @@ export default function AnswerCard({
 
                 {/* Markdown Content */}
                 <div className="question-detail-markdown" data-color-mode="dark">
-                    <MarkdownPreview source={answer.content} />
+                    <AnswerMarkdown source={answer.content} />
                 </div>
 
                 {/* Footer Actions */}
                 <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.08] pt-4 text-[13px] font-medium text-zinc-400">
                     <div className="flex items-center gap-4">
-                        <button className="flex items-center gap-1.5 transition hover:text-zinc-200">
-                            Reply
-                        </button>
                         <button onClick={handleShare} className="flex items-center gap-1.5 transition hover:text-zinc-200">
                             <Share2 className="size-3.5" /> Share
                         </button>
@@ -201,15 +183,30 @@ export default function AnswerCard({
                     <CommentsSection type="answer" typeId={answer.$id} />
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                title="Delete this answer?"
+                description="This permanently removes the answer and its comments. This cannot be undone."
+                confirmLabel={isDeleting ? "Deleting..." : "Delete answer"}
+                destructive
+                onCancel={() => setDeleteDialogOpen(false)}
+                onConfirm={handleConfirmDelete}
+            />
         </article>
     );
 }
 
-function Avatar({ name }: { name: string }) {
-    const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
-    return (
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[linear-gradient(135deg,#2D2D2D,#1A1A1A)] text-sm font-medium text-zinc-300">
-            {initials}
-        </span>
-    );
-}
+const AnswerMarkdown = dynamic(
+    () => import("@uiw/react-md-editor").then((module) => module.default.Markdown),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="space-y-3 p-4">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.08]" />
+                <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
+                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.06]" />
+            </div>
+        ),
+    }
+);

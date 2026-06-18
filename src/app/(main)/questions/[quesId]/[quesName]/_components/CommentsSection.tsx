@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
 import { CommentDoc, CommentTargetType, useQuestionDetail } from "./QuestionDetailContext";
-import { Avatar, ConfirmDialog } from "./QuestionHero";
+import { Avatar, ConfirmDialog } from "./shared";
 
 export default function CommentsSection({
     type,

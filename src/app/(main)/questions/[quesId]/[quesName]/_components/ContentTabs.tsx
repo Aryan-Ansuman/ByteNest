@@ -1,7 +1,7 @@
 "use client";
 
-import React, from "react";
-import { Sparkles } from "lucide-react";
+import React from "react";
+import { Sparkles, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuestionDetail } from "./QuestionDetailContext";
 import AnswerCard from "./AnswerCard";
@@ -16,23 +16,22 @@ export default function ContentTabs() {
         <div className="mt-10">
             {/* Tabs Header */}
             <div className="flex items-center gap-6 border-b border-white/[0.08]">
-                <TabButton 
-                    active={activeTab === "ai"} 
+                <TabButton
+                    active={activeTab === "ai"}
                     onClick={() => setActiveTab("ai")}
                     icon={<Sparkles className="size-4" />}
                     label="AI Answer"
                 />
-                <TabButton 
-                    active={activeTab === "answers"} 
+                <TabButton
+                    active={activeTab === "answers"}
                     onClick={() => setActiveTab("answers")}
                     label={`Answers`}
                     count={answers.total}
                 />
-                <TabButton 
-                    active={activeTab === "discussion"} 
+                <TabButton
+                    active={activeTab === "discussion"}
                     onClick={() => setActiveTab("discussion")}
                     label="Discussion"
-                    count={3} // Mocking discussion count for now based on UI
                 />
             </div>
 
@@ -40,10 +39,10 @@ export default function ContentTabs() {
             <div className="mt-6">
                 {activeTab === "ai" && <AiAnswerTab />}
                 {activeTab === "answers" && (
-                    <AnswersTab 
-                        bestAnswer={bestAnswer} 
-                        communityAnswers={communityAnswers} 
-                        total={answers.total} 
+                    <AnswersTab
+                        bestAnswer={bestAnswer}
+                        communityAnswers={communityAnswers}
+                        total={answers.total}
                     />
                 )}
                 {activeTab === "discussion" && <DiscussionTab />}
@@ -71,7 +70,7 @@ function TabButton({ active, onClick, icon, label, count }: { active: boolean; o
                     {count}
                 </span>
             )}
-            
+
             {active && (
                 <div className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[#CFE8D5]" />
             )}
@@ -80,45 +79,89 @@ function TabButton({ active, onClick, icon, label, count }: { active: boolean; o
 }
 
 function AiAnswerTab() {
+    // Honest placeholder: no AI integration exists yet, so this is explicitly
+    // marked "not available" rather than an infinite fake-loading skeleton.
     return (
         <div className="rounded-xl border border-white/[0.08] bg-black/20 p-8 text-center">
             <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full border border-[#CFE8D5]/20 bg-[#CFE8D5]/10 text-[#CFE8D5]">
                 <Sparkles className="size-5" />
             </div>
-            <h3 className="text-lg font-bold text-zinc-100">AI Analysis in Progress</h3>
+            <h3 className="text-lg font-bold text-zinc-100">AI Answers coming soon</h3>
             <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
-                The AI is currently analyzing this question and community responses to formulate a comprehensive answer.
+                This feature isn't wired up yet. Check the Answers tab for responses from the community in the meantime.
             </p>
-            
-            <div className="mt-8 space-y-3">
-                <div className="mx-auto h-4 w-3/4 animate-pulse rounded bg-white/[0.05]" />
-                <div className="mx-auto h-4 w-5/6 animate-pulse rounded bg-white/[0.05]" />
-                <div className="mx-auto h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
-            </div>
         </div>
     );
 }
 
 function AnswersTab({ bestAnswer, communityAnswers, total }: { bestAnswer: any; communityAnswers: any[]; total: number }) {
+    const { currentUser, openAnswerComposer, answerComposerOpen, closeAnswerComposer, submitAnswer } = useQuestionDetail();
+    const [draft, setDraft] = React.useState("");
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!draft.trim()) return;
+        setIsSubmitting(true);
+        const posted = await submitAnswer(draft);
+        setIsSubmitting(false);
+        if (posted) {
+            setDraft("");
+            closeAnswerComposer();
+        }
+    };
+
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-                <p className="text-sm text-zinc-300">
-                    Based on your code, here are the most likely reasons and fixes.
-                </p>
-                <span className="rounded bg-white/[0.05] px-2 py-0.5 text-[11px] font-bold tracking-wider text-[#CFE8D5]">
-                    Beta
-                </span>
-            </div>
-
             <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-zinc-100">{total} Answers</h3>
-                <div className="flex overflow-hidden rounded-lg border border-white/[0.08] bg-black/20 text-[13px]">
-                    <button className="px-4 py-1.5 text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-200">Oldest</button>
-                    <button className="bg-white/[0.05] px-4 py-1.5 font-medium text-[#CFE8D5]">Most Voted</button>
-                    <button className="px-4 py-1.5 text-zinc-400 transition hover:bg-white/[0.05] hover:text-zinc-200">Newest</button>
-                </div>
+                {!answerComposerOpen && (
+                    <button
+                        onClick={openAnswerComposer}
+                        className="flex h-9 items-center gap-2 rounded-xl border border-[#CFE8D5]/20 bg-[#CFE8D5] px-4 text-sm font-semibold text-[#08100B] transition hover:bg-[#ddf3e2]"
+                    >
+                        Write an answer
+                    </button>
+                )}
             </div>
+
+            {/* Answer composer — this previously had no UI at all, so
+                answerComposerOpen was tracked but never consumed. */}
+            {answerComposerOpen && (
+                <form
+                    onSubmit={handleSubmit}
+                    className="rounded-xl border border-white/[0.08] bg-black/20 p-4"
+                >
+                    <p className="mb-2 text-xs font-medium text-zinc-500">
+                        Posting as {currentUser?.name ?? "you"}
+                    </p>
+                    <textarea
+                        autoFocus
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        placeholder="Write your answer... Markdown supported."
+                        rows={6}
+                        className="w-full resize-y rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-[#CFE8D5]/35"
+                    />
+                    <div className="mt-3 flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={closeAnswerComposer}
+                            className="h-9 rounded-xl border border-white/[0.08] px-3.5 text-sm text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting || !draft.trim()}
+                            className="flex h-9 items-center gap-2 rounded-xl border border-[#CFE8D5]/20 bg-[#CFE8D5] px-3.5 text-sm font-semibold text-[#08100B] transition hover:bg-[#ddf3e2] disabled:opacity-50"
+                        >
+                            {isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                            {isSubmitting ? "Posting..." : "Post answer"}
+                        </button>
+                    </div>
+                </form>
+            )}
 
             <div className="space-y-6">
                 {bestAnswer && <AnswerCard answer={bestAnswer} variant="best" />}
@@ -126,12 +169,6 @@ function AnswersTab({ bestAnswer, communityAnswers, total }: { bestAnswer: any; 
                     <AnswerCard key={answer.$id} answer={answer} />
                 ))}
             </div>
-
-            {total > communityAnswers.length + (bestAnswer ? 1 : 0) && (
-                <button className="w-full rounded-xl border border-white/[0.08] bg-black/20 py-3 text-[13px] font-medium text-zinc-400 transition hover:bg-white/[0.04] hover:text-zinc-200">
-                    Show {total - communityAnswers.length - (bestAnswer ? 1 : 0)} more answers
-                </button>
-            )}
         </div>
     );
 }

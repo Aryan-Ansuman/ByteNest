@@ -4,6 +4,58 @@ import { UserPrefs } from "@/store/Auth";
 import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
 
+export async function GET(request: NextRequest) {
+    try {
+        const searchParams = request.nextUrl.searchParams;
+        const type = searchParams.get("type");
+        const typeId = searchParams.get("typeId");
+        const votedById = searchParams.get("votedById");
+
+        if (!type || !typeId || !votedById) {
+            return NextResponse.json(
+                { error: "type, typeId, and votedById are required" },
+                { status: 400 }
+            );
+        }
+
+        const response = await databases.listDocuments(db, voteCollection, [
+            Query.equal("type", type),
+            Query.equal("typeId", typeId),
+            Query.equal("votedById", votedById),
+            Query.limit(1),
+        ]);
+
+        return NextResponse.json(
+            { data: { document: response.documents[0] ?? null } },
+            { status: 200 }
+        );
+    } catch (error: any) {
+        return NextResponse.json(
+            { error: error?.message || "Error fetching vote" },
+            { status: error?.status || error?.code || 500 }
+        );
+    }
+}
+
+// Tallies the GLOBAL vote score for a target — every voter, not just one user.
+async function getVoteResult(type: string, typeId: string) {
+    const [upvotes, downvotes] = await Promise.all([
+        databases.listDocuments(db, voteCollection, [
+            Query.equal("type", type),
+            Query.equal("typeId", typeId),
+            Query.equal("voteStatus", "upvoted"),
+            Query.limit(1), // we only need `.total`, not the documents
+        ]),
+        databases.listDocuments(db, voteCollection, [
+            Query.equal("type", type),
+            Query.equal("typeId", typeId),
+            Query.equal("voteStatus", "downvoted"),
+            Query.limit(1),
+        ]),
+    ]);
+    return upvotes.total - downvotes.total;
+}
+
 export async function POST(request: NextRequest) {
     try {
         const { votedById, voteStatus, type, typeId } = await request.json();
@@ -34,7 +86,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // that means prev vote does not exists or voteStatus changed
+        // that means prev vote does not exist, or voteStatus changed
         if (response.documents[0]?.voteStatus !== voteStatus) {
             const doc = await databases.createDocument(db, voteCollection, ID.unique(), {
                 type,
@@ -43,7 +95,7 @@ export async function POST(request: NextRequest) {
                 votedById,
             });
 
-            // Increate/Decrease the reputation of the question/answer author accordingly
+            // Increase/decrease the reputation of the question/answer author accordingly
             const questionOrAnswer = await databases.getDocument(
                 db,
                 type === "question" ? questionCollection : answerCollection,
@@ -52,11 +104,9 @@ export async function POST(request: NextRequest) {
 
             const authorPrefs = await users.getPrefs<UserPrefs>(questionOrAnswer.authorId);
 
-            // if vote was present
             if (response.documents[0]) {
                 await users.updatePrefs<UserPrefs>(questionOrAnswer.authorId, {
                     reputation:
-                        // that means prev vote was "upvoted" and new value is "downvoted" so we have to decrease the reputation
                         response.documents[0].voteStatus === "upvoted"
                             ? Number(authorPrefs.reputation) - 1
                             : Number(authorPrefs.reputation) + 1,
@@ -64,72 +114,35 @@ export async function POST(request: NextRequest) {
             } else {
                 await users.updatePrefs<UserPrefs>(questionOrAnswer.authorId, {
                     reputation:
-                        // that means prev vote was "upvoted" and new value is "downvoted" so we have to decrease the reputation
                         voteStatus === "upvoted"
                             ? Number(authorPrefs.reputation) + 1
                             : Number(authorPrefs.reputation) - 1,
                 });
             }
 
-            const [upvotes, downvotes] = await Promise.all([
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", type),
-                    Query.equal("typeId", typeId),
-                    Query.equal("voteStatus", "upvoted"),
-                    Query.equal("votedById", votedById),
-                    Query.limit(1), // for optimization as we only need total
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", type),
-                    Query.equal("typeId", typeId),
-                    Query.equal("voteStatus", "downvoted"),
-                    Query.equal("votedById", votedById),
-                    Query.limit(1), // for optimization as we only need total
-                ]),
-            ]);
+            const voteResult = await getVoteResult(type, typeId);
 
             return NextResponse.json(
                 {
-                    data: { document: doc, voteResult: upvotes.total - downvotes.total },
+                    data: { document: doc, voteResult },
                     message: response.documents[0] ? "Vote Status Updated" : "Voted",
                 },
-                {
-                    status: 201,
-                }
+                { status: 201 }
             );
         }
 
-        const [upvotes, downvotes] = await Promise.all([
-            databases.listDocuments(db, voteCollection, [
-                Query.equal("type", type),
-                Query.equal("typeId", typeId),
-                Query.equal("voteStatus", "upvoted"),
-                Query.equal("votedById", votedById),
-                Query.limit(1), // for optimization as we only need total
-            ]),
-            databases.listDocuments(db, voteCollection, [
-                Query.equal("type", type),
-                Query.equal("typeId", typeId),
-                Query.equal("voteStatus", "downvoted"),
-                Query.equal("votedById", votedById),
-                Query.limit(1), // for optimization as we only need total
-            ]),
-        ]);
+        const voteResult = await getVoteResult(type, typeId);
 
         return NextResponse.json(
             {
-                data: { 
-                    document: null, voteResult: upvotes.total - downvotes.total 
-                },
+                data: { document: null, voteResult },
                 message: "Vote Withdrawn",
             },
-            {
-                status: 200,
-            }
+            { status: 200 }
         );
     } catch (error: any) {
         return NextResponse.json(
-            { message: error?.message || "Error deleting answer" },
+            { message: error?.message || "Error processing vote" },
             { status: error?.status || error?.code || 500 }
         );
     }
