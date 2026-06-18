@@ -11,6 +11,7 @@ import { storage } from "@/models/client/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
 import { cookies, headers } from "next/headers";
+import { notFound } from "next/navigation";
 import React from "react";
 import QuestionDetailPage from "./_components/QuestionDetailPage";
 import slugify from "@/utils/slugify";
@@ -18,31 +19,24 @@ import slugify from "@/utils/slugify";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// A realistic ceiling that signals a need for a denormalized counter before
+// counts become wrong. 5 000 is kept as the per-query page-size limit but
+// the comment below makes the tradeoff explicit.
 const VOTE_LIMIT = 5000;
 
-// Known search engine crawlers, social link-unfurlers, and SEO bots — these
-// should never count as a "view" no matter how often they hit the page.
 const BOT_USER_AGENT_PATTERN =
     /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|slackbot|twitterbot|discordbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|vkshare|w3c_validator|baiduspider|yandexbot|duckduckbot|ahrefsbot|semrushbot|mj12bot|petalbot|skypeuripreview|redditbot|applebot/i;
 
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
-    // ── Fetch the question once. We do NOT blindly write an incremented view
-    // count on every load anymore — see the view-dedup block below. ──
-    const existingQuestion = await databases.getDocument(db, questionCollection, params.quesId);
+    // ── 1. Fetch the question — 404 cleanly on missing / deleted documents ──
+    let existingQuestion;
+    try {
+        existingQuestion = await databases.getDocument(db, questionCollection, params.quesId);
+    } catch {
+        notFound();
+    }
 
-    // ── View-count dedup ──────────────────────────────────────────────────
-    // Problems being solved:
-    //   1. Refreshing the page repeatedly shouldn't add a new view each time.
-    //   2. Search crawlers / link-unfurlers (Slack, Discord, Twitter, etc.)
-    //      shouldn't count as views at all.
-    //   3. We should avoid writing to the DB on every single read — only
-    //      write when we actually intend to count a new view, which also
-    //      shrinks (though doesn't fully eliminate) the read-then-write race
-    //      window. A fully atomic counter would require either a native
-    //      increment operation (not exposed by this SDK) or a separate
-    //      append-only "view events" collection — out of scope here, but
-    //      gating writes like this removes the vast majority of redundant
-    //      writes that caused the original bug.
+    // ── 2. View-count dedup ───────────────────────────────────────────────
     const cookieStore = cookies();
     const viewCookieName = `bn_viewed_${params.quesId}`;
     const alreadyViewedThisSession = cookieStore.get(viewCookieName)?.value === "1";
@@ -52,15 +46,30 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
 
     const shouldIncrementView = !alreadyViewedThisSession && !isBot;
 
-    const tags = ((existingQuestion.tags as string[]) ?? []).filter(Boolean);
+    // Fire-and-forget: increment the view counter without blocking rendering
+    // and without taking down the page if the write fails.
+    if (shouldIncrementView) {
+        databases
+            .updateDocument(db, questionCollection, params.quesId, {
+                views: Number(existingQuestion.views ?? 0) + 1,
+            })
+            .catch((err) => {
+                // Non-fatal — log and move on.
+                console.error("[view-increment] failed:", err?.message ?? err);
+            });
+    }
 
-    const [question, author, answers, upvotes, downvotes, comments, similar] = await Promise.all([
-        shouldIncrementView
-            ? databases.updateDocument(db, questionCollection, params.quesId, {
-                  views: Number(existingQuestion.views ?? 0) + 1,
-              })
-            : Promise.resolve(existingQuestion),
-        users.get<UserPrefs>(existingQuestion.authorId),
+    // `question` for rendering is the already-fetched document; we do NOT
+    // wait for the write so rendering starts immediately.
+    const question = existingQuestion;
+
+    const tags = ((question.tags as string[]) ?? []).filter(Boolean);
+
+    // ── 3. Parallel data fetches ──────────────────────────────────────────
+    // The question author is fetched here. We add their id to the dedup set
+    // so it isn't fetched again if they also answered / commented.
+    const [author, answers, upvotes, downvotes, comments, similar] = await Promise.all([
+        users.get<UserPrefs>(question.authorId),
         databases.listDocuments(db, answerCollection, [
             Query.orderDesc("$createdAt"),
             Query.equal("questionId", params.quesId),
@@ -82,40 +91,51 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             Query.equal("typeId", params.quesId),
             Query.orderDesc("$createdAt"),
         ]),
-        // Similar questions, by shared tags — only run if there are tags to match.
+        // Similar questions — swallow errors so a missing index etc. never
+        // 500s the whole page. Sort by number of shared tags descending by
+        // fetching a larger candidate set and re-ranking client-side.
         tags.length > 0
-            ? databases.listDocuments(db, questionCollection, [
-                  Query.contains("tags", tags),
-                  Query.notEqual("$id", params.quesId),
-                  Query.orderDesc("$createdAt"),
-                  Query.limit(3),
-              ]).catch((e) => {
-                  console.error("Failed to fetch similar questions:", e);
-                  return { documents: [] as any[], total: 0 };
-              })
+            ? databases
+                  .listDocuments(db, questionCollection, [
+                      Query.contains("tags", tags),
+                      Query.notEqual("$id", params.quesId),
+                      Query.orderDesc("$createdAt"),
+                      Query.limit(10),
+                  ])
+                  .then((res) => {
+                      // Re-rank by number of overlapping tags (descending).
+                      const tagSet = new Set(tags);
+                      return {
+                          ...res,
+                          documents: res.documents
+                              .map((q) => ({
+                                  doc: q,
+                                  overlap: ((q.tags as string[]) ?? []).filter((t) =>
+                                      tagSet.has(t)
+                                  ).length,
+                              }))
+                              .sort((a, b) => b.overlap - a.overlap)
+                              .slice(0, 3)
+                              .map(({ doc }) => doc),
+                      };
+                  })
+                  .catch((err) => {
+                      console.error("[similar-questions] failed:", err?.message ?? err);
+                      return { documents: [] as any[], total: 0 };
+                  })
             : Promise.resolve({ documents: [] as any[], total: 0 }),
     ]);
 
-    // Use the shared slugify utility so links match the rest of the app.
-    const similarQuestions = similar.documents.map((q) => ({
+    const similarQuestions = (similar as { documents: any[] }).documents.map((q) => ({
         title: q.title as string,
         href: `/questions/${q.$id}/${slugify(q.title as string)}`,
         answers: (q as any).totalAnswers ?? 0,
     }));
 
-    // ── Collapse the N+1 avalanche. ──
-    // Instead of, per answer: author fetch -> comments fetch -> per-comment author
-    // fetch -> upvotes -> downvotes (each serialized inside a nested Promise.all),
-    // batch by *kind* of fetch across all answers/comments at once, deduping
-    // user lookups so the same author is never fetched twice.
-
+    // ── 4. Batch per-answer sub-fetches ───────────────────────────────────
     const answerIds = answers.documents.map((a) => a.$id);
 
-    const [
-        allAnswerComments,
-        allAnswerUpvotes,
-        allAnswerDownvotes,
-    ] = await Promise.all([
+    const [allAnswerComments, allAnswerUpvotes, allAnswerDownvotes] = await Promise.all([
         answerIds.length > 0
             ? databases.listDocuments(db, commentCollection, [
                   Query.equal("type", "answer"),
@@ -142,31 +162,39 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             : Promise.resolve({ documents: [] as any[], total: 0 }),
     ]);
 
-    // Group the batched results back per-answer.
+    // Group batched results back per-answer.
     const commentsByAnswer = new Map<string, any[]>();
-    for (const c of allAnswerComments.documents) {
+    for (const c of (allAnswerComments as { documents: any[] }).documents) {
         const list = commentsByAnswer.get(c.typeId as string) ?? [];
         list.push(c);
         commentsByAnswer.set(c.typeId as string, list);
     }
     const upvotesByAnswer = new Map<string, number>();
-    for (const v of allAnswerUpvotes.documents) {
+    for (const v of (allAnswerUpvotes as { documents: any[] }).documents) {
         upvotesByAnswer.set(v.typeId as string, (upvotesByAnswer.get(v.typeId as string) ?? 0) + 1);
     }
     const downvotesByAnswer = new Map<string, number>();
-    for (const v of allAnswerDownvotes.documents) {
-        downvotesByAnswer.set(v.typeId as string, (downvotesByAnswer.get(v.typeId as string) ?? 0) + 1);
+    for (const v of (allAnswerDownvotes as { documents: any[] }).documents) {
+        downvotesByAnswer.set(
+            v.typeId as string,
+            (downvotesByAnswer.get(v.typeId as string) ?? 0) + 1
+        );
     }
 
-    // Collect every distinct author id we need — answer authors, answer-comment
-    // authors, and question-comment authors — and fetch each ONCE.
+    // ── 5. Deduplicated user fetches ──────────────────────────────────────
+    // Seed with the question author so they're never fetched twice.
     const authorIds = new Set<string>();
+    authorIds.add(question.authorId as string);
     answers.documents.forEach((a) => authorIds.add(a.authorId as string));
-    allAnswerComments.documents.forEach((c) => authorIds.add(c.authorId as string));
+    (allAnswerComments as { documents: any[] }).documents.forEach((c) =>
+        authorIds.add(c.authorId as string)
+    );
     comments.documents.forEach((c) => authorIds.add(c.authorId as string));
 
     const authorEntries = await Promise.all(
         Array.from(authorIds).map(async (id) => {
+            // Reuse already-fetched question author to avoid an extra round-trip.
+            if (id === question.authorId) return [id, author] as const;
             const u = await users.get<UserPrefs>(id).catch(() => null);
             return [id, u] as const;
         })
@@ -182,14 +210,12 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         };
     };
 
-    // Hydrate question-level comments
+    // ── 6. Hydrate documents ──────────────────────────────────────────────
     comments.documents = comments.documents.map((comment) => ({
         ...comment,
         author: toAuthor(comment.authorId as string),
     }));
 
-    // Hydrate answers: author, comments (with their authors), and vote totals —
-    // all from the maps built above, with zero additional API calls per answer.
     answers.documents = answers.documents.map((answer) => {
         const answerComments = (commentsByAnswer.get(answer.$id) ?? []).map((c) => ({
             ...c,
@@ -205,17 +231,14 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         };
     });
 
-    const attachmentUrl = question.attachmentId && question.attachmentId !== "none"
-        ? storage.getFilePreview(questionAttachmentBucket, question.attachmentId).href
-        : "";
+    const attachmentUrl =
+        question.attachmentId && question.attachmentId !== "none"
+            ? storage.getFilePreview(questionAttachmentBucket, question.attachmentId).href
+            : "";
 
     return (
         <>
             {shouldIncrementView && (
-                // Marks this question as "viewed" client-side so a refresh (or
-                // re-fetch by the same browser) doesn't count again. Bots and
-                // link-unfurlers generally don't execute this script, but they're
-                // already excluded above via the User-Agent check.
                 <script
                     suppressHydrationWarning
                     dangerouslySetInnerHTML={{
