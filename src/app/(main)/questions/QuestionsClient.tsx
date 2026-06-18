@@ -249,7 +249,7 @@ function FilterTab({
 }
 
 function QuestionCard({ question }: { question: Question }) {
-    const excerpt = getQuestionExcerpt(question.content, 200);
+    const excerpt = getQuestionExcerpt(question.content);
 
     return (
         <motion.article
@@ -289,7 +289,7 @@ function QuestionCard({ question }: { question: Question }) {
                 </Link>
 
                 {excerpt && (
-                    <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-zinc-400">
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">
                         {excerpt}
                     </p>
                 )}
@@ -436,7 +436,7 @@ function EmptyState({ search, tag }: { search: string; tag: string }) {
     );
 }
 
-function getQuestionExcerpt(content: string, maxLength: number) {
+function getQuestionExcerpt(content: string) {
     const clean = content
         .replace(/```[\s\S]*?```/g, " code block ")
         .replace(/`([^`]+)`/g, "$1")
@@ -445,8 +445,7 @@ function getQuestionExcerpt(content: string, maxLength: number) {
         .replace(/\s+/g, " ")
         .trim();
 
-    if (clean.length <= maxLength) return clean;
-    return `${clean.slice(0, maxLength).trim()}...`;
+    return clean;
 }
 
 function getInitials(name: string) {

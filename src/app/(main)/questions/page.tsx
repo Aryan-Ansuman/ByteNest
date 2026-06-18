@@ -5,6 +5,10 @@ import { Query } from "node-appwrite";
 import QuestionsClient from "./QuestionsClient";
 import type { Question } from "./QuestionsClient";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 const FILTERS = ["Newest", "Active", "Most Voted", "Unanswered"] as const;
 type QuestionFilter = (typeof FILTERS)[number];
 

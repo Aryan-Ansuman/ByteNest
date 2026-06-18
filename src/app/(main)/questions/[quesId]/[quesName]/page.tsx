@@ -11,7 +11,10 @@ import { storage } from "@/models/client/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
 import React from "react";
-import QuestionDetail from "./QuestionDetail";
+import QuestionDetailPage from "./_components/QuestionDetailPage";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
     const [question, answers, upvotes, downvotes, comments] = await Promise.all([
@@ -38,6 +41,27 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             Query.orderDesc("$createdAt"),
         ]),
     ]);
+
+    // Fetch similar questions based on tags
+    let similarQuestions: any[] = [];
+    const tags = question.tags || [];
+    if (tags.length > 0) {
+        try {
+            const similar = await databases.listDocuments(db, questionCollection, [
+                Query.contains("tags", tags),
+                Query.notEqual("$id", params.quesId),
+                Query.orderDesc("$createdAt"),
+                Query.limit(3)
+            ]);
+            similarQuestions = similar.documents.map(q => ({
+                title: q.title,
+                href: `/questions/${q.$id}/${q.title.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`,
+                answers: q.totalAnswers || 0
+            }));
+        } catch (e) {
+            console.error("Failed to fetch similar questions:", e);
+        }
+    }
 
     // since it is dependent on the question, we fetch it here outside of the Promise.all
     const author = await users.get<UserPrefs>(question.authorId);
@@ -112,7 +136,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         : "";
 
     return (
-        <QuestionDetail
+        <QuestionDetailPage
             question={question}
             author={author}
             answers={answers as any}
@@ -120,6 +144,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             downvotes={downvotes}
             comments={comments as any}
             attachmentUrl={attachmentUrl}
+            similarQuestions={similarQuestions}
         />
     );
 };

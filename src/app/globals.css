@@ -56,12 +56,17 @@
         font-size: 0.97rem;
         line-height: 1.8;
         letter-spacing: 0;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        white-space: normal;
     }
 
     .question-detail-markdown .wmde-markdown p,
     .question-detail-markdown .wmde-markdown ul,
     .question-detail-markdown .wmde-markdown ol {
         margin-bottom: 1.25rem;
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
 
     .question-detail-markdown .wmde-markdown a {

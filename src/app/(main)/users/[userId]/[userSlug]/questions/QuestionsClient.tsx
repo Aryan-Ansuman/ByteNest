@@ -350,8 +350,7 @@ function QuestionCard({
         .replace(/`[^`]+`/g, (m) => m.slice(1, -1))
         .replace(/[#*_>\[\]!]/g, "")
         .replace(/\n+/g, " ")
-        .trim()
-        .slice(0, 180);
+        .trim();
 
     const voteColor =
         question.totalVotes > 0
@@ -421,7 +420,7 @@ function QuestionCard({
                     </Link>
 
                     {excerpt && (
-                        <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-zinc-500">
+                        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
                             {excerpt}
                         </p>
                     )}
