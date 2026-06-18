@@ -1,6 +1,5 @@
-// src/app/(main)/page.tsx
 import { databases, users } from "@/models/server/config";
-import { answerCollection, db, voteCollection, questionCollection } from "@/models/name";
+import { answerCollection, db, questionCollection } from "@/models/name";
 import { Query } from "node-appwrite";
 import { UserPrefs } from "@/store/Auth";
 import HomeClient from "./HomeClient";
@@ -19,43 +18,38 @@ const Page = async ({
     const filter = searchParams.filter || "Newest";
     const limit = 10;
 
-    // Build query based on filter
     const queries: any[] = [Query.limit(limit)];
-
     if (filter === "Newest" || filter === "Unanswered") {
         queries.push(Query.orderDesc("$createdAt"));
     } else if (filter === "Trending") {
-        queries.push(Query.orderDesc("$createdAt")); // We'll sort by votes client-side
+        queries.push(Query.orderDesc("$createdAt"));
     }
 
-    // Parallel fetch: Feed questions, Stats, Tags/News, Answers (for contributors)
-    const [questions, totalQuestions, totalAnswers, recentQuestions, recentAnswers] = await Promise.all([
-        databases.listDocuments(db, questionCollection, queries),
-        databases.listDocuments(db, questionCollection, [Query.limit(1)]),
-        databases.listDocuments(db, answerCollection, [Query.limit(1)]),
-        databases.listDocuments(db, questionCollection, [Query.orderDesc("$createdAt"), Query.limit(50), Query.select(["tags", "title", "$createdAt", "$id"])]),
-        databases.listDocuments(db, answerCollection, [Query.orderDesc("$createdAt"), Query.limit(50), Query.select(["authorId"])]),
-    ]);
+    const [questions, totalQuestions, totalAnswers, recentQuestions, recentAnswers] =
+        await Promise.all([
+            databases.listDocuments(db, questionCollection, queries),
+            databases.listDocuments(db, questionCollection, [Query.limit(1)]),
+            databases.listDocuments(db, answerCollection, [Query.limit(1)]),
+            databases.listDocuments(db, questionCollection, [
+                Query.orderDesc("$createdAt"),
+                Query.limit(50),
+                Query.select(["tags", "title", "$createdAt", "$id"]),
+            ]),
+            databases.listDocuments(db, answerCollection, [
+                Query.orderDesc("$createdAt"),
+                Query.limit(50),
+                Query.select(["authorId"]),
+            ]),
+        ]);
 
-    // 1. Enrich Feed Questions
+    // Enrich feed questions — vote total comes from the denormalized field,
+    // no vote-document listing required.
     const enriched = await Promise.all(
         questions.documents.map(async (q) => {
-            const [author, answers, upvotes, downvotes] = await Promise.all([
+            const [author, answers] = await Promise.all([
                 users.get<UserPrefs>(q.authorId).catch(() => null),
                 databases.listDocuments(db, answerCollection, [
                     Query.equal("questionId", q.$id),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", q.$id),
-                    Query.equal("voteStatus", "upvoted"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", q.$id),
-                    Query.equal("voteStatus", "downvoted"),
                     Query.limit(1),
                 ]),
             ]);
@@ -67,7 +61,8 @@ const Page = async ({
                 tags: (q.tags as string[]) ?? [],
                 $createdAt: q.$createdAt,
                 totalAnswers: answers.total,
-                totalVotes: upvotes.total - downvotes.total,
+                // Read from denormalized field; default 0 for pre-migration docs.
+                totalVotes: Number(q.totalVotes ?? 0),
                 author: {
                     $id: author?.$id ?? "deleted",
                     name: author?.name ?? "Deleted User",
@@ -77,7 +72,7 @@ const Page = async ({
         })
     );
 
-    // 2. Compute Trending Tags
+    // Trending tags
     const tagFreq: Record<string, number> = {};
     recentQuestions.documents.forEach((q) => {
         (q.tags || []).forEach((t: string) => {
@@ -87,32 +82,37 @@ const Page = async ({
     const trendingTags = Object.entries(tagFreq)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([tag, count]) => ({ tag, questions: count * 5 + Math.floor(Math.random() * 50) })); // Scale count for aesthetic
+        .map(([tag, count]) => ({
+            tag,
+            questions: count * 5 + Math.floor(Math.random() * 50),
+        }));
 
-    // 3. Compute Community Highlights (Top active contributors)
-    const authorIds = Array.from(new Set(recentAnswers.documents.map(a => a.authorId)));
+    // Community highlights
+    const authorIds = Array.from(
+        new Set(recentAnswers.documents.map((a) => a.authorId))
+    );
     const fetchedAuthors = await Promise.all(
-        authorIds.slice(0, 10).map(id => users.get<UserPrefs>(id).catch(() => null))
+        authorIds.slice(0, 10).map((id) => users.get<UserPrefs>(id).catch(() => null))
     );
     const communityHighlights = fetchedAuthors
         .filter((a): a is any => a !== null)
         .sort((a, b) => (b.prefs?.reputation ?? 0) - (a.prefs?.reputation ?? 0))
         .slice(0, 3)
-        .map(a => ({
-            name: a.name,
-            $id: a.$id,
-            reputation: a.prefs?.reputation ?? 0
-        }));
+        .map((a) => ({ name: a.name, $id: a.$id, reputation: a.prefs?.reputation ?? 0 }));
 
-    // 4. Developer News
+    // Developer news
     const developerNews = recentQuestions.documents
-        .filter(q => (q.tags || []).includes("news") || (q.tags || []).includes("announcement"))
+        .filter(
+            (q) =>
+                (q.tags || []).includes("news") ||
+                (q.tags || []).includes("announcement")
+        )
         .slice(0, 3)
-        .map(q => ({
+        .map((q) => ({
             $id: q.$id,
             title: q.title as string,
             time: convertDateToRelativeTime(new Date(q.$createdAt)),
-            slug: slugify(q.title as string)
+            slug: slugify(q.title as string),
         }));
 
     return (

@@ -1,5 +1,5 @@
 import { databases, users } from "@/models/server/config";
-import { answerCollection, db, questionCollection, voteCollection } from "@/models/name";
+import { answerCollection, db, questionCollection } from "@/models/name";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
 import QuestionsClient from "./QuestionsClient";
@@ -44,9 +44,11 @@ const Page = async ({
 
     const questions = await databases.listDocuments(db, questionCollection, queries);
 
+    // Vote totals are now read directly from the denormalized `totalVotes`
+    // field — no vote-document listing per question.
     const enriched: Question[] = await Promise.all(
         questions.documents.map(async (ques) => {
-            const [author, answers, latestAnswer, upvotes, downvotes] = await Promise.all([
+            const [author, answers, latestAnswer] = await Promise.all([
                 users.get<UserPrefs>(ques.authorId),
                 databases.listDocuments(db, answerCollection, [
                     Query.equal("questionId", ques.$id),
@@ -55,18 +57,6 @@ const Page = async ({
                 databases.listDocuments(db, answerCollection, [
                     Query.equal("questionId", ques.$id),
                     Query.orderDesc("$createdAt"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", ques.$id),
-                    Query.equal("voteStatus", "upvoted"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", ques.$id),
-                    Query.equal("voteStatus", "downvoted"),
                     Query.limit(1),
                 ]),
             ]);
@@ -86,7 +76,8 @@ const Page = async ({
                 $updatedAt: ques.$updatedAt,
                 activityAt,
                 totalAnswers: answers.total,
-                totalVotes: upvotes.total - downvotes.total,
+                // Read from denormalized field; default 0 for pre-migration docs.
+                totalVotes: Number(ques.totalVotes ?? 0),
                 totalViews: Number(ques.views ?? ques.totalViews ?? 0),
                 author: {
                     $id: author.$id,
@@ -110,8 +101,6 @@ const Page = async ({
         activeFilter === "Unanswered"
             ? sortedQuestions.filter((question) => question.totalAnswers === 0)
             : sortedQuestions;
-
-
 
     return (
         <QuestionsClient

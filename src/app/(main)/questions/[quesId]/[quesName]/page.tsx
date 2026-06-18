@@ -19,16 +19,11 @@ import slugify from "@/utils/slugify";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// A realistic ceiling that signals a need for a denormalized counter before
-// counts become wrong. 5 000 is kept as the per-query page-size limit but
-// the comment below makes the tradeoff explicit.
-const VOTE_LIMIT = 5000;
-
 const BOT_USER_AGENT_PATTERN =
     /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|slackbot|twitterbot|discordbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|vkshare|w3c_validator|baiduspider|yandexbot|duckduckbot|ahrefsbot|semrushbot|mj12bot|petalbot|skypeuripreview|redditbot|applebot/i;
 
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
-    // ── 1. Fetch the question — 404 cleanly on missing / deleted documents ──
+    // ── 1. Fetch question — 404 cleanly on missing/deleted documents ──────
     let existingQuestion;
     try {
         existingQuestion = await databases.getDocument(db, questionCollection, params.quesId);
@@ -40,60 +35,40 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
     const cookieStore = cookies();
     const viewCookieName = `bn_viewed_${params.quesId}`;
     const alreadyViewedThisSession = cookieStore.get(viewCookieName)?.value === "1";
-
     const userAgent = headers().get("user-agent") ?? "";
     const isBot = BOT_USER_AGENT_PATTERN.test(userAgent);
-
     const shouldIncrementView = !alreadyViewedThisSession && !isBot;
 
-    // Fire-and-forget: increment the view counter without blocking rendering
-    // and without taking down the page if the write fails.
+    // Fire-and-forget — never blocks rendering or takes down the page.
     if (shouldIncrementView) {
         databases
             .updateDocument(db, questionCollection, params.quesId, {
                 views: Number(existingQuestion.views ?? 0) + 1,
             })
             .catch((err) => {
-                // Non-fatal — log and move on.
                 console.error("[view-increment] failed:", err?.message ?? err);
             });
     }
 
-    // `question` for rendering is the already-fetched document; we do NOT
-    // wait for the write so rendering starts immediately.
     const question = existingQuestion;
-
     const tags = ((question.tags as string[]) ?? []).filter(Boolean);
 
     // ── 3. Parallel data fetches ──────────────────────────────────────────
-    // The question author is fetched here. We add their id to the dedup set
-    // so it isn't fetched again if they also answered / commented.
-    const [author, answers, upvotes, downvotes, comments, similar] = await Promise.all([
+    // Vote totals are now read directly from the denormalized `totalVotes`
+    // field on the document — no vote-document listing needed here at all.
+    const questionVoteScore = Number(question.totalVotes ?? 0);
+
+    const [author, answers, comments, similar] = await Promise.all([
         users.get<UserPrefs>(question.authorId),
         databases.listDocuments(db, answerCollection, [
             Query.orderDesc("$createdAt"),
             Query.equal("questionId", params.quesId),
-        ]),
-        databases.listDocuments(db, voteCollection, [
-            Query.equal("typeId", params.quesId),
-            Query.equal("type", "question"),
-            Query.equal("voteStatus", "upvoted"),
-            Query.limit(VOTE_LIMIT),
-        ]),
-        databases.listDocuments(db, voteCollection, [
-            Query.equal("typeId", params.quesId),
-            Query.equal("type", "question"),
-            Query.equal("voteStatus", "downvoted"),
-            Query.limit(VOTE_LIMIT),
         ]),
         databases.listDocuments(db, commentCollection, [
             Query.equal("type", "question"),
             Query.equal("typeId", params.quesId),
             Query.orderDesc("$createdAt"),
         ]),
-        // Similar questions — swallow errors so a missing index etc. never
-        // 500s the whole page. Sort by number of shared tags descending by
-        // fetching a larger candidate set and re-ranking client-side.
         tags.length > 0
             ? databases
                   .listDocuments(db, questionCollection, [
@@ -103,7 +78,6 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                       Query.limit(10),
                   ])
                   .then((res) => {
-                      // Re-rank by number of overlapping tags (descending).
                       const tagSet = new Set(tags);
                       return {
                           ...res,
@@ -135,7 +109,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
     // ── 4. Batch per-answer sub-fetches ───────────────────────────────────
     const answerIds = answers.documents.map((a) => a.$id);
 
-    const [allAnswerComments, allAnswerUpvotes, allAnswerDownvotes] = await Promise.all([
+    const [allAnswerComments] = await Promise.all([
         answerIds.length > 0
             ? databases.listDocuments(db, commentCollection, [
                   Query.equal("type", "answer"),
@@ -144,45 +118,18 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                   Query.limit(5000),
               ])
             : Promise.resolve({ documents: [] as any[], total: 0 }),
-        answerIds.length > 0
-            ? databases.listDocuments(db, voteCollection, [
-                  Query.equal("type", "answer"),
-                  Query.equal("typeId", answerIds),
-                  Query.equal("voteStatus", "upvoted"),
-                  Query.limit(VOTE_LIMIT),
-              ])
-            : Promise.resolve({ documents: [] as any[], total: 0 }),
-        answerIds.length > 0
-            ? databases.listDocuments(db, voteCollection, [
-                  Query.equal("type", "answer"),
-                  Query.equal("typeId", answerIds),
-                  Query.equal("voteStatus", "downvoted"),
-                  Query.limit(VOTE_LIMIT),
-              ])
-            : Promise.resolve({ documents: [] as any[], total: 0 }),
+        // No vote document listing — answer vote totals come from
+        // the denormalized `totalVotes` field on each answer document.
     ]);
 
-    // Group batched results back per-answer.
     const commentsByAnswer = new Map<string, any[]>();
     for (const c of (allAnswerComments as { documents: any[] }).documents) {
         const list = commentsByAnswer.get(c.typeId as string) ?? [];
         list.push(c);
         commentsByAnswer.set(c.typeId as string, list);
     }
-    const upvotesByAnswer = new Map<string, number>();
-    for (const v of (allAnswerUpvotes as { documents: any[] }).documents) {
-        upvotesByAnswer.set(v.typeId as string, (upvotesByAnswer.get(v.typeId as string) ?? 0) + 1);
-    }
-    const downvotesByAnswer = new Map<string, number>();
-    for (const v of (allAnswerDownvotes as { documents: any[] }).documents) {
-        downvotesByAnswer.set(
-            v.typeId as string,
-            (downvotesByAnswer.get(v.typeId as string) ?? 0) + 1
-        );
-    }
 
     // ── 5. Deduplicated user fetches ──────────────────────────────────────
-    // Seed with the question author so they're never fetched twice.
     const authorIds = new Set<string>();
     authorIds.add(question.authorId as string);
     answers.documents.forEach((a) => authorIds.add(a.authorId as string));
@@ -193,7 +140,6 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
 
     const authorEntries = await Promise.all(
         Array.from(authorIds).map(async (id) => {
-            // Reuse already-fetched question author to avoid an extra round-trip.
             if (id === question.authorId) return [id, author] as const;
             const u = await users.get<UserPrefs>(id).catch(() => null);
             return [id, u] as const;
@@ -222,14 +168,39 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             author: toAuthor(c.authorId as string),
         }));
 
+        // Read the denormalized counter; fall back to 0 for answers
+        // created before the migration.
+        const answerVoteScore = Number(answer.totalVotes ?? 0);
+
         return {
             ...answer,
             comments: { total: answerComments.length, documents: answerComments },
-            upvotesDocuments: { total: upvotesByAnswer.get(answer.$id) ?? 0, documents: [] },
-            downvotesDocuments: { total: downvotesByAnswer.get(answer.$id) ?? 0, documents: [] },
+            // Synthetic DocumentList shapes the Provider expects, encoding
+            // the pre-computed total so the client renders the correct
+            // score immediately without listing any vote documents.
+            upvotesDocuments: {
+                total: answerVoteScore >= 0 ? answerVoteScore : 0,
+                documents: [],
+            },
+            downvotesDocuments: {
+                total: answerVoteScore < 0 ? Math.abs(answerVoteScore) : 0,
+                documents: [],
+            },
             author: toAuthor(answer.authorId as string),
         };
     });
+
+    // Synthetic upvotes/downvotes for the question — the Provider computes
+    // `questionVoteScore = upvotes.total - downvotes.total`, so we encode
+    // the denormalized total as a net-positive or net-negative split.
+    const syntheticUpvotes = {
+        total: questionVoteScore >= 0 ? questionVoteScore : 0,
+        documents: [],
+    };
+    const syntheticDownvotes = {
+        total: questionVoteScore < 0 ? Math.abs(questionVoteScore) : 0,
+        documents: [],
+    };
 
     const attachmentUrl =
         question.attachmentId && question.attachmentId !== "none"
@@ -250,8 +221,8 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                 question={question}
                 author={author}
                 answers={answers as any}
-                upvotes={upvotes}
-                downvotes={downvotes}
+                upvotes={syntheticUpvotes as any}
+                downvotes={syntheticDownvotes as any}
                 comments={comments as any}
                 attachmentUrl={attachmentUrl}
                 similarQuestions={similarQuestions}

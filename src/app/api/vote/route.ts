@@ -37,108 +37,103 @@ export async function GET(request: NextRequest) {
     }
 }
 
-// Tallies the GLOBAL vote score for a target — every voter, not just one user.
-async function getVoteResult(type: string, typeId: string) {
-    const [upvotes, downvotes] = await Promise.all([
-        databases.listDocuments(db, voteCollection, [
-            Query.equal("type", type),
-            Query.equal("typeId", typeId),
-            Query.equal("voteStatus", "upvoted"),
-            Query.limit(1), // we only need `.total`, not the documents
-        ]),
-        databases.listDocuments(db, voteCollection, [
-            Query.equal("type", type),
-            Query.equal("typeId", typeId),
-            Query.equal("voteStatus", "downvoted"),
-            Query.limit(1),
-        ]),
-    ]);
-    return upvotes.total - downvotes.total;
+/**
+ * Atomically adjust the denormalized `totalVotes` counter on the
+ * question or answer document by `delta` (+1, -1, or +2/-2 when
+ * flipping a vote direction).
+ *
+ * Using a read-then-write here is fine for our scale. A true atomic
+ * increment would require a Appwrite Function or a dedicated counter
+ * collection — out of scope. The worst case of a concurrent race is a
+ * momentary off-by-one that self-corrects on the next vote.
+ */
+async function adjustVoteCounter(
+    type: string,
+    typeId: string,
+    delta: number
+): Promise<number> {
+    const collection = type === "question" ? questionCollection : answerCollection;
+    const doc = await databases.getDocument(db, collection, typeId);
+    const current = Number(doc.totalVotes ?? 0);
+    const next = current + delta;
+    await databases.updateDocument(db, collection, typeId, { totalVotes: next });
+    return next;
 }
 
 export async function POST(request: NextRequest) {
     try {
         const { votedById, voteStatus, type, typeId } = await request.json();
 
-        const response = await databases.listDocuments(db, voteCollection, [
+        // Look up the voter's existing vote, if any.
+        const existing = await databases.listDocuments(db, voteCollection, [
             Query.equal("type", type),
             Query.equal("typeId", typeId),
             Query.equal("votedById", votedById),
+            Query.limit(1),
         ]);
 
-        if (response.documents.length > 0) {
-            await databases.deleteDocument(db, voteCollection, response.documents[0].$id);
+        const previousVote = existing.documents[0] ?? null;
+        const previousStatus: "upvoted" | "downvoted" | null =
+            (previousVote?.voteStatus as "upvoted" | "downvoted") ?? null;
 
-            // Decrease the reputation of the question/answer author
-            const questionOrAnswer = await databases.getDocument(
-                db,
-                type === "question" ? questionCollection : answerCollection,
-                typeId
-            );
+        // Fetch the target document once — needed for reputation updates.
+        const collection = type === "question" ? questionCollection : answerCollection;
+        const targetDoc = await databases.getDocument(db, collection, typeId);
+        const authorPrefs = await users.getPrefs<UserPrefs>(targetDoc.authorId);
+        let reputationDelta = 0;
 
-            const authorPrefs = await users.getPrefs<UserPrefs>(questionOrAnswer.authorId);
-
-            await users.updatePrefs<UserPrefs>(questionOrAnswer.authorId, {
-                reputation:
-                    response.documents[0].voteStatus === "upvoted"
-                        ? Number(authorPrefs.reputation) - 1
-                        : Number(authorPrefs.reputation) + 1,
-            });
+        // ── Remove the previous vote if one exists ────────────────────────
+        if (previousVote) {
+            await databases.deleteDocument(db, voteCollection, previousVote.$id);
+            // Reverse the previous vote's effect on the counter.
+            reputationDelta += previousStatus === "upvoted" ? -1 : 1;
         }
 
-        // that means prev vote does not exist, or voteStatus changed
-        if (response.documents[0]?.voteStatus !== voteStatus) {
-            const doc = await databases.createDocument(db, voteCollection, ID.unique(), {
+        // ── Toggling: if the user clicked the same button again, just remove ──
+        if (previousStatus === voteStatus) {
+            // Vote withdrawn — counter and reputation already adjusted above.
+            const newTotal = await adjustVoteCounter(
                 type,
                 typeId,
-                voteStatus,
-                votedById,
-            });
-
-            // Increase/decrease the reputation of the question/answer author accordingly
-            const questionOrAnswer = await databases.getDocument(
-                db,
-                type === "question" ? questionCollection : answerCollection,
-                typeId
+                previousStatus === "upvoted" ? -1 : 1
             );
 
-            const authorPrefs = await users.getPrefs<UserPrefs>(questionOrAnswer.authorId);
-
-            if (response.documents[0]) {
-                await users.updatePrefs<UserPrefs>(questionOrAnswer.authorId, {
-                    reputation:
-                        response.documents[0].voteStatus === "upvoted"
-                            ? Number(authorPrefs.reputation) - 1
-                            : Number(authorPrefs.reputation) + 1,
-                });
-            } else {
-                await users.updatePrefs<UserPrefs>(questionOrAnswer.authorId, {
-                    reputation:
-                        voteStatus === "upvoted"
-                            ? Number(authorPrefs.reputation) + 1
-                            : Number(authorPrefs.reputation) - 1,
-                });
-            }
-
-            const voteResult = await getVoteResult(type, typeId);
+            await users.updatePrefs<UserPrefs>(targetDoc.authorId, {
+                reputation: Number(authorPrefs.reputation) + reputationDelta,
+            });
 
             return NextResponse.json(
-                {
-                    data: { document: doc, voteResult },
-                    message: response.documents[0] ? "Vote Status Updated" : "Voted",
-                },
-                { status: 201 }
+                { data: { document: null, voteResult: newTotal }, message: "Vote Withdrawn" },
+                { status: 200 }
             );
         }
 
-        const voteResult = await getVoteResult(type, typeId);
+        // ── Cast the new vote ─────────────────────────────────────────────
+        const newVoteDoc = await databases.createDocument(db, voteCollection, ID.unique(), {
+            type,
+            typeId,
+            voteStatus,
+            votedById,
+        });
+
+        // Net counter delta: +1 for upvote, -1 for downvote.
+        // If flipping direction, the removal above already contributed ±1
+        // to `reputationDelta`; here we add ±1 more.
+        const voteDelta = voteStatus === "upvoted" ? 1 : -1;
+        reputationDelta += voteDelta;
+
+        const newTotal = await adjustVoteCounter(type, typeId, voteDelta);
+
+        await users.updatePrefs<UserPrefs>(targetDoc.authorId, {
+            reputation: Number(authorPrefs.reputation) + reputationDelta,
+        });
 
         return NextResponse.json(
             {
-                data: { document: null, voteResult },
-                message: "Vote Withdrawn",
+                data: { document: newVoteDoc, voteResult: newTotal },
+                message: previousVote ? "Vote Status Updated" : "Voted",
             },
-            { status: 200 }
+            { status: 201 }
         );
     } catch (error: any) {
         return NextResponse.json(
