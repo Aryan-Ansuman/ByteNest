@@ -136,6 +136,8 @@ export default function AnswerCard({
         voteAnswer,
         getAnswerScore,
         deleteAnswer,
+        isQuestionAuthor,
+        acceptAnswer,
     } = useQuestionDetail();
 
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
@@ -194,9 +196,25 @@ export default function AnswerCard({
                     </button>
                 </div>
 
-                {variant === "best" && (
-                    <div className="z-10 mt-2 flex size-10 items-center justify-center rounded-full border border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]">
-                        <Check className="size-4" />
+                {isQuestionAuthor ? (
+                    <button
+                        onClick={() => acceptAnswer(answer.$id)}
+                        className={cn(
+                            "z-10 mt-2 flex size-10 items-center justify-center rounded-full transition",
+                            answer.isAccepted
+                                ? "border border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
+                                : "text-zinc-600 hover:text-[#CFE8D5] hover:bg-[#CFE8D5]/5"
+                        )}
+                        title={answer.isAccepted ? "Unaccept this answer" : "Accept this answer"}
+                    >
+                        <Check className="size-5" />
+                    </button>
+                ) : answer.isAccepted && (
+                    <div
+                        className="z-10 mt-2 flex size-10 items-center justify-center rounded-full border border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
+                        title="Accepted Answer"
+                    >
+                        <Check className="size-5" />
                     </div>
                 )}
             </aside>
@@ -238,7 +256,7 @@ export default function AnswerCard({
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {variant === "best" && (
+                        {answer.isAccepted && (
                             <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#CFE8D5]">
                                 <Check className="size-4" />
                                 Accepted
