@@ -67,6 +67,8 @@ export interface AnswerDoc extends AppDocument {
     questionId: string;
     authorId: string;
     author: Author;
+    /** True only when the question author explicitly marked this answer accepted. */
+    isAccepted: boolean;
     upvotesDocuments: DocumentList<VoteDocument>;
     downvotesDocuments: DocumentList<VoteDocument>;
     comments: DocumentList<CommentDoc>;
@@ -145,6 +147,7 @@ interface QuestionDetailContextValue {
     closeAnswerComposer: () => void;
     answers: DocumentList<AnswerDoc>;
     sortedAnswers: AnswerDoc[];
+    /** The single explicitly-accepted answer, or null if none has been accepted yet. */
     bestAnswer: AnswerDoc | null;
     communityAnswers: AnswerDoc[];
     questionComments: DocumentList<CommentDoc>;
@@ -155,11 +158,13 @@ interface QuestionDetailContextValue {
     learningResources: LearningResource[];
     similarQuestions: SimilarQuestion[];
     isDeletingQuestion: boolean;
+    isQuestionAuthor: boolean;
     getVoteStatus: (type: CommentTargetType, typeId: string) => VoteStatus | null | undefined;
     ensureVoteState: (type: CommentTargetType, typeId: string) => Promise<VoteStatus | null>;
     getAnswerScore: (answer: AnswerDoc) => number;
     voteQuestion: (status: VoteStatus) => Promise<void>;
     voteAnswer: (answerId: string, status: VoteStatus) => Promise<void>;
+    acceptAnswer: (answerId: string) => Promise<void>;
     submitAnswer: (content: string) => Promise<boolean>;
     deleteAnswer: (answerId: string) => Promise<boolean>;
     addComment: (type: CommentTargetType, typeId: string, content: string) => Promise<boolean>;
@@ -178,7 +183,6 @@ interface VoteLookupResponse {
     };
 }
 
-// Batch lookup: returns a map of typeId → VoteStatus | null
 interface VoteBatchLookupResponse {
     data: {
         documents: Array<{ typeId: string; voteStatus: VoteStatus }>;
@@ -234,15 +238,11 @@ export function QuestionDetailProvider({
     >({});
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
 
-    // Track in-flight vote lookups to avoid duplicate fetches.
     const pendingVoteLookups = React.useRef<Set<string>>(new Set());
-
-    // ── Per-target AbortController for vote mutations ─────────────────────
-    // Keyed by `type:typeId`. When a new vote POST fires for the same target
-    // while one is already in-flight, we abort the previous one so only the
-    // latest click wins — prevents out-of-order responses from leaving stale
-    // vote state.
     const voteAbortControllers = React.useRef<Map<string, AbortController>>(new Map());
+
+    // Whether the current user is the question author (controls accept button visibility).
+    const isQuestionAuthor = currentUser?.$id === question.authorId;
 
     const questionTags = React.useMemo(
         () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
@@ -260,6 +260,10 @@ export function QuestionDetailProvider({
 
     const sortedAnswers = React.useMemo(() => {
         return [...answers.documents].sort((a, b) => {
+            // Accepted answer always floats to the top regardless of sort mode.
+            if (a.isAccepted && !b.isAccepted) return -1;
+            if (!a.isAccepted && b.isAccepted) return 1;
+
             if (answerSort === "Oldest") {
                 return new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime();
             }
@@ -270,7 +274,12 @@ export function QuestionDetailProvider({
         });
     }, [answers.documents, answerSort, getAnswerScore]);
 
-    const bestAnswer = React.useMemo(() => sortedAnswers[0] ?? null, [sortedAnswers]);
+    // bestAnswer is the explicitly accepted one — NOT just the top vote-getter.
+    const bestAnswer = React.useMemo(
+        () => answers.documents.find((a) => a.isAccepted) ?? null,
+        [answers.documents]
+    );
+
     const communityAnswers = React.useMemo(
         () =>
             bestAnswer
@@ -311,7 +320,6 @@ export function QuestionDetailProvider({
         [voteStatusByTarget]
     );
 
-    // ── Single-target vote lookup (question, or answers already in the map) ─
     const ensureVoteState = React.useCallback(
         async (type: CommentTargetType, typeId: string) => {
             const key = targetKey(type, typeId);
@@ -349,30 +357,20 @@ export function QuestionDetailProvider({
         [currentUser, voteStatusByTarget]
     );
 
-    // ── Batched answer vote lookup ─────────────────────────────────────────
-    // Called once when the page mounts (or when the current user changes)
-    // with ALL answer IDs at once. This replaces the N individual
-    // `ensureVoteState("answer", id)` calls that each AnswerCard used to
-    // trigger, collapsing N round-trips into one.
     const ensureAnswerVoteStates = React.useCallback(
         async (answerIds: string[]) => {
             if (!currentUser || answerIds.length === 0) return;
 
-            // Filter out ids we already know about.
             const unknown = answerIds.filter(
                 (id) => voteStatusByTarget[targetKey("answer", id)] === undefined
             );
             if (unknown.length === 0) return;
 
-            // Mark all as pending immediately to prevent duplicate calls.
             unknown.forEach((id) =>
                 pendingVoteLookups.current.add(targetKey("answer", id))
             );
 
             try {
-                // The API accepts a comma-separated `typeIds` parameter for
-                // bulk lookups. If your /api/vote GET doesn't support this yet,
-                // see the companion vote route change.
                 const params = new URLSearchParams({
                     type: "answer",
                     typeIds: unknown.join(","),
@@ -382,7 +380,6 @@ export function QuestionDetailProvider({
                     `/api/vote/batch?${params.toString()}`
                 );
 
-                // Build a map from the response.
                 const resultMap = new Map<string, VoteStatus | null>(
                     unknown.map((id) => [id, null])
                 );
@@ -398,7 +395,6 @@ export function QuestionDetailProvider({
                     return next;
                 });
             } catch (error) {
-                // On failure, mark everything as null so cards degrade gracefully.
                 setVoteStatusByTarget((prev) => {
                     const next = { ...prev };
                     unknown.forEach((id) => {
@@ -415,12 +411,8 @@ export function QuestionDetailProvider({
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [currentUser]
-        // Intentionally omitting voteStatusByTarget from deps — we read it
-        // inside via the functional updater pattern and don't want this
-        // callback to re-create on every vote status change.
     );
 
-    // Reset vote cache when the logged-in user changes.
     React.useEffect(() => {
         setVoteStatusByTarget({});
         pendingVoteLookups.current.clear();
@@ -428,23 +420,19 @@ export function QuestionDetailProvider({
         voteAbortControllers.current.clear();
     }, [currentUser?.$id]);
 
-    // Fetch the question's own vote status on mount.
     React.useEffect(() => {
         if (!currentUser) return;
         void ensureVoteState("question", question.$id);
     }, [currentUser, ensureVoteState, question.$id]);
 
-    // Fetch ALL answer vote statuses in one batched call on mount.
     React.useEffect(() => {
         if (!currentUser) return;
         const ids = answers.documents.map((a) => a.$id);
         void ensureAnswerVoteStates(ids);
-        // We only want to run this when the user or the answer list changes,
-        // not on every ensureAnswerVoteStates recreation.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?.$id, answers.documents]);
 
-    // ── Vote mutation helpers ──────────────────────────────────────────────
+    // ── Vote mutations ────────────────────────────────────────────────────
 
     const voteQuestion = React.useCallback(
         async (status: VoteStatus) => {
@@ -460,11 +448,9 @@ export function QuestionDetailProvider({
             const nextStatus = previousStatus === status ? null : status;
             const previousScore = questionVoteScore;
 
-            // Optimistic update.
             setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
             setQuestionVoteScore((score) => score + voteDelta(previousStatus, nextStatus));
 
-            // Abort any in-flight vote for this target.
             const existing = voteAbortControllers.current.get(key);
             existing?.abort();
             const controller = new AbortController();
@@ -488,13 +474,11 @@ export function QuestionDetailProvider({
                     [key]: response.data.document?.voteStatus ?? null,
                 }));
             } catch (error) {
-                if (isAbortError(error)) return; // superseded by a newer click — ignore
-                // Rollback.
+                if (isAbortError(error)) return;
                 setQuestionVoteScore(previousScore);
                 setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
                 toast.error(getErrorMessage(error, "Vote failed"));
             } finally {
-                // Only clean up if this controller is still the current one.
                 if (voteAbortControllers.current.get(key) === controller) {
                     voteAbortControllers.current.delete(key);
                 }
@@ -524,7 +508,6 @@ export function QuestionDetailProvider({
             const nextStatus = previousStatus === status ? null : status;
             const previousScore = answerVoteScores[answerId] ?? 0;
 
-            // Optimistic update.
             setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
             setAnswerVoteScores((prev) => ({
                 ...prev,
@@ -532,7 +515,6 @@ export function QuestionDetailProvider({
                     (prev[answerId] ?? previousScore) + voteDelta(previousStatus, nextStatus),
             }));
 
-            // Abort any in-flight vote for this answer.
             const existing = voteAbortControllers.current.get(key);
             existing?.abort();
             const controller = new AbortController();
@@ -560,7 +542,6 @@ export function QuestionDetailProvider({
                 }));
             } catch (error) {
                 if (isAbortError(error)) return;
-                // Rollback.
                 setAnswerVoteScores((prev) => ({ ...prev, [answerId]: previousScore }));
                 setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
                 toast.error(getErrorMessage(error, "Vote failed"));
@@ -579,6 +560,62 @@ export function QuestionDetailProvider({
         ]
     );
 
+    // ── Accept answer ─────────────────────────────────────────────────────
+
+    const acceptAnswer = React.useCallback(
+        async (answerId: string) => {
+            if (!currentUser) {
+                router.push("/login");
+                return;
+            }
+            if (!isQuestionAuthor) {
+                toast.error("Only the question author can accept an answer");
+                return;
+            }
+
+            // Current accepted state for this answer.
+            const current = answers.documents.find((a) => a.$id === answerId);
+            if (!current) return;
+
+            const willAccept = !current.isAccepted;
+
+            // Optimistic update: flip the target; clear all others.
+            setAnswers((prev) => ({
+                ...prev,
+                documents: prev.documents.map((a) => ({
+                    ...a,
+                    isAccepted: a.$id === answerId ? willAccept : willAccept ? false : a.isAccepted,
+                })),
+            }));
+
+            try {
+                await apiFetch("/api/answer", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        answerId,
+                        questionId: question.$id,
+                        requesterId: currentUser.$id,
+                        accept: willAccept,
+                    }),
+                });
+                toast.success(willAccept ? "Answer accepted" : "Acceptance removed");
+            } catch (error) {
+                // Roll back optimistic update.
+                setAnswers((prev) => ({
+                    ...prev,
+                    documents: prev.documents.map((a) => ({
+                        ...a,
+                        isAccepted: a.$id === answerId ? !willAccept : a.isAccepted,
+                    })),
+                }));
+                toast.error(getErrorMessage(error, "Failed to update accepted answer"));
+            }
+        },
+        [answers.documents, currentUser, isQuestionAuthor, question.$id, router]
+    );
+
+    // ── Answer CRUD ───────────────────────────────────────────────────────
+
     const submitAnswer = React.useCallback(
         async (content: string) => {
             if (!currentUser) {
@@ -589,8 +626,6 @@ export function QuestionDetailProvider({
             const trimmed = content.trim();
             if (!trimmed) return false;
 
-            // Use crypto.randomUUID() to avoid Date.now() collisions on rapid
-            // double-submissions.
             const optimisticId = `optimistic-answer-${crypto.randomUUID()}`;
             const optimisticAnswer = createOptimisticAnswer(
                 trimmed,
@@ -675,6 +710,8 @@ export function QuestionDetailProvider({
         [answers.documents, currentUser?.$id]
     );
 
+    // ── Comments ──────────────────────────────────────────────────────────
+
     const addComment = React.useCallback(
         async (type: CommentTargetType, typeId: string, content: string) => {
             if (!currentUser) {
@@ -685,7 +722,6 @@ export function QuestionDetailProvider({
             const trimmed = content.trim();
             if (!trimmed) return false;
 
-            // Use crypto.randomUUID() to avoid Date.now() collisions.
             const optimisticId = `optimistic-comment-${crypto.randomUUID()}`;
             const optimisticComment = createOptimisticComment(
                 trimmed,
@@ -771,9 +807,6 @@ export function QuestionDetailProvider({
                 }),
             });
             toast.success("Question deleted");
-            // `router.refresh()` is intentionally omitted: we're navigating away,
-            // so revalidating the current route's server data is both redundant
-            // and potentially racy with the push.
             router.push("/questions");
             return true;
         } catch (error) {
@@ -824,11 +857,13 @@ export function QuestionDetailProvider({
             learningResources,
             similarQuestions,
             isDeletingQuestion,
+            isQuestionAuthor,
             getVoteStatus,
             ensureVoteState,
             getAnswerScore,
             voteQuestion,
             voteAnswer,
+            acceptAnswer,
             submitAnswer,
             deleteAnswer,
             addComment,
@@ -859,11 +894,13 @@ export function QuestionDetailProvider({
             learningResources,
             similarQuestions,
             isDeletingQuestion,
+            isQuestionAuthor,
             getVoteStatus,
             ensureVoteState,
             getAnswerScore,
             voteQuestion,
             voteAnswer,
+            acceptAnswer,
             submitAnswer,
             deleteAnswer,
             addComment,
@@ -1017,6 +1054,7 @@ function createOptimisticAnswer(
         questionId,
         authorId: user.$id,
         author: authorFromUser(user),
+        isAccepted: false,
         upvotesDocuments: { total: 0, documents: [] },
         downvotesDocuments: { total: 0, documents: [] },
         comments: { total: 0, documents: [] },
@@ -1028,6 +1066,7 @@ function hydrateAnswer(answer: AnswerDoc, user: CurrentUser): AnswerDoc {
     return {
         ...answer,
         author: answer.author ?? authorFromUser(user),
+        isAccepted: answer.isAccepted ?? false,
         upvotesDocuments: answer.upvotesDocuments ?? { total: 0, documents: [] },
         downvotesDocuments: answer.downvotesDocuments ?? { total: 0, documents: [] },
         comments: answer.comments ?? { total: 0, documents: [] },

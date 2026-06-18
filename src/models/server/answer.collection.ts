@@ -18,6 +18,10 @@ export default async function createAnswerCollection() {
         databases.createStringAttribute(db, answerCollection, "authorId", 50, true),
         // Denormalized vote counter — incremented/decremented by the vote API.
         databases.createIntegerAttribute(db, answerCollection, "totalVotes", false, undefined, undefined, 0),
+        // True only when the question author explicitly marks this answer as accepted.
+        // Defaults false; only one answer per question should ever be true at a time
+        // (enforced by the PATCH /api/answer endpoint).
+        databases.createBooleanAttribute(db, answerCollection, "isAccepted", false, false),
     ]);
     console.log("Answer Attributes Created");
 }
