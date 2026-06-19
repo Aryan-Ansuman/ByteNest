@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Bookmark, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Avatar({ name, small = false }: { name: string; small?: boolean }) {
@@ -33,6 +33,8 @@ interface ConfirmDialogProps {
     confirmLabel?: string;
     cancelLabel?: string;
     destructive?: boolean;
+    busy?: boolean;
+    icon?: "alert" | "bookmark" | "trash";
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -44,17 +46,23 @@ export function ConfirmDialog({
     confirmLabel = "Confirm",
     cancelLabel = "Cancel",
     destructive = false,
+    busy = false,
+    icon,
     onConfirm,
     onCancel,
 }: ConfirmDialogProps) {
+    const iconKind = icon ?? (destructive ? "trash" : "alert");
+    const DialogIcon =
+        iconKind === "bookmark" ? Bookmark : iconKind === "trash" ? Trash2 : AlertTriangle;
+
     React.useEffect(() => {
         if (!open) return;
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onCancel();
+            if (e.key === "Escape" && !busy) onCancel();
         };
         document.addEventListener("keydown", handleKey);
         return () => document.removeEventListener("keydown", handleKey);
-    }, [open, onCancel]);
+    }, [busy, open, onCancel]);
 
     return (
         <AnimatePresence>
@@ -64,7 +72,9 @@ export function ConfirmDialog({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-                    onClick={onCancel}
+                    onClick={() => {
+                        if (!busy) onCancel();
+                    }}
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -73,6 +83,7 @@ export function ConfirmDialog({
                         transition={{ duration: 0.15, ease: "easeOut" }}
                         onClick={(e) => e.stopPropagation()}
                         className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0c0c] p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)]"
+                        aria-busy={busy}
                     >
                         <div className="flex items-start gap-3">
                             <span
@@ -80,10 +91,10 @@ export function ConfirmDialog({
                                     "flex size-9 shrink-0 items-center justify-center rounded-xl border",
                                     destructive
                                         ? "border-red-500/20 bg-red-500/10 text-red-400"
-                                        : "border-[#a7c8b3]/20 bg-[#a7c8b3]/10 text-[#a7c8b3]"
+                                        : "border-[#CFE8D5]/20 bg-[#CFE8D5]/10 text-[#CFE8D5]"
                                 )}
                             >
-                                <AlertTriangle className="size-4" />
+                                <DialogIcon className="size-4" />
                             </span>
                             <div className="min-w-0">
                                 <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
@@ -94,17 +105,19 @@ export function ConfirmDialog({
                         <div className="mt-5 flex items-center justify-end gap-2">
                             <button
                                 onClick={onCancel}
-                                className="flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-sm text-zinc-300 transition hover:bg-white/[0.08]"
+                                disabled={busy}
+                                className="flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {cancelLabel}
                             </button>
                             <button
                                 onClick={onConfirm}
+                                disabled={busy}
                                 className={cn(
-                                    "flex h-9 items-center rounded-xl px-3.5 text-sm font-semibold transition",
+                                    "flex h-9 items-center rounded-xl px-3.5 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-70",
                                     destructive
                                         ? "bg-red-500/90 text-white hover:bg-red-500"
-                                        : "bg-[#a7c8b3] text-[#08100b] hover:bg-[#b4d6bf]"
+                                        : "bg-[#CFE8D5] text-[#08100b] hover:bg-[#ddf3e2]"
                                 )}
                             >
                                 {confirmLabel}

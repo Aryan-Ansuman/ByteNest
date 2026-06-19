@@ -58,6 +58,8 @@ interface Props {
 export default function DynamicAnswerSection({ questionId }: Props) {
     const { hydrateDynamic } = useQuestionDetail();
     const [isLoading, setIsLoading] = React.useState(true);
+    const [announcement, setAnnouncement] = React.useState("");
+    const sectionRef = React.useRef<HTMLDivElement>(null);
     const hasFetched = React.useRef(false);
 
     React.useEffect(() => {
@@ -80,6 +82,13 @@ export default function DynamicAnswerSection({ questionId }: Props) {
 
                 const payload: DynamicPayload = await res.json();
                 hydrateDynamic(payload.answers, payload.comments);
+                const answerTotal = payload.answers.total;
+                setAnnouncement(
+                    `${answerTotal} answer${answerTotal === 1 ? "" : "s"} loaded.`
+                );
+                if (document.activeElement === document.body) {
+                    sectionRef.current?.focus({ preventScroll: true });
+                }
             } catch (err: any) {
                 if (err?.name === "AbortError") return;
                 console.error("[DynamicAnswerSection] fetch failed:", err);
@@ -95,5 +104,18 @@ export default function DynamicAnswerSection({ questionId }: Props) {
 
     // ContentTabs reads from context — it renders correctly whether answers
     // have loaded yet or not (shows 0 answers until hydrateDynamic fires).
-    return <ContentTabs isLoadingDynamic={isLoading} />;
+    return (
+        <div
+            ref={sectionRef}
+            tabIndex={-1}
+            aria-busy={isLoading}
+            aria-label="Answers and discussion"
+            className="outline-none"
+        >
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {announcement}
+            </p>
+            <ContentTabs isLoadingDynamic={isLoading} />
+        </div>
+    );
 }

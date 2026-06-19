@@ -161,6 +161,7 @@ interface QuestionDetailContextValue {
     learningResources: LearningResource[];
     similarQuestions: SimilarQuestion[];
     isDeletingQuestion: boolean;
+    acceptingAnswerId: string | null;
     isQuestionAuthor: boolean;
     getVoteStatus: (type: CommentTargetType, typeId: string) => VoteStatus | null | undefined;
     ensureVoteState: (type: CommentTargetType, typeId: string) => Promise<VoteStatus | null>;
@@ -250,12 +251,26 @@ export function QuestionDetailProvider({
         Record<string, VoteStatus | null | undefined>
     >({});
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
+    const [acceptingAnswerId, setAcceptingAnswerId] = React.useState<string | null>(null);
 
     const pendingVoteLookups = React.useRef<Set<string>>(new Set());
     const voteAbortControllers = React.useRef<Map<string, AbortController>>(new Map());
 
     // Whether the current user is the question author (controls accept button visibility).
     const isQuestionAuthor = currentUser?.$id === question.authorId;
+
+    const promptSignIn = React.useCallback(
+        (title: string) => {
+            toast.warning(title, {
+                description: "Your current draft will stay here until you choose to leave.",
+                action: {
+                    label: "Sign in",
+                    onClick: () => router.push("/login"),
+                },
+            });
+        },
+        [router]
+    );
 
     const questionTags = React.useMemo(
         () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
@@ -448,8 +463,12 @@ export function QuestionDetailProvider({
 
     const voteQuestion = React.useCallback(
         async (status: VoteStatus) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return;
+            }
             if (!currentUser) {
-                router.push("/login");
+                promptSignIn("Sign in to vote");
                 return;
             }
 
@@ -499,17 +518,22 @@ export function QuestionDetailProvider({
         [
             currentUser,
             ensureVoteState,
+            isDeletingQuestion,
+            promptSignIn,
             question.$id,
             questionVoteScore,
-            router,
             voteStatusByTarget,
         ]
     );
 
     const voteAnswer = React.useCallback(
         async (answerId: string, status: VoteStatus) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return;
+            }
             if (!currentUser) {
-                router.push("/login");
+                promptSignIn("Sign in to vote");
                 return;
             }
 
@@ -567,7 +591,8 @@ export function QuestionDetailProvider({
             answerVoteScores,
             currentUser,
             ensureVoteState,
-            router,
+            isDeletingQuestion,
+            promptSignIn,
             voteStatusByTarget,
         ]
     );
@@ -576,8 +601,13 @@ export function QuestionDetailProvider({
 
     const acceptAnswer = React.useCallback(
         async (answerId: string) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return;
+            }
+            if (acceptingAnswerId) return;
             if (!currentUser) {
-                router.push("/login");
+                promptSignIn("Sign in to accept an answer");
                 return;
             }
             if (!isQuestionAuthor) {
@@ -590,8 +620,12 @@ export function QuestionDetailProvider({
             if (!current) return;
 
             const willAccept = !current.isAccepted;
+            const previousAcceptedState = new Map(
+                answers.documents.map((answer) => [answer.$id, answer.isAccepted])
+            );
 
             // Optimistic update: flip the target; clear all others.
+            setAcceptingAnswerId(answerId);
             setAnswers((prev) => ({
                 ...prev,
                 documents: prev.documents.map((a) => ({
@@ -617,21 +651,35 @@ export function QuestionDetailProvider({
                     ...prev,
                     documents: prev.documents.map((a) => ({
                         ...a,
-                        isAccepted: a.$id === answerId ? !willAccept : a.isAccepted,
+                        isAccepted: previousAcceptedState.get(a.$id) ?? a.isAccepted,
                     })),
                 }));
                 toast.error(getErrorMessage(error, "Failed to update accepted answer"));
+            } finally {
+                setAcceptingAnswerId(null);
             }
         },
-        [answers.documents, currentUser, isQuestionAuthor, question.$id, router]
+        [
+            acceptingAnswerId,
+            answers.documents,
+            currentUser,
+            isDeletingQuestion,
+            isQuestionAuthor,
+            promptSignIn,
+            question.$id,
+        ]
     );
 
     // ── Answer CRUD ───────────────────────────────────────────────────────
 
     const submitAnswer = React.useCallback(
         async (content: string) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return false;
+            }
             if (!currentUser) {
-                router.push("/login");
+                promptSignIn("Sign in to post an answer");
                 return false;
             }
 
@@ -690,11 +738,15 @@ export function QuestionDetailProvider({
                 return false;
             }
         },
-        [currentUser, question.$id, router]
+        [currentUser, isDeletingQuestion, promptSignIn, question.$id]
     );
 
     const deleteAnswer = React.useCallback(
         async (answerId: string) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return false;
+            }
             const answer = answers.documents.find((item) => item.$id === answerId);
             if (!answer) return false;
 
@@ -719,7 +771,7 @@ export function QuestionDetailProvider({
                 return false;
             }
         },
-        [answers.documents, currentUser?.$id]
+        [answers.documents, currentUser?.$id, isDeletingQuestion]
     );
 
     // ── Comments ──────────────────────────────────────────────────────────
@@ -731,8 +783,12 @@ export function QuestionDetailProvider({
             content: string,
             parentId?: string | null
         ) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return false;
+            }
             if (!currentUser) {
-                router.push("/login");
+                promptSignIn("Sign in to comment");
                 return false;
             }
 
@@ -785,11 +841,15 @@ export function QuestionDetailProvider({
                 return false;
             }
         },
-        [currentUser, router]
+        [currentUser, isDeletingQuestion, promptSignIn]
     );
 
     const deleteComment = React.useCallback(
         async (type: CommentTargetType, typeId: string, commentId: string) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return false;
+            }
             const commentsToRemove = findCommentSubtree(
                 type,
                 typeId,
@@ -826,12 +886,13 @@ export function QuestionDetailProvider({
                 return false;
             }
         },
-        [answers, currentUser?.$id, questionComments]
+        [answers, currentUser?.$id, isDeletingQuestion, questionComments]
     );
 
     const deleteQuestion = React.useCallback(async () => {
+        if (isDeletingQuestion) return false;
         if (!currentUser) {
-            router.push("/login");
+            promptSignIn("Sign in to delete this question");
             return false;
         }
 
@@ -853,15 +914,19 @@ export function QuestionDetailProvider({
         } finally {
             setIsDeletingQuestion(false);
         }
-    }, [currentUser, question.$id, router]);
+    }, [currentUser, isDeletingQuestion, promptSignIn, question.$id, router]);
 
     const openAnswerComposer = React.useCallback(() => {
+        if (isDeletingQuestion) {
+            toast("This question is being deleted");
+            return;
+        }
         if (!currentUser) {
-            router.push("/login");
+            promptSignIn("Sign in to write an answer");
             return;
         }
         setAnswerComposerOpen(true);
-    }, [currentUser, router]);
+    }, [currentUser, isDeletingQuestion, promptSignIn]);
 
     const closeAnswerComposer = React.useCallback(() => {
         setAnswerComposerOpen(false);
@@ -914,6 +979,7 @@ export function QuestionDetailProvider({
             learningResources,
             similarQuestions,
             isDeletingQuestion,
+            acceptingAnswerId,
             isQuestionAuthor,
             getVoteStatus,
             ensureVoteState,
@@ -952,6 +1018,7 @@ export function QuestionDetailProvider({
             learningResources,
             similarQuestions,
             isDeletingQuestion,
+            acceptingAnswerId,
             isQuestionAuthor,
             getVoteStatus,
             ensureVoteState,

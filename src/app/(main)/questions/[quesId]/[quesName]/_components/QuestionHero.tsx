@@ -9,12 +9,9 @@ import {
     ArrowUp,
     Bookmark,
     Check,
-    Copy,
-    ExternalLink,
     Flag,
     MoreHorizontal,
     Share2,
-    Sparkles,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,13 +45,19 @@ function MoreMenu({
     isOwner,
     onDelete,
     onReport,
+    disabled = false,
 }: {
     isOwner: boolean;
     onDelete: () => void;
     onReport: () => void;
+    disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
     const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (disabled) setOpen(false);
+    }, [disabled]);
 
     React.useEffect(() => {
         if (!open) return;
@@ -92,8 +95,11 @@ function MoreMenu({
     return (
         <div ref={ref} className="relative">
             <button
-                onClick={() => setOpen((v) => !v)}
-                className="flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-300 transition hover:bg-white/[0.06]"
+                onClick={() => {
+                    if (!disabled) setOpen((v) => !v);
+                }}
+                disabled={disabled}
+                className="flex size-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-300 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="More options"
             >
                 <MoreHorizontal className="size-4" />
@@ -139,40 +145,72 @@ export default function QuestionHero() {
 
     const BOOKMARK_KEY = `bn_bookmark_q_${question.$id}`;
     const [bookmarked, setBookmarked] = React.useState(false);
+    const [bookmarkReady, setBookmarkReady] = React.useState(false);
+    const [canPersistBookmark, setCanPersistBookmark] = React.useState(true);
     const [copied, setCopied] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
-    // Rehydrate bookmark from localStorage on mount
     React.useEffect(() => {
         try {
-            setBookmarked(localStorage.getItem(BOOKMARK_KEY) === "1");
+            setBookmarked(window.localStorage.getItem(BOOKMARK_KEY) === "1");
+            setCanPersistBookmark(true);
         } catch {
-            // localStorage blocked in some environments; fail silently
+            setCanPersistBookmark(false);
+        } finally {
+            setBookmarkReady(true);
         }
     }, [BOOKMARK_KEY]);
 
-    const toggleBookmark = () => {
-        const next = !bookmarked;
-        setBookmarked(next);
+    const persistBookmark = (next: boolean) => {
+        if (!canPersistBookmark) {
+            toast.warning(
+                next
+                    ? "Bookmark saved for this session only"
+                    : "Bookmark removed for this session",
+                {
+                    description: "Your browser is blocking persistent storage.",
+                }
+            );
+            return;
+        }
+
         try {
             if (next) {
-                localStorage.setItem(BOOKMARK_KEY, "1");
+                window.localStorage.setItem(BOOKMARK_KEY, "1");
                 toast.success("Question bookmarked");
             } else {
-                localStorage.removeItem(BOOKMARK_KEY);
+                window.localStorage.removeItem(BOOKMARK_KEY);
                 toast("Bookmark removed");
             }
         } catch {
-            // ignore
+            setCanPersistBookmark(false);
+            toast.warning(
+                next
+                    ? "Bookmark saved for this session only"
+                    : "Bookmark removed for this session",
+                {
+                    description: "Your browser is blocking persistent storage.",
+                }
+            );
         }
+    };
+
+    const toggleBookmark = () => {
+        if (!bookmarkReady) return;
+        const next = !bookmarked;
+        setBookmarked(next);
+        persistBookmark(next);
     };
 
     const votedStatus = getVoteStatus("question", question.$id);
 
     const handleShareCopy = async () => {
+        if (isDeletingQuestion) return;
         await navigator.clipboard.writeText(window.location.href);
         setCopied(true);
-        toast.success("Question link copied");
+        toast("Question link copied", {
+            description: "Link copied to clipboard.",
+        });
         window.setTimeout(() => setCopied(false), 2000);
     };
 
@@ -181,6 +219,12 @@ export default function QuestionHero() {
     };
 
     const isOwner = currentUser?.$id === question.authorId;
+    const createdAtMs = new Date(question.$createdAt).getTime();
+    const updatedAtMs = new Date(question.$updatedAt).getTime();
+    const wasEdited =
+        Number.isFinite(createdAtMs) &&
+        Number.isFinite(updatedAtMs) &&
+        updatedAtMs - createdAtMs > 60_000;
 
     return (
         <>
@@ -190,8 +234,11 @@ export default function QuestionHero() {
                     <div className="flex shrink-0 flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
                         <button
                             onClick={() => voteQuestion("upvoted")}
+                            disabled={isDeletingQuestion}
+                            aria-label={`Upvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
+                            aria-pressed={votedStatus === "upvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500",
+                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50",
                                 votedStatus === "upvoted" ? "text-orange-500" : "text-zinc-500"
                             )}
                         >
@@ -211,8 +258,11 @@ export default function QuestionHero() {
                         </span>
                         <button
                             onClick={() => voteQuestion("downvoted")}
+                            disabled={isDeletingQuestion}
+                            aria-label={`Downvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
+                            aria-pressed={votedStatus === "downvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-red-400",
+                                "flex h-8 w-full items-center justify-center transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50",
                                 votedStatus === "downvoted" ? "text-red-400" : "text-zinc-500"
                             )}
                         >
@@ -225,9 +275,16 @@ export default function QuestionHero() {
 
                     <button
                         onClick={toggleBookmark}
-                        aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
+                        aria-label={
+                            !bookmarkReady
+                                ? "Loading bookmark state"
+                                : bookmarked
+                                ? "Remove bookmark"
+                                : "Bookmark question"
+                        }
+                        disabled={isDeletingQuestion || !bookmarkReady}
                         className={cn(
-                            "flex shrink-0 size-10 items-center justify-center rounded-xl border transition-all",
+                            "flex shrink-0 size-10 items-center justify-center rounded-xl border transition-all disabled:cursor-not-allowed disabled:opacity-50",
                             bookmarked
                                 ? "border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
                                 : "border-white/[0.08] bg-white/[0.03] text-zinc-500 hover:border-white/15 hover:text-zinc-200"
@@ -236,15 +293,12 @@ export default function QuestionHero() {
                         <Bookmark className="size-4" fill={bookmarked ? "currentColor" : "none"} />
                     </button>
 
-                    {/* Thread line extending down */}
-                    <div className="w-px bg-white/[0.08] flex-1 mt-3" style={{ marginBottom: "-20px" }} />
                 </aside>
 
                 {/* Right Column: Content */}
                 <div className="min-w-0">
                     <header>
-                        <h1 className="flex items-start gap-2 text-2xl font-bold leading-snug tracking-tight text-zinc-100 sm:text-3xl">
-                            <Sparkles className="mt-1 size-6 shrink-0 text-[#CFE8D5]" />
+                        <h1 className="text-2xl font-bold leading-snug tracking-tight text-zinc-100 sm:text-3xl">
                             {question.title}
                         </h1>
 
@@ -255,12 +309,14 @@ export default function QuestionHero() {
                                     {convertDateToRelativeTime(new Date(question.$createdAt))}
                                 </span>
                             </span>
-                            <span>
-                                Modified{" "}
-                                <span className="text-zinc-300">
-                                    {convertDateToRelativeTime(new Date(question.$updatedAt))}
+                            {wasEdited && (
+                                <span>
+                                    Modified{" "}
+                                    <span className="text-zinc-300">
+                                        {convertDateToRelativeTime(new Date(question.$updatedAt))}
+                                    </span>
                                 </span>
-                            </span>
+                            )}
                             <span>
                                 Viewed{" "}
                                 <span className="text-zinc-300">{formatCount(totalViews)} times</span>
@@ -283,7 +339,8 @@ export default function QuestionHero() {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleShareCopy}
-                                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.06]"
+                                    disabled={isDeletingQuestion}
+                                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
                                     Share
@@ -292,6 +349,7 @@ export default function QuestionHero() {
                                     isOwner={isOwner}
                                     onDelete={() => setDeleteDialogOpen(true)}
                                     onReport={handleReport}
+                                    disabled={isDeletingQuestion}
                                 />
                             </div>
                         </div>
@@ -305,7 +363,7 @@ export default function QuestionHero() {
                         <div className="relative mt-6 h-[400px] max-h-[400px] overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-2">
                             <Image
                                 src={attachmentUrl}
-                                alt="Question attachment"
+                                alt={`Attachment for question: ${question.title}`}
                                 fill
                                 sizes="(min-width: 1280px) 900px, 100vw"
                                 className="object-contain p-2"
@@ -315,10 +373,17 @@ export default function QuestionHero() {
                     ) : null}
 
                     {/* Author row */}
-                    <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="text-[13px] text-zinc-500">
-                            Edited {convertDateToRelativeTime(new Date(question.$updatedAt))}
-                        </span>
+                    <div
+                        className={cn(
+                            "mt-8 flex flex-col gap-4 sm:flex-row sm:items-center",
+                            wasEdited ? "sm:justify-between" : "sm:justify-end"
+                        )}
+                    >
+                        {wasEdited && (
+                            <span className="text-[13px] text-zinc-500">
+                                Edited {convertDateToRelativeTime(new Date(question.$updatedAt))}
+                            </span>
+                        )}
 
                         <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] p-1.5 pr-4">
                             <Avatar name={author.name} />
@@ -354,7 +419,14 @@ export default function QuestionHero() {
                     await deleteQuestion();
                     setDeleteDialogOpen(false);
                 }}
+                busy={isDeletingQuestion}
             />
         </>
     );
+}
+
+function formatQuestionVoteStatusForLabel(status: string | null | undefined) {
+    if (status === "upvoted") return "You have upvoted this question";
+    if (status === "downvoted") return "You have downvoted this question";
+    return "You have not voted on this question";
 }

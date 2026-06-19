@@ -85,7 +85,7 @@ export default function QuestionSidebar() {
     const extraParticipantsCount = Math.max(0, uniqueParticipants.length - 5);
 
     return (
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+        <aside aria-label="Question sidebar" className="space-y-4 xl:sticky xl:top-24 xl:self-start">
             {/* ── AI Summary — honest coming-soon ── */}
             <SidebarCard className="border-[#CFE8D5]/20 bg-[linear-gradient(135deg,rgba(207,232,213,0.05),rgba(255,255,255,0.01))]">
                 <div className="flex items-center gap-2 text-sm font-bold text-zinc-100">
@@ -128,9 +128,7 @@ export default function QuestionSidebar() {
                             </div>
                         </div>
                         <p className="mt-3 line-clamp-3 text-[13px] leading-relaxed text-zinc-400">
-                            {bestAnswer.content
-                                .replace(/```[\s\S]*?```/g, "[Code block]")
-                                .replace(/<[^>]*>?/gm, "")}
+                            {markdownToPlainPreview(bestAnswer.content)}
                         </p>
                         <button
                             onClick={() => {
@@ -197,7 +195,7 @@ export default function QuestionSidebar() {
                 </div>
                 <div className="mt-4 space-y-3">
                     <ActivityRow label="Answers added" value={answers.total} note="today" />
-                    <ActivityRow label="Comments added" value={totalComments} note="recent" />
+                    <ActivityRow label="Comments added" value={totalComments} note="lifetime" />
                     <ActivityRow label="People viewed" value={totalViews} note="lifetime" />
                 </div>
 
@@ -279,4 +277,18 @@ function ActivityRow({
             <span className="text-zinc-600">{note}</span>
         </div>
     );
+}
+
+function markdownToPlainPreview(content: string) {
+    return content
+        .replace(/```[\s\S]*?```/g, " [Code block] ")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+        .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+        .replace(/^#{1,6}\s+/gm, "")
+        .replace(/^>\s?/gm, "")
+        .replace(/[*_~]+/g, "")
+        .replace(/<[^>]*>?/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
 }

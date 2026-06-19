@@ -14,14 +14,13 @@ import {
     Bookmark,
     Trash2,
     MoreHorizontal,
-    CheckCircle2,
-    ThumbsUp,
+    Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
-import { AnswerDoc, formatCount, useQuestionDetail } from "./QuestionDetailContext";
+import { AnswerDoc, useQuestionDetail } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
 import { Avatar, ConfirmDialog } from "./shared";
 
@@ -31,13 +30,19 @@ function AnswerMoreMenu({
     answerId,
     isOwner,
     onDelete,
+    disabled = false,
 }: {
     answerId: string;
     isOwner: boolean;
     onDelete: () => void;
+    disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
     const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (disabled) setOpen(false);
+    }, [disabled]);
 
     React.useEffect(() => {
         if (!open) return;
@@ -59,7 +64,9 @@ function AnswerMoreMenu({
         setOpen(false);
         const url = `${window.location.origin}${window.location.pathname}#answer-${answerId}`;
         await navigator.clipboard.writeText(url);
-        toast.success("Answer link copied");
+        toast("Answer link copied", {
+            description: "Link copied to clipboard.",
+        });
     };
 
     const handleReport = () => {
@@ -98,8 +105,11 @@ function AnswerMoreMenu({
     return (
         <div ref={ref} className="relative">
             <button
-                onClick={() => setOpen((v) => !v)}
-                className="flex size-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300"
+                onClick={() => {
+                    if (!disabled) setOpen((v) => !v);
+                }}
+                disabled={disabled}
+                className="flex size-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="More options"
             >
                 <MoreHorizontal className="size-4" />
@@ -138,6 +148,8 @@ function VoteRail({
     isAccepted,
     isQuestionAuthor,
     onAccept,
+    isAccepting = false,
+    disabled = false,
 }: {
     score: number;
     votedStatus: string | null | undefined;
@@ -146,18 +158,22 @@ function VoteRail({
     isAccepted: boolean;
     isQuestionAuthor: boolean;
     onAccept: () => void;
+    isAccepting?: boolean;
+    disabled?: boolean;
 }) {
     return (
         <div className="flex shrink-0 flex-col items-center gap-1.5 pt-1 w-10">
             <button
                 onClick={onUpvote}
+                disabled={disabled}
+                aria-label={`Upvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
+                aria-pressed={votedStatus === "upvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center transition-colors rounded-full",
+                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                     votedStatus === "upvoted"
-                        ? "text-green-500"
+                        ? "text-[#CFE8D5]"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
                 )}
-                aria-label="Upvote"
             >
                 <ChevronUp className="size-8" strokeWidth={1.5} />
             </button>
@@ -166,7 +182,7 @@ function VoteRail({
                 className={cn(
                     "py-1 text-center text-lg font-bold leading-none",
                     votedStatus === "upvoted"
-                        ? "text-green-500"
+                        ? "text-[#CFE8D5]"
                         : votedStatus === "downvoted"
                         ? "text-red-400"
                         : "text-zinc-300"
@@ -177,13 +193,15 @@ function VoteRail({
 
             <button
                 onClick={onDownvote}
+                disabled={disabled}
+                aria-label={`Downvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
+                aria-pressed={votedStatus === "downvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center transition-colors rounded-full",
+                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                     votedStatus === "downvoted"
                         ? "text-red-400"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
                 )}
-                aria-label="Downvote"
             >
                 <ChevronDown className="size-8" strokeWidth={1.5} />
             </button>
@@ -192,27 +210,35 @@ function VoteRail({
                 {isQuestionAuthor ? (
                     <button
                         onClick={onAccept}
+                        disabled={disabled || isAccepting}
+                        aria-busy={isAccepting}
                         title={isAccepted ? "Unaccept this answer" : "Accept this answer"}
                         className={cn(
-                            "flex size-8 items-center justify-center transition-all duration-200",
+                            "flex size-8 items-center justify-center transition-all duration-200 disabled:cursor-wait disabled:opacity-70",
                             isAccepted
-                                ? "text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]"
-                                : "text-zinc-600 hover:text-green-500"
+                                ? "text-[#CFE8D5] drop-shadow-[0_0_8px_rgba(207,232,213,0.35)]"
+                                : "text-zinc-600 hover:text-[#CFE8D5]"
                         )}
                     >
-                        <Check className="size-6" strokeWidth={2.5} />
+                        {isAccepting ? (
+                            <Loader2 className="size-5 animate-spin" />
+                        ) : (
+                            <Check className="size-6" strokeWidth={2.5} />
+                        )}
                     </button>
                 ) : isAccepted ? (
                     <div
                         title="Accepted Answer"
-                        className="flex size-8 items-center justify-center text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]"
+                        className="flex size-8 items-center justify-center text-[#CFE8D5] drop-shadow-[0_0_8px_rgba(207,232,213,0.35)]"
                     >
                         <Check className="size-6" strokeWidth={2.5} />
                     </div>
                 ) : null}
                 
                 <button
-                    className="flex size-8 items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors"
+                    disabled={disabled}
+                    aria-label="Bookmark answer"
+                    className="flex size-8 items-center justify-center text-zinc-600 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <Bookmark className="size-5" />
                 </button>
@@ -238,19 +264,29 @@ export default function AnswerCard({
         deleteAnswer,
         isQuestionAuthor,
         acceptAnswer,
+        isDeletingQuestion,
+        acceptingAnswerId,
+        question,
     } = useQuestionDetail();
 
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
-    const [showComments, setShowComments] = React.useState(true);
 
     const votedStatus = getVoteStatus("answer", answer.$id);
     const voteScore = getAnswerScore(answer);
-    const isOwner = currentUser?.$id === answer.authorId;
+    const isAnswerOwner = currentUser?.$id === answer.authorId;
+    const isOriginalPoster = answer.authorId === question.authorId;
     const commentCount = answer.comments?.total || 0;
     const isBest = variant === "best" || answer.isAccepted;
+    const interactionsDisabled = isDeletingQuestion || isDeleting;
+    const isAccepting = acceptingAnswerId === answer.$id;
+    const commentComposerId = `comment-composer-answer-${answer.$id}`;
+    const createdAtMs = new Date(answer.$createdAt).getTime();
+    const updatedAtMs = new Date(answer.$updatedAt).getTime();
+    const wasEdited = Number.isFinite(createdAtMs) && Number.isFinite(updatedAtMs) && updatedAtMs - createdAtMs > 60_000;
 
     const handleConfirmDelete = async () => {
+        if (isDeletingQuestion) return;
         setIsDeleting(true);
         const deleted = await deleteAnswer(answer.$id);
         setIsDeleting(false);
@@ -258,9 +294,21 @@ export default function AnswerCard({
     };
 
     const handleShare = async () => {
+        if (interactionsDisabled) return;
         const url = `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`;
         await navigator.clipboard.writeText(url);
-        toast.success("Answer link copied");
+        toast("Answer link copied", {
+            description: "Link copied to clipboard.",
+        });
+    };
+
+    const focusCommentComposer = () => {
+        if (interactionsDisabled) return;
+        const composer = document.getElementById(commentComposerId);
+        composer?.scrollIntoView({ behavior: "smooth", block: "center" });
+        window.setTimeout(() => {
+            composer?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+        }, 250);
     };
 
     return (
@@ -277,10 +325,17 @@ export default function AnswerCard({
                 isAccepted={answer.isAccepted}
                 isQuestionAuthor={isQuestionAuthor}
                 onAccept={() => acceptAnswer(answer.$id)}
+                isAccepting={isAccepting}
+                disabled={interactionsDisabled}
             />
 
             {/* Content Container - Bordered box */}
-            <div className="flex-1 min-w-0 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-5">
+            <div
+                className={cn(
+                    "flex-1 min-w-0 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-5",
+                    isBest && "border-[#CFE8D5]/20 bg-[#CFE8D5]/[0.025]"
+                )}
+            >
                 {/* Author row */}
                 <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -291,8 +346,8 @@ export default function AnswerCard({
                         >
                             {answer.author.name}
                         </Link>
-                        {isOwner && (
-                            <span className="rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-bold text-green-400 uppercase tracking-wide">
+                        {isOriginalPoster && (
+                            <span className="rounded bg-[#CFE8D5]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#CFE8D5] uppercase tracking-wide">
                                 OP
                             </span>
                         )}
@@ -303,13 +358,14 @@ export default function AnswerCard({
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {answer.$createdAt !== answer.$updatedAt && (
+                        {wasEdited && (
                             <span className="text-xs text-zinc-600">Edited {convertDateToRelativeTime(new Date(answer.$updatedAt))}</span>
                         )}
                         <AnswerMoreMenu
                             answerId={answer.$id}
-                            isOwner={isOwner}
+                            isOwner={isAnswerOwner}
                             onDelete={() => setDeleteDialogOpen(true)}
+                            disabled={interactionsDisabled}
                         />
                     </div>
                 </div>
@@ -321,26 +377,22 @@ export default function AnswerCard({
 
                 {/* Action bar */}
                 <div className="mt-5 flex items-center gap-6 text-[13px] font-medium text-zinc-500">
-                    <button className={cn("flex items-center gap-2 transition hover:text-zinc-300", voteScore > 0 && "text-green-500 hover:text-green-400")}>
-                        <ThumbsUp className="size-4" fill={voteScore > 0 ? "currentColor" : "none"} />
-                        <span className="font-bold">{voteScore}</span>
-                    </button>
-                    
-                    <button className="flex items-center gap-2 transition hover:text-zinc-300">
+                    <button
+                        onClick={focusCommentComposer}
+                        disabled={interactionsDisabled}
+                        className="flex items-center gap-2 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                         <MessageCircle className="size-4" />
-                        Reply
+                        Comment
                     </button>
 
                     <button
                         onClick={handleShare}
-                        className="flex items-center gap-2 transition hover:text-zinc-300"
+                        disabled={interactionsDisabled}
+                        className="flex items-center gap-2 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <Share2 className="size-4" />
                         Share
-                    </button>
-                    
-                    <button className="flex items-center gap-2 transition hover:text-zinc-300">
-                        <MoreHorizontal className="size-4" />
                     </button>
                 </div>
 
@@ -351,18 +403,8 @@ export default function AnswerCard({
                             <MessageCircle className="size-4" />
                             Comments ({commentCount})
                         </h4>
-                        {commentCount > 0 && (
-                            <button
-                                onClick={() => setShowComments(!showComments)}
-                                className="text-xs font-medium text-zinc-500 hover:text-zinc-300 transition"
-                            >
-                                {showComments ? "Hide comments ^" : "Show comments v"}
-                            </button>
-                        )}
                     </div>
-                    {showComments && (
-                        <CommentsSection type="answer" typeId={answer.$id} />
-                    )}
+                    <CommentsSection type="answer" typeId={answer.$id} />
                 </div>
             </div>
 
@@ -374,6 +416,7 @@ export default function AnswerCard({
                 destructive
                 onCancel={() => setDeleteDialogOpen(false)}
                 onConfirm={handleConfirmDelete}
+                busy={isDeleting}
             />
         </article>
     );
@@ -392,3 +435,9 @@ const AnswerMarkdown = dynamic(
         ),
     }
 );
+
+function formatVoteStatusForLabel(status: string | null | undefined) {
+    if (status === "upvoted") return "You have upvoted this answer";
+    if (status === "downvoted") return "You have downvoted this answer";
+    return "You have not voted on this answer";
+}

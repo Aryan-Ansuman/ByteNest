@@ -28,7 +28,7 @@ import React from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/store/Auth";
-import { QuestionDetailProvider } from "./QuestionDetailContext";
+import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailContext";
 import QuestionHero from "./QuestionHero";
 import QuestionSidebar from "./QuestionSidebar";
 import DynamicAnswerSection from "./DynamicAnswerSection";
@@ -44,6 +44,7 @@ interface StaticQuestion {
     attachmentId: string | null;
     views: number;
     totalVotes: number;
+    totalAnswers: number;
 }
 
 interface StaticAuthor {
@@ -73,9 +74,8 @@ export default function QuestionStaticShell({
 }: Props) {
     const { user } = useAuthStore();
 
-    const breadcrumbLabel = question.tags[0]
-        ? question.tags[0].charAt(0).toUpperCase() + question.tags[0].slice(1)
-        : "Uncategorized";
+    const breadcrumbTag = question.tags[0] ?? "";
+    const breadcrumbLabel = breadcrumbTag ? formatCollectiveName(breadcrumbTag) : "Uncategorized";
 
     // Synthetic vote lists so QuestionDetailProvider initialises with the
     // ISR-cached net score immediately, before the client vote-status fetch
@@ -112,12 +112,16 @@ export default function QuestionStaticShell({
                         All Questions
                     </Link>
                     <ChevronRight className="size-3.5" />
-                    <Link
-                        href={`/questions?tag=${encodeURIComponent(breadcrumbLabel.toLowerCase())}`}
-                        className="transition-colors hover:text-zinc-200"
-                    >
-                        {breadcrumbLabel}
-                    </Link>
+                    {breadcrumbTag ? (
+                        <Link
+                            href={`/questions?tag=${encodeURIComponent(breadcrumbTag)}`}
+                            className="transition-colors hover:text-zinc-200"
+                        >
+                            {breadcrumbLabel}
+                        </Link>
+                    ) : (
+                        <span className="text-zinc-500">{breadcrumbLabel}</span>
+                    )}
                     <ChevronRight className="size-3.5" />
                     <span className="truncate text-zinc-400">{question.title}</span>
                 </div>
@@ -133,7 +137,7 @@ export default function QuestionStaticShell({
                          * Suspense boundary shows a skeleton while the client
                          * fetches answers from the server.
                          */}
-                        <React.Suspense fallback={<AnswersSkeleton />}>
+                        <React.Suspense fallback={<AnswersSkeleton expectedAnswerCount={question.totalAnswers} />}>
                             <DynamicAnswerSection questionId={question.$id} />
                         </React.Suspense>
                     </main>
@@ -148,7 +152,9 @@ export default function QuestionStaticShell({
 
 // ─── Skeleton shown while answers load ───────────────────────────────────────
 
-function AnswersSkeleton() {
+function AnswersSkeleton({ expectedAnswerCount }: { expectedAnswerCount: number }) {
+    const placeholderCount = Math.min(Math.max(expectedAnswerCount, 0), 5);
+
     return (
         <div className="mt-10 space-y-4" aria-busy="true" aria-label="Loading answers…">
             {/* Tab bar placeholder */}
@@ -157,8 +163,13 @@ function AnswersSkeleton() {
                     <div key={label} className="h-4 w-20 animate-pulse rounded-full bg-white/[0.07]" />
                 ))}
             </div>
+            <p className="text-xs text-zinc-600">
+                {expectedAnswerCount > 0
+                    ? `Loading ${expectedAnswerCount} answer${expectedAnswerCount !== 1 ? "s" : ""}...`
+                    : "Checking for answers..."}
+            </p>
             {/* Answer card placeholders */}
-            {[1, 2].map((i) => (
+            {Array.from({ length: placeholderCount }, (_, i) => i + 1).map((i) => (
                 <div
                     key={i}
                     className="grid grid-cols-[56px_minmax(0,1fr)] gap-5 rounded-2xl border border-white/[0.06] bg-white/[0.015] p-6"

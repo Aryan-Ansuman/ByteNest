@@ -18,7 +18,7 @@
  *   confirm the vote count they already saw.
  */
 
-import { db, questionCollection, questionAttachmentBucket } from "@/models/name";
+import { answerCollection, db, questionCollection, questionAttachmentBucket } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { storage } from "@/models/client/config";
 import { UserPrefs } from "@/store/Auth";
@@ -56,7 +56,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
 
     // ── 2. Parallel static fetches (all ISR-cached) ──────────────────────
     // author + similar questions are rarely-changing — safe to cache.
-    const [author, similar] = await Promise.all([
+    const [author, similar, answerCount] = await Promise.all([
         users.get<UserPrefs>(question.authorId),
         tags.length > 0
             ? databases
@@ -79,6 +79,10 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                   })
                   .catch(() => [] as any[])
             : Promise.resolve([] as any[]),
+        databases.listDocuments(db, answerCollection, [
+            Query.equal("questionId", params.quesId),
+            Query.limit(1),
+        ]),
     ]);
 
     const similarQuestions = similar.map((q) => ({
@@ -92,11 +96,24 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
     // ISR cache key. Reading cookies() makes this render dynamic, but it's
     // a fire-and-forget write — it never blocks the response.
     const cookieStore = cookies();
+    const requestHeaders = headers();
     const viewCookieName = `bn_viewed_${params.quesId}`;
     const alreadyViewedThisSession = cookieStore.get(viewCookieName)?.value === "1";
-    const userAgent = headers().get("user-agent") ?? "";
+    const userAgent = requestHeaders.get("user-agent") ?? "";
+    const acceptHeader = requestHeaders.get("accept") ?? "";
+    const secFetchMode = requestHeaders.get("sec-fetch-mode") ?? "";
+    const secFetchDest = requestHeaders.get("sec-fetch-dest") ?? "";
+    const purpose = `${requestHeaders.get("purpose") ?? ""} ${requestHeaders.get("sec-purpose") ?? ""}`;
+    const isDocumentNavigation =
+        acceptHeader.includes("text/html") &&
+        secFetchMode === "navigate" &&
+        secFetchDest === "document";
+    const isPrefetch =
+        purpose.toLowerCase().includes("prefetch") ||
+        requestHeaders.get("next-router-prefetch") === "1";
     const isBot = BOT_USER_AGENT_PATTERN.test(userAgent);
-    const shouldIncrementView = !alreadyViewedThisSession && !isBot;
+    const shouldIncrementView =
+        !alreadyViewedThisSession && !isBot && isDocumentNavigation && !isPrefetch;
 
     if (shouldIncrementView) {
         databases
@@ -129,6 +146,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             // Pass the denormalized total so the client shows a number immediately
             // without waiting for the vote API response.
             totalVotes: Number(question.totalVotes ?? 0),
+            totalAnswers: Number(answerCount.total ?? 0),
         },
         author: {
             $id: author.$id,

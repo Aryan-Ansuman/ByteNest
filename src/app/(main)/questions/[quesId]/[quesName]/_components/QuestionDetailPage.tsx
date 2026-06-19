@@ -2,10 +2,10 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Models } from "appwrite";
 import { useAuthStore } from "@/store/Auth";
-import { QuestionDetailProvider } from "./QuestionDetailContext";
+import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailContext";
 import QuestionHero from "./QuestionHero";
 import QuestionSidebar from "./QuestionSidebar";
 import ContentTabs from "./ContentTabs";
@@ -33,9 +33,8 @@ export default function QuestionDetailPage({
 }: Props) {
     const { user } = useAuthStore();
 
-    const breadcrumbLabel = question.tags && question.tags[0] 
-        ? question.tags[0].charAt(0).toUpperCase() + question.tags[0].slice(1)
-        : "Uncategorized";
+    const breadcrumbTag = question.tags?.[0] ?? "";
+    const breadcrumbLabel = breadcrumbTag ? formatCollectiveName(breadcrumbTag) : "Uncategorized";
 
     return (
         <QuestionDetailProvider
@@ -59,9 +58,13 @@ export default function QuestionDetailPage({
                         All Questions
                     </Link>
                     <ChevronRight className="size-3.5" />
-                    <Link href={`/questions?tag=${encodeURIComponent(breadcrumbLabel.toLowerCase())}`} className="transition-colors hover:text-zinc-200">
-                        {breadcrumbLabel}
-                    </Link>
+                    {breadcrumbTag ? (
+                        <Link href={`/questions?tag=${encodeURIComponent(breadcrumbTag)}`} className="transition-colors hover:text-zinc-200">
+                            {breadcrumbLabel}
+                        </Link>
+                    ) : (
+                        <span className="text-zinc-500">{breadcrumbLabel}</span>
+                    )}
                     <ChevronRight className="size-3.5" />
                     <span className="truncate text-zinc-400">{question.title}</span>
                 </div>

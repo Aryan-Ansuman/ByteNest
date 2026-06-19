@@ -5,11 +5,9 @@ import Link from "next/link";
 import {
     MessageCircle,
     Trash2,
-    ThumbsUp,
     Reply,
-    ImageIcon,
-    Smile,
     MoreHorizontal,
+    X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
@@ -31,6 +29,7 @@ function CommentComposer({
     onCancel,
     placeholder = "Add a comment…",
     compact = false,
+    disabled = false,
 }: {
     currentUser: { $id: string; name: string } | null;
     isPosting: boolean;
@@ -40,19 +39,23 @@ function CommentComposer({
     onCancel?: () => void;
     placeholder?: string;
     compact?: boolean;
+    disabled?: boolean;
 }) {
-    const [expanded, setExpanded] = React.useState(!compact);
     const inputRef = React.useRef<HTMLTextAreaElement>(null);
+    const charsRemaining = 500 - value.length;
 
-    const handleFocus = () => {
-        if (compact) setExpanded(true);
-    };
+    React.useEffect(() => {
+        const input = inputRef.current;
+        if (!input) return;
+        input.style.height = "auto";
+        input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+    }, [value]);
 
-    if (!currentUser && compact) {
+    if (!currentUser) {
         return (
             <div className="flex items-center gap-2 py-3 text-sm text-zinc-600">
                 <MessageCircle className="size-4" />
-                <Link href="/login" className="text-green-500 hover:text-green-400 transition">
+                <Link href="/login" className="text-[#CFE8D5] transition hover:text-white">
                     Sign in
                 </Link>{" "}
                 to join the discussion
@@ -65,37 +68,58 @@ function CommentComposer({
             <div className="flex items-start gap-3">
                 {currentUser && <Avatar name={currentUser.name} />}
 
-                <div className="min-w-0 flex-1 border border-white/10 rounded-xl bg-white/[0.02] p-2 flex items-center focus-within:border-white/20 transition-colors">
+                <div className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.02] p-2 transition-colors focus-within:border-white/20">
                     <textarea
                         ref={inputRef}
                         autoFocus={!compact}
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
-                        onFocus={handleFocus}
+                        onKeyDown={(e) => {
+                            if (e.key === "Escape" && onCancel) {
+                                e.preventDefault();
+                                onCancel();
+                            }
+                        }}
                         placeholder={placeholder}
                         maxLength={500}
-                        rows={1}
+                        rows={compact ? 2 : 3}
+                        disabled={disabled || isPosting}
                         className={cn(
-                            "w-full resize-none bg-transparent px-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 h-6"
+                            "max-h-40 min-h-10 w-full resize-none overflow-hidden bg-transparent px-2 py-1 text-sm leading-relaxed text-zinc-200 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
                         )}
                     />
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                        <span
+                            className={cn(
+                                "px-2 text-[11px]",
+                                charsRemaining < 50 ? "text-amber-400" : "text-zinc-600"
+                            )}
+                        >
+                            {value.length}/500
+                        </span>
 
-                        <button
-                            type="button"
-                            title="Attach image"
-                            className="flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 transition"
-                        >
-                            <ImageIcon className="size-4" />
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isPosting || !value.trim()}
-                            className="h-8 rounded-lg bg-white/[0.06] text-zinc-300 px-4 text-xs font-semibold hover:bg-white/[0.12] hover:text-white disabled:opacity-50 transition"
-                        >
-                            {isPosting ? "Posting…" : "Post"}
-                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                            {onCancel && (
+                                <button
+                                    type="button"
+                                    onClick={onCancel}
+                                    disabled={disabled || isPosting}
+                                    title="Cancel reply"
+                                    className="flex size-8 items-center justify-center rounded-lg text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <X className="size-4" />
+                                </button>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={disabled || isPosting || !value.trim()}
+                                className="h-8 rounded-lg bg-white/[0.06] px-4 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.12] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {isPosting ? "Posting…" : "Post"}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -112,6 +136,7 @@ function CommentRow({
     onReply,
     isReply = false,
     isAnswerAuthor = false,
+    disabled = false,
 }: {
     comment: CommentDoc & { author: { $id: string; name: string; reputation: number } };
     onDelete: () => void;
@@ -119,9 +144,8 @@ function CommentRow({
     onReply: () => void;
     isReply?: boolean;
     isAnswerAuthor?: boolean;
+    disabled?: boolean;
 }) {
-    const [liked, setLiked] = React.useState(false);
-    const [likeCount, setLikeCount] = React.useState(0);
     const isOwn = currentUserId === comment.authorId;
 
     return (
@@ -143,7 +167,7 @@ function CommentRow({
                         {comment.author.name}
                     </Link>
                     {isAnswerAuthor && (
-                        <span className="rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-bold text-green-400 uppercase tracking-wide">
+                        <span className="rounded bg-[#CFE8D5]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#CFE8D5] uppercase tracking-wide">
                             OP
                         </span>
                     )}
@@ -167,22 +191,9 @@ function CommentRow({
                 {!comment.isDeleted && (
                 <div className="mt-2 flex items-center gap-4">
                     <button
-                        onClick={() => {
-                            setLiked(!liked);
-                            setLikeCount((c) => (liked ? c - 1 : c + 1));
-                        }}
-                        className={cn(
-                            "flex items-center gap-1.5 text-xs font-semibold transition",
-                            liked ? "text-green-500" : "text-zinc-500 hover:text-zinc-300"
-                        )}
-                    >
-                        <ThumbsUp className="size-4" fill={liked ? "currentColor" : "none"} />
-                        {likeCount > 0 && <span>{likeCount}</span>}
-                    </button>
-
-                    <button
+                        disabled={disabled}
                         onClick={onReply}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-300 transition"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <Reply className="size-4" />
                         Reply
@@ -190,8 +201,9 @@ function CommentRow({
 
                     {isOwn && (
                         <button
+                            disabled={disabled}
                             onClick={onDelete}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 hover:text-red-400 transition"
+                            className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label="Delete comment"
                         >
                             <Trash2 className="size-3.5" />
@@ -221,6 +233,7 @@ export default function CommentsSection({
         currentUser,
         addComment,
         deleteComment,
+        isDeletingQuestion,
     } = useQuestionDetail();
 
     const [expanded, setExpanded] = React.useState(false);
@@ -230,6 +243,7 @@ export default function CommentsSection({
     const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
     const [replyText, setReplyText] = React.useState("");
     const [isPostingReply, setIsPostingReply] = React.useState(false);
+    const composerId = `comment-composer-${type}-${typeId}`;
 
     const comments =
         type === "question"
@@ -262,7 +276,7 @@ export default function CommentsSection({
 
     const handlePost = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim()) return;
+        if (isDeletingQuestion || !newComment.trim()) return;
         setIsPosting(true);
         const posted = await addComment(type, typeId, newComment);
         setIsPosting(false);
@@ -274,7 +288,7 @@ export default function CommentsSection({
 
     const handlePostReply = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!replyText.trim() || !replyingTo) return;
+        if (isDeletingQuestion || !replyText.trim() || !replyingTo) return;
         setIsPostingReply(true);
         const posted = await addComment(type, typeId, replyText, replyingTo);
         setIsPostingReply(false);
@@ -286,65 +300,44 @@ export default function CommentsSection({
     };
 
     const handleDelete = async () => {
-        if (!commentToDelete) return;
+        if (isDeletingQuestion || !commentToDelete) return;
         const deleted = await deleteComment(type, typeId, commentToDelete.$id);
         if (deleted) setCommentToDelete(null);
     };
 
-    const renderCommentThread = (
-        thread: ThreadedComment[],
-        isNested = false
-    ): React.ReactNode =>
-        thread.map((comment, index) => {
+    const renderCommentThread = (thread: ThreadedComment[]): React.ReactNode =>
+        thread.map((comment) => {
             const isAnswerAuthor = answerAuthorId === comment.authorId;
             const isReplyComposerOpen = replyingTo === comment.$id;
             const hasChildren = comment.replies.length > 0;
-            const isLast = index === thread.length - 1;
 
             return (
                 <div key={comment.$id} className="relative">
-                    {/* If nested, draw the L-curve and the vertical line to the next sibling */}
-                    {isNested && (
-                        <>
-                            <div
-                                className="pointer-events-none absolute -left-6 top-0 w-6 border-b border-l border-white/[0.18] rounded-bl-xl"
-                                style={{ height: "32px" }}
-                            />
-                            {!isLast && (
-                                <div className="pointer-events-none absolute -left-6 top-[32px] bottom-0 w-px bg-white/[0.18]" />
-                            )}
-                        </>
-                    )}
-
                     <div className="relative z-10">
-                        {/* Parent drop line: only needed if there are children or composer */}
-                        {(isReplyComposerOpen || hasChildren) && (
-                            <div className="pointer-events-none absolute left-[16px] top-[48px] bottom-0 w-px bg-white/[0.18] z-0" />
-                        )}
                         <CommentRow
                             comment={comment}
                             currentUserId={currentUser?.$id}
                             isAnswerAuthor={isAnswerAuthor}
                             onDelete={() => setCommentToDelete(comment)}
                             onReply={() => {
-                                setReplyingTo(replyingTo === comment.$id ? null : comment.$id);
+                                if (isDeletingQuestion) return;
+                                if (replyingTo === comment.$id) {
+                                    setReplyingTo(null);
+                                    setReplyText("");
+                                    return;
+                                }
+                                setReplyingTo(comment.$id);
                                 setReplyText(`@${comment.author?.name ?? "user"} `);
                             }}
+                            disabled={isDeletingQuestion}
                         />
                     </div>
 
                     {(isReplyComposerOpen || hasChildren) && (
-                        <div className="ml-4 pl-6 relative z-0">
+                        <div className="ml-5 border-l border-white/[0.12] pl-5">
                             {/* Inline reply composer */}
                             {isReplyComposerOpen && (
                                 <div className="relative pb-2">
-                                    <div
-                                        className="pointer-events-none absolute -left-6 top-0 w-6 border-b border-l border-white/[0.18] rounded-bl-xl"
-                                        style={{ height: "32px" }}
-                                    />
-                                    {hasChildren && (
-                                        <div className="pointer-events-none absolute -left-6 top-[32px] bottom-0 w-px bg-white/[0.18]" />
-                                    )}
                                     <CommentComposer
                                         currentUser={currentUser}
                                         isPosting={isPostingReply}
@@ -357,11 +350,12 @@ export default function CommentsSection({
                                         }}
                                         placeholder={`Reply to ${comment.author?.name ?? "user"}…`}
                                         compact={false}
+                                        disabled={isDeletingQuestion}
                                     />
                                 </div>
                             )}
 
-                            {hasChildren && renderCommentThread(comment.replies, true)}
+                            {hasChildren && renderCommentThread(comment.replies)}
                         </div>
                     )}
                 </div>
@@ -391,17 +385,24 @@ export default function CommentsSection({
 
             {/* Add comment composer */}
             {replyingTo === null && (
-                <CommentComposer
-                    currentUser={currentUser}
-                    isPosting={isPosting}
-                    value={newComment}
-                    onChange={setNewComment}
-                    onSubmit={handlePost}
-                    placeholder={
-                        currentUser ? "Add a comment..." : "Sign in to comment"
-                    }
-                    compact={comments.total > 0}
-                />
+                <div id={composerId}>
+                    <CommentComposer
+                        currentUser={currentUser}
+                        isPosting={isPosting}
+                        value={newComment}
+                        onChange={setNewComment}
+                        onSubmit={handlePost}
+                        placeholder={
+                            isDeletingQuestion
+                                ? "Question is being deleted..."
+                                : currentUser
+                                ? "Add a comment..."
+                                : "Sign in to comment"
+                        }
+                        compact={comments.total > 0}
+                        disabled={isDeletingQuestion}
+                    />
+                </div>
             )}
 
             <ConfirmDialog
@@ -412,6 +413,7 @@ export default function CommentsSection({
                 destructive
                 onCancel={() => setCommentToDelete(null)}
                 onConfirm={handleDelete}
+                busy={isDeletingQuestion}
             />
         </div>
     );
