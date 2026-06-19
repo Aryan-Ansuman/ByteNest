@@ -24,6 +24,7 @@
         --input: 240 5.9% 90%;
         --ring: 138 28% 72%;
         --radius: 0.75rem;
+        --thread-rail: #e2e8f0;
     }
 
     .dark {
@@ -46,6 +47,7 @@
         --border: 240 3.7% 15.9%;
         --input: 240 3.7% 15.9%;
         --ring: 138 28% 72%;
+        --thread-rail: #2d2d2d;
     }
 }
 

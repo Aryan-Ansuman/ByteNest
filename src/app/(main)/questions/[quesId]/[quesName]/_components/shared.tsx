@@ -17,7 +17,7 @@ export function Avatar({ name, small = false }: { name: string; small?: boolean 
     return (
         <span
             className={cn(
-                "flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-[linear-gradient(135deg,#2D2D2D,#1A1A1A)] font-medium text-zinc-300",
+                "flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-[#2D2D2D] to-[#1A1A1A] font-medium text-zinc-300",
                 small ? "size-7 text-[10px]" : "size-10 text-sm"
             )}
         >
