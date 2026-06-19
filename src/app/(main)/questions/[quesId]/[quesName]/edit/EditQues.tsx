@@ -39,10 +39,7 @@ import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
-const MarkdownPreview = dynamic(
-    () => import("@uiw/react-md-editor").then((m) => m.default.Markdown),
-    { ssr: false }
-);
+import MarkdownPreview from "@/components/MarkdownPreview";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -200,6 +197,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
 
         setIsSubmitting(true);
         setError("");
+        let uploadedAttachmentId: string | null = null;
 
         try {
             let newAttachmentId: string | undefined;
@@ -212,6 +210,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                     newAttachment
                 );
                 newAttachmentId = stored.$id;
+                uploadedAttachmentId = stored.$id;
             }
 
             const payload: any = {
@@ -241,6 +240,11 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                 router.push(`/questions/${question.$id}/${slugify(title.trim())}`);
             }, 1200);
         } catch (err: any) {
+            if (uploadedAttachmentId) {
+                await storage
+                    .deleteFile(questionAttachmentBucket, uploadedAttachmentId)
+                    .catch(() => undefined);
+            }
             setError(err?.message || "Something went wrong. Please try again.");
             setIsSubmitting(false);
         }

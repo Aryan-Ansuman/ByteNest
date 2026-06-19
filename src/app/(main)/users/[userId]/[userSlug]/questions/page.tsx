@@ -1,4 +1,4 @@
-import { answerCollection, db, questionCollection, voteCollection } from "@/models/name";
+import { answerCollection, db, questionCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
@@ -29,23 +29,9 @@ const Page = async ({
     // 3. Enrich each question with answer count and net vote count
     const enriched: QuestionItem[] = await Promise.all(
         questions.documents.map(async (q) => {
-            const [upvotes, downvotes, answers] = await Promise.all([
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", q.$id),
-                    Query.equal("voteStatus", "upvoted"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", q.$id),
-                    Query.equal("voteStatus", "downvoted"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, answerCollection, [
-                    Query.equal("questionId", q.$id),
-                    Query.limit(1),
-                ]),
+            const answers = await databases.listDocuments(db, answerCollection, [
+                Query.equal("questionId", q.$id),
+                Query.limit(1),
             ]);
 
             return {
@@ -56,9 +42,9 @@ const Page = async ({
                 $createdAt: q.$createdAt,
                 $updatedAt: q.$updatedAt,
                 authorId: q.authorId as string,
-                totalVotes: upvotes.total - downvotes.total,
+                totalVotes: Number(q.totalVotes ?? 0),
                 totalAnswers: answers.total,
-                hasAcceptedAnswer: false,
+                hasAcceptedAnswer: Boolean(q.acceptedAnswerId),
             };
         })
     );

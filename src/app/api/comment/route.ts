@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit per authenticated user
-    const rl = rateLimit({
+    const rl = await rateLimit({
         key: `comment:${requesterId}`,
         limit: COMMENT_RATE_LIMIT,
         windowMs: COMMENT_WINDOW_MS,

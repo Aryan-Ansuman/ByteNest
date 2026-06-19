@@ -39,23 +39,16 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
     // Enrich questions with vote + answer counts
     const enrichedQuestions = await Promise.all(
         questions.documents.map(async (q) => {
-            const [qVotes, qAnswers] = await Promise.all([
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "question"),
-                    Query.equal("typeId", q.$id),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, answerCollection, [
-                    Query.equal("questionId", q.$id),
-                    Query.limit(1),
-                ]),
+            const qAnswers = await databases.listDocuments(db, answerCollection, [
+                Query.equal("questionId", q.$id),
+                Query.limit(1),
             ]);
             return {
                 $id: q.$id,
                 title: q.title as string,
                 tags: q.tags as string[],
                 $createdAt: q.$createdAt,
-                totalVotes: qVotes.total,
+                totalVotes: Number(q.totalVotes ?? 0),
                 totalAnswers: qAnswers.total,
             };
         })
@@ -64,15 +57,8 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
     // Enrich answers with question title
     const enrichedAnswers = await Promise.all(
         answers.documents.map(async (a) => {
-            const [question, aVotes] = await Promise.all([
-                databases.getDocument(db, questionCollection, a.questionId as string, [
-                    Query.select(["title"]),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "answer"),
-                    Query.equal("typeId", a.$id),
-                    Query.limit(1),
-                ]),
+            const question = await databases.getDocument(db, questionCollection, a.questionId as string, [
+                Query.select(["title"]),
             ]);
             return {
                 $id: a.$id,
@@ -80,7 +66,7 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
                 $createdAt: a.$createdAt,
                 questionId: a.questionId as string,
                 questionTitle: question.title as string,
-                totalVotes: aVotes.total,
+                totalVotes: Number(a.totalVotes ?? 0),
             };
         })
     );

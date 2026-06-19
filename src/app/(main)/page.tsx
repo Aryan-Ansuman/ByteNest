@@ -5,6 +5,7 @@ import { UserPrefs } from "@/store/Auth";
 import HomeClient from "./HomeClient";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
+import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,15 +45,15 @@ const Page = async ({
 
     // Enrich feed questions — vote total comes from the denormalized field,
     // no vote-document listing required.
+    const authorById = await getAuthorsById(questions.documents.map((q) => q.authorId as string));
+
     const enriched = await Promise.all(
         questions.documents.map(async (q) => {
-            const [author, answers] = await Promise.all([
-                users.get<UserPrefs>(q.authorId).catch(() => null),
-                databases.listDocuments(db, answerCollection, [
+            const answers = await databases.listDocuments(db, answerCollection, [
                     Query.equal("questionId", q.$id),
                     Query.limit(1),
-                ]),
             ]);
+            const author = authorById.get(q.authorId as string) ?? deletedAuthor;
 
             return {
                 $id: q.$id,
@@ -63,11 +64,7 @@ const Page = async ({
                 totalAnswers: answers.total,
                 // Read from denormalized field; default 0 for pre-migration docs.
                 totalVotes: Number(q.totalVotes ?? 0),
-                author: {
-                    $id: author?.$id ?? "deleted",
-                    name: author?.name ?? "Deleted User",
-                    reputation: author?.prefs?.reputation ?? 0,
-                },
+                author,
             };
         })
     );
@@ -84,21 +81,19 @@ const Page = async ({
         .slice(0, 5)
         .map(([tag, count]) => ({
             tag,
-            questions: count * 5 + Math.floor(Math.random() * 50),
+            questions: count,
         }));
 
     // Community highlights
     const authorIds = Array.from(
         new Set(recentAnswers.documents.map((a) => a.authorId))
     );
-    const fetchedAuthors = await Promise.all(
-        authorIds.slice(0, 10).map((id) => users.get<UserPrefs>(id).catch(() => null))
-    );
-    const communityHighlights = fetchedAuthors
-        .filter((a): a is any => a !== null)
-        .sort((a, b) => (b.prefs?.reputation ?? 0) - (a.prefs?.reputation ?? 0))
+    const recentAnswerAuthors = await getAuthorsById(authorIds.slice(0, 10));
+    const communityHighlights = Array.from(recentAnswerAuthors.values())
+        .filter((a) => a.$id !== "deleted")
+        .sort((a, b) => b.reputation - a.reputation)
         .slice(0, 3)
-        .map((a) => ({ name: a.name, $id: a.$id, reputation: a.prefs?.reputation ?? 0 }));
+        .map((a) => ({ name: a.name, $id: a.$id, reputation: a.reputation }));
 
     // Developer news
     const developerNews = recentQuestions.documents

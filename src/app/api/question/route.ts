@@ -12,7 +12,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
 import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
-import { sanitizeMarkdownSource } from "@/lib/sanitize";
+import { sanitizeMarkdownSource, sanitizeTitleSource } from "@/lib/sanitize";
+import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
+import { listAllDocuments } from "@/lib/appwrite-pagination";
 
 // Rate limit: 3 questions per user per 10 minutes
 const QUESTION_RATE_LIMIT = 3;
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
         const requesterId = await getAuthenticatedUserId();
 
         // Rate limit per authenticated user
-        const rl = rateLimit({
+        const rl = await rateLimit({
             key: `question:${requesterId}`,
             limit: QUESTION_RATE_LIMIT,
             windowMs: QUESTION_WINDOW_MS,
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Sanitize user-supplied markdown content before persisting
-        const sanitizedTitle = sanitizeMarkdownSource(title ?? "").slice(0, 100);
+        const sanitizedTitle = sanitizeTitleSource(title ?? "").slice(0, 100);
         const sanitizedContent = sanitizeMarkdownSource(content ?? "");
 
         if (sanitizedTitle.length < 15) {
@@ -74,6 +76,7 @@ export async function POST(request: NextRequest) {
             ID.unique(),
             docData
         );
+        await revalidateQuestionCaches(response.$id, [sanitizedTitle]);
 
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
@@ -103,7 +106,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Sanitize on update too
-        const sanitizedTitle = sanitizeMarkdownSource(title ?? "").slice(0, 100);
+        const sanitizedTitle = sanitizeTitleSource(title ?? "").slice(0, 100);
         const sanitizedContent = sanitizeMarkdownSource(content ?? "");
 
         const docData: Record<string, unknown> = {
@@ -113,11 +116,6 @@ export async function PATCH(request: NextRequest) {
         };
 
         if (attachmentId && oldAttachmentId && oldAttachmentId !== attachmentId) {
-            try {
-                await storage.deleteFile(questionAttachmentBucket, oldAttachmentId);
-            } catch {
-                // Old file may already be gone; non-fatal.
-            }
             docData.attachmentId = attachmentId;
         } else if (attachmentId) {
             docData.attachmentId = attachmentId === "none" ? null : attachmentId;
@@ -129,6 +127,18 @@ export async function PATCH(request: NextRequest) {
             questionId,
             docData
         );
+        await revalidateQuestionCaches(questionId, [
+            question.title as string,
+            sanitizedTitle,
+        ]);
+
+        if (oldAttachmentId && oldAttachmentId !== attachmentId) {
+            try {
+                await storage.deleteFile(questionAttachmentBucket, oldAttachmentId);
+            } catch {
+                // Old file may already be gone; non-fatal after the document update succeeded.
+            }
+        }
 
         return NextResponse.json(response, { status: 200 });
     } catch (error: unknown) {
@@ -177,34 +187,29 @@ export async function DELETE(request: NextRequest) {
     }
 
     const [answers, questionVotes, questionComments] = await Promise.all([
-        databases.listDocuments(db, answerCollection, [
+        listAllDocuments(answerCollection, [
             Query.equal("questionId", questionId),
-            Query.limit(5000),
         ]),
-        databases.listDocuments(db, voteCollection, [
+        listAllDocuments(voteCollection, [
             Query.equal("type", "question"),
             Query.equal("typeId", questionId),
-            Query.limit(5000),
         ]),
-        databases.listDocuments(db, commentCollection, [
+        listAllDocuments(commentCollection, [
             Query.equal("type", "question"),
             Query.equal("typeId", questionId),
-            Query.limit(5000),
         ]),
     ]);
 
     const perAnswerData = await Promise.all(
         answers.documents.map(async (answer) => {
             const [answerVotes, answerComments] = await Promise.all([
-                databases.listDocuments(db, voteCollection, [
+                listAllDocuments(voteCollection, [
                     Query.equal("type", "answer"),
                     Query.equal("typeId", answer.$id),
-                    Query.limit(5000),
                 ]),
-                databases.listDocuments(db, commentCollection, [
+                listAllDocuments(commentCollection, [
                     Query.equal("type", "answer"),
                     Query.equal("typeId", answer.$id),
-                    Query.limit(5000),
                 ]),
             ]);
             return { answer, answerVotes, answerComments };
@@ -256,6 +261,7 @@ export async function DELETE(request: NextRequest) {
             { status: 500 }
         );
     }
+    await revalidateQuestionCaches(questionId, [question.title as string]);
 
     const upvoteCount = questionVotes.documents.filter(
         (v) => v.voteStatus === "upvoted"

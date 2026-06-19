@@ -18,12 +18,10 @@
  *   confirm the vote count they already saw.
  */
 
-import { answerCollection, db, questionCollection, questionAttachmentBucket } from "@/models/name";
+import { answerCollection, db, questionCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
-import { storage } from "@/models/client/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
-import { cookies, headers } from "next/headers";
 import { notFound } from "next/navigation";
 import React from "react";
 import QuestionStaticShell from "./_components/QuestionStaticShell";
@@ -34,13 +32,7 @@ import slugify from "@/utils/slugify";
 // for 1 hour. Votes/answers/comments are fetched dynamically on the client.
 export const revalidate = 3600; // 1 hour ISR for the static shell
 
-// We still need cookies() for the view-count dedup, which opts this specific
-// invocation into dynamic rendering — but only for the view-count side-effect.
-// The rest of the data is fully cacheable.
 export const dynamic = "auto";
-
-const BOT_USER_AGENT_PATTERN =
-    /bot|crawler|spider|slurp|facebookexternalhit|whatsapp|slackbot|twitterbot|discordbot|telegrambot|linkedinbot|embedly|quora link preview|pinterest|vkshare|w3c_validator|baiduspider|yandexbot|duckduckbot|ahrefsbot|semrushbot|mj12bot|petalbot|skypeuripreview|redditbot|applebot/i;
 
 const Page = async ({ params }: { params: { quesId: string; quesName: string } }) => {
     // ── 1. Fetch the static question document ────────────────────────────
@@ -91,47 +83,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         answers: (q as any).totalAnswers ?? 0,
     }));
 
-    // ── 3. View-count side-effect (dynamic, non-blocking) ────────────────
-    // Runs AFTER all cacheable data is resolved so it doesn't contaminate the
-    // ISR cache key. Reading cookies() makes this render dynamic, but it's
-    // a fire-and-forget write — it never blocks the response.
-    const cookieStore = cookies();
-    const requestHeaders = headers();
-    const viewCookieName = `bn_viewed_${params.quesId}`;
-    const alreadyViewedThisSession = cookieStore.get(viewCookieName)?.value === "1";
-    const userAgent = requestHeaders.get("user-agent") ?? "";
-    const acceptHeader = requestHeaders.get("accept") ?? "";
-    const secFetchMode = requestHeaders.get("sec-fetch-mode") ?? "";
-    const secFetchDest = requestHeaders.get("sec-fetch-dest") ?? "";
-    const purpose = `${requestHeaders.get("purpose") ?? ""} ${requestHeaders.get("sec-purpose") ?? ""}`;
-    const isDocumentNavigation =
-        acceptHeader.includes("text/html") &&
-        secFetchMode === "navigate" &&
-        secFetchDest === "document";
-    const isPrefetch =
-        purpose.toLowerCase().includes("prefetch") ||
-        requestHeaders.get("next-router-prefetch") === "1";
-    const isBot = BOT_USER_AGENT_PATTERN.test(userAgent);
-    const shouldIncrementView =
-        !alreadyViewedThisSession && !isBot && isDocumentNavigation && !isPrefetch;
-
-    if (shouldIncrementView) {
-        databases
-            .updateDocument(db, questionCollection, params.quesId, {
-                views: Number(question.views ?? 0) + 1,
-            })
-            .catch((err) => {
-                console.error("[view-increment] failed:", err?.message ?? err);
-            });
-    }
-
-    // ── 4. Attachment URL (client-side Appwrite SDK, no server secret) ───
-    const attachmentUrl =
-        question.attachmentId && question.attachmentId !== "none"
-            ? storage.getFilePreview(questionAttachmentBucket, question.attachmentId).href
-            : "";
-
-    // ── 5. Serialize only what the static shell needs ────────────────────
+    // ── 3. Serialize only what the static shell needs ────────────────────
     const staticProps = {
         question: {
             $id: question.$id,
@@ -142,6 +94,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             authorId: question.authorId as string,
             tags,
             attachmentId: (question.attachmentId as string) ?? null,
+            acceptedAnswerId: (question.acceptedAnswerId as string | undefined) ?? null,
             views: Number(question.views ?? 0),
             // Pass the denormalized total so the client shows a number immediately
             // without waiting for the vote API response.
@@ -153,27 +106,20 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             name: author.name,
             reputation: author.prefs?.reputation ?? 0,
         },
-        attachmentUrl,
+        attachmentUrl:
+            question.attachmentId && question.attachmentId !== "none"
+                ? `/api/question-attachment/${encodeURIComponent(question.attachmentId as string)}`
+                : "",
         similarQuestions,
     };
 
     return (
-        <>
-            {shouldIncrementView && (
-                <script
-                    suppressHydrationWarning
-                    dangerouslySetInnerHTML={{
-                        __html: `document.cookie = "${viewCookieName}=1; path=/; max-age=86400; samesite=lax";`,
-                    }}
-                />
-            )}
-            {/*
-             * QuestionStaticShell renders the question body immediately from ISR cache.
-             * Inside it, DynamicAnswers and DynamicVotes are wrapped in <Suspense>
-             * and fetch from /api/* on the client, so they never block the static paint.
-             */}
-            <QuestionStaticShell {...staticProps} />
-        </>
+        /*
+         * QuestionStaticShell renders the question body immediately from ISR cache.
+         * Inside it, DynamicAnswers and DynamicVotes are wrapped in <Suspense>
+         * and fetch from /api/* on the client, so they never block the static paint.
+         */
+        <QuestionStaticShell {...staticProps} />
     );
 };
 

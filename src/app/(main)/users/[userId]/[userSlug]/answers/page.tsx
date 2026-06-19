@@ -1,4 +1,4 @@
-import { answerCollection, db, questionCollection, voteCollection } from "@/models/name";
+import { answerCollection, db, questionCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
@@ -29,30 +29,7 @@ const Page = async ({
     // 3. Enrich each answer with question info + vote count
     const enriched: AnswerItem[] = await Promise.all(
         answers.documents.map(async (ans) => {
-            const [question, votes] = await Promise.all([
-                databases.getDocument(db, questionCollection, ans.questionId as string),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "answer"),
-                    Query.equal("typeId", ans.$id),
-                    Query.limit(1),
-                ]),
-            ]);
-
-            // Net votes: count upvotes minus downvotes properly
-            const [upvotes, downvotes] = await Promise.all([
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "answer"),
-                    Query.equal("typeId", ans.$id),
-                    Query.equal("voteStatus", "upvoted"),
-                    Query.limit(1),
-                ]),
-                databases.listDocuments(db, voteCollection, [
-                    Query.equal("type", "answer"),
-                    Query.equal("typeId", ans.$id),
-                    Query.equal("voteStatus", "downvoted"),
-                    Query.limit(1),
-                ]),
-            ]);
+            const question = await databases.getDocument(db, questionCollection, ans.questionId as string);
 
             return {
                 $id: ans.$id,
@@ -62,7 +39,7 @@ const Page = async ({
                 questionId: ans.questionId as string,
                 questionTitle: question.title as string,
                 questionTags: (question.tags as string[]) ?? [],
-                totalVotes: upvotes.total - downvotes.total,
+                totalVotes: Number(ans.totalVotes ?? 0),
                 voteStatus: null, // server-side render; client would check against current user
             };
         })

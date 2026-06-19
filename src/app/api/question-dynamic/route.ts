@@ -19,6 +19,7 @@ import {
     answerCollection,
     commentCollection,
     db,
+    questionCollection,
 } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
@@ -39,11 +40,17 @@ export async function GET(request: NextRequest) {
         }
 
         // ── 1. Fetch answers + question-level comments in parallel ────────
-        const [answers, comments] = await Promise.all([
+        const [question, answers, comments] = await Promise.all([
+            databases.getDocument(db, questionCollection, questionId, [
+                Query.select(["acceptedAnswerId"]),
+            ]),
             databases.listDocuments(db, answerCollection, [
                 Query.orderDesc("$createdAt"),
                 Query.equal("questionId", questionId),
-                Query.limit(200),
+                Query.limit(getAnswerPageSize(request)),
+                ...(request.nextUrl.searchParams.get("cursor")
+                    ? [Query.cursorAfter(request.nextUrl.searchParams.get("cursor") as string)]
+                    : []),
             ]),
             databases.listDocuments(db, commentCollection, [
                 Query.equal("type", "question"),
@@ -53,7 +60,15 @@ export async function GET(request: NextRequest) {
             ]),
         ]);
 
+        const acceptedAnswerId =
+            typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId
+                ? question.acceptedAnswerId
+                : null;
         const answerIds = answers.documents.map((a) => a.$id);
+        const nextCursor =
+            answers.documents.length > 0
+                ? answers.documents[answers.documents.length - 1].$id
+                : null;
 
         // ── 2. Batch-fetch all answer comments in one query ───────────────
         const allAnswerComments =
@@ -62,7 +77,7 @@ export async function GET(request: NextRequest) {
                       Query.equal("type", "answer"),
                       Query.equal("typeId", answerIds),
                       Query.orderDesc("$createdAt"),
-                      Query.limit(5000),
+                      Query.limit(500),
                   ])
                 : { documents: [] as any[], total: 0 };
 
@@ -110,19 +125,14 @@ export async function GET(request: NextRequest) {
                 content: answer.content as string,
                 questionId: answer.questionId as string,
                 authorId: answer.authorId as string,
-                isAccepted: answer.isAccepted as boolean,
+                isAccepted: acceptedAnswerId
+                    ? answer.$id === acceptedAnswerId
+                    : Boolean(answer.isAccepted),
+                totalVotes: answerVoteScore,
                 author: toAuthor(answer.authorId as string),
                 comments: { total: answerComments.length, documents: answerComments },
-                // Encode denormalized totalVotes as synthetic up/down split
-                // so QuestionDetailContext's score calculation is correct.
-                upvotesDocuments: {
-                    total: answerVoteScore >= 0 ? answerVoteScore : 0,
-                    documents: [],
-                },
-                downvotesDocuments: {
-                    total: answerVoteScore < 0 ? Math.abs(answerVoteScore) : 0,
-                    documents: [],
-                },
+                upvotesDocuments: { total: 0, documents: [] },
+                downvotesDocuments: { total: 0, documents: [] },
             };
         });
 
@@ -136,6 +146,13 @@ export async function GET(request: NextRequest) {
             {
                 answers: { total: answers.total, documents: hydratedAnswers },
                 comments: { total: comments.total, documents: hydratedComments },
+                acceptedAnswerId,
+                answerPagination: {
+                    total: answers.total,
+                    loaded: hydratedAnswers.length,
+                    hasMore: hydratedAnswers.length < answers.total,
+                    nextCursor,
+                },
             },
             {
                 status: 200,
@@ -153,4 +170,10 @@ export async function GET(request: NextRequest) {
             { status: error?.status || error?.code || 500 }
         );
     }
+}
+
+function getAnswerPageSize(request: NextRequest) {
+    const requested = Number(request.nextUrl.searchParams.get("limit") ?? 20);
+    if (!Number.isFinite(requested)) return 20;
+    return Math.min(Math.max(Math.trunc(requested), 1), 50);
 }

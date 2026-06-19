@@ -17,6 +17,8 @@ import {
     Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { markdownToPlainExcerpt } from "@/lib/sanitize";
+import MarkdownPreview from "@/components/MarkdownPreview";
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
@@ -164,12 +166,12 @@ function VoteRail({
     return (
         <div className="flex shrink-0 flex-col items-center gap-1.5 pt-1 w-10">
             <button
-                onClick={onUpvote}
-                disabled={disabled}
+                onClick={(e) => { if (disabled) e.preventDefault(); else onUpvote(); }}
+                aria-disabled={disabled}
                 aria-label={`Upvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
                 aria-pressed={votedStatus === "upvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                    "flex size-9 items-center justify-center rounded-full transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
                     votedStatus === "upvoted"
                         ? "text-[#CFE8D5]"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
@@ -192,12 +194,12 @@ function VoteRail({
             </span>
 
             <button
-                onClick={onDownvote}
-                disabled={disabled}
+                onClick={(e) => { if (disabled) e.preventDefault(); else onDownvote(); }}
+                aria-disabled={disabled}
                 aria-label={`Downvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
                 aria-pressed={votedStatus === "downvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                    "flex size-9 items-center justify-center rounded-full transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
                     votedStatus === "downvoted"
                         ? "text-red-400"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
@@ -371,8 +373,13 @@ export default function AnswerCard({
                 </div>
 
                 {/* Markdown body */}
-                <div className="question-detail-markdown" data-color-mode="dark">
-                    <AnswerMarkdown source={answer.content} />
+                <div
+                    className="question-detail-markdown"
+                    data-color-mode="dark"
+                    role="region"
+                    aria-label="Answer body"
+                >
+                    <MarkdownPreview source={answer.content} />
                 </div>
 
                 {/* Action bar */}
@@ -421,20 +428,6 @@ export default function AnswerCard({
         </article>
     );
 }
-
-const AnswerMarkdown = dynamic(
-    () => import("@uiw/react-md-editor").then((module) => module.default.Markdown),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="space-y-3 py-2">
-                <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 w-full animate-pulse rounded bg-white/[0.05]" />
-                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
-            </div>
-        ),
-    }
-);
 
 function formatVoteStatusForLabel(status: string | null | undefined) {
     if (status === "upvoted") return "You have upvoted this answer";

@@ -12,7 +12,15 @@ type Tab = "ai" | "answers" | "discussion";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
-export default function ContentTabs({ isLoadingDynamic = false }: { isLoadingDynamic?: boolean }) {
+export default function ContentTabs({
+    isLoadingDynamic = false,
+    isLoadingMoreAnswers = false,
+    onLoadMoreAnswers,
+}: {
+    isLoadingDynamic?: boolean;
+    isLoadingMoreAnswers?: boolean;
+    onLoadMoreAnswers?: () => void;
+}) {
     const [activeTab, setActiveTab] = React.useState<Tab>("answers");
     const { answers, bestAnswer, communityAnswers } = useQuestionDetail();
 
@@ -47,6 +55,8 @@ export default function ContentTabs({ isLoadingDynamic = false }: { isLoadingDyn
                         bestAnswer={bestAnswer}
                         communityAnswers={communityAnswers}
                         total={answers.total}
+                        isLoadingMore={isLoadingMoreAnswers}
+                        onLoadMore={onLoadMoreAnswers}
                     />
                 )}
                 {activeTab === "discussion" && <DiscussionTab />}
@@ -98,7 +108,19 @@ function AiAnswerTab() {
     );
 }
 
-function AnswersTab({ bestAnswer, communityAnswers, total }: { bestAnswer: any; communityAnswers: any[]; total: number }) {
+function AnswersTab({
+    bestAnswer,
+    communityAnswers,
+    total,
+    isLoadingMore,
+    onLoadMore,
+}: {
+    bestAnswer: any;
+    communityAnswers: any[];
+    total: number;
+    isLoadingMore: boolean;
+    onLoadMore?: () => void;
+}) {
     const {
         currentUser,
         openAnswerComposer,
@@ -108,6 +130,7 @@ function AnswersTab({ bestAnswer, communityAnswers, total }: { bestAnswer: any; 
         isDeletingQuestion,
         answerSort,
         setAnswerSort,
+        answerPagination,
     } = useQuestionDetail();
     const [draft, setDraft] = React.useState("");
     const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -212,6 +235,19 @@ function AnswersTab({ bestAnswer, communityAnswers, total }: { bestAnswer: any; 
                 {communityAnswers.map((answer) => (
                     <AnswerCard key={answer.$id} answer={answer} />
                 ))}
+                {answerPagination.hasMore && (
+                    <div className="flex justify-center pt-2">
+                        <button
+                            type="button"
+                            onClick={onLoadMore}
+                            disabled={!onLoadMore || isLoadingMore || isDeletingQuestion}
+                            className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isLoadingMore && <Loader2 className="size-3.5 animate-spin" />}
+                            {isLoadingMore ? "Loading..." : "Load more answers"}
+                        </button>
+                    </div>
+                )}
                 {total === 0 && !answerComposerOpen && (
                     <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-6 py-10 text-center">
                         <div className="mx-auto flex size-11 items-center justify-center rounded-full border border-[#CFE8D5]/20 bg-[#CFE8D5]/10 text-[#CFE8D5]">

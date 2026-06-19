@@ -1,5 +1,6 @@
 import { db, voteCollection } from "@/models/name";
 import { databases } from "@/models/server/config";
+import { getAuthenticatedUserId } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { Query } from "node-appwrite";
 
@@ -22,6 +23,8 @@ import { Query } from "node-appwrite";
  * Only IDs that have an existing vote document are included in the
  * response array — absent IDs should be treated as "no vote" (null).
  */
+const MAX_BATCH_VOTE_IDS = 200;
+
 export async function GET(request: NextRequest) {
     try {
         const searchParams = request.nextUrl.searchParams;
@@ -36,10 +39,32 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        if (type !== "question" && type !== "answer") {
+            return NextResponse.json(
+                { error: "type must be question or answer" },
+                { status: 400 }
+            );
+        }
+
+        const requesterId = await getAuthenticatedUserId();
+        if (votedById !== requesterId) {
+            return NextResponse.json(
+                { error: "Unauthorized: votedById mismatch" },
+                { status: 403 }
+            );
+        }
+
         const typeIds = typeIdsRaw
             .split(",")
             .map((id) => id.trim())
             .filter(Boolean);
+
+        if (typeIds.length > MAX_BATCH_VOTE_IDS) {
+            return NextResponse.json(
+                { error: `Batch vote lookup is limited to ${MAX_BATCH_VOTE_IDS} targets` },
+                { status: 413 }
+            );
+        }
 
         if (typeIds.length === 0) {
             return NextResponse.json(
@@ -80,6 +105,7 @@ export async function GET(request: NextRequest) {
             { status: 200 }
         );
     } catch (error: any) {
+        if (error instanceof Response) return error;
         return NextResponse.json(
             { error: error?.message || "Error fetching batch vote statuses" },
             { status: error?.status || error?.code || 500 }

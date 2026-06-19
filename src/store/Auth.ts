@@ -7,7 +7,9 @@ import { account } from "@/models/client/config";
 
 
 export interface UserPrefs {
-  reputation: number
+  reputation: number;
+  bookmarks?: string[];
+  defaultAnswerSort?: string;
 }
 
 interface IAuthStore {
@@ -35,7 +37,9 @@ interface IAuthStore {
     success: boolean;
     error?: AppwriteException| null
   }>
-  logout(): Promise<void>
+  logout(): Promise<void>;
+  toggleBookmark(questionId: string): Promise<void>;
+  updateAnswerSort(sort: string): Promise<void>;
 }
 
 
@@ -53,27 +57,63 @@ export const useAuthStore = create<IAuthStore>()(
 
       async verfiySession() {
         try {
-          const session = await account.getSession("current")
-          set({session})
+          const [session, user] = await Promise.all([
+            account.getSession("current"),
+            account.get<UserPrefs>(),
+          ]);
 
-        } catch (error) {
-          console.log(error)
+          const currentPrefs = user.prefs || {};
+          let needsUpdate = false;
+          if (typeof currentPrefs.reputation !== "number") {
+            currentPrefs.reputation = 0;
+            needsUpdate = true;
+          }
+          if (!currentPrefs.bookmarks) {
+            currentPrefs.bookmarks = [];
+            needsUpdate = true;
+          }
+          if (!currentPrefs.defaultAnswerSort) {
+            currentPrefs.defaultAnswerSort = "highest-score";
+            needsUpdate = true;
+          }
+          
+          if (needsUpdate) {
+             const updatedUser = await account.updatePrefs<UserPrefs>(currentPrefs);
+             user.prefs = updatedUser.prefs;
+          }
+
+          set({session, user, jwt: null})
+
+        } catch {
+          set({session: null, jwt: null, user: null})
         }
       },
 
       async login(email: string, password: string) {
         try {
           const session = await account.createEmailPasswordSession(email, password)
-          const [user, {jwt}] = await Promise.all([
-            account.get<UserPrefs>(),
-            account.createJWT()
+          const user = await account.get<UserPrefs>()
+          const currentPrefs = user.prefs || {};
+          let needsUpdate = false;
+          if (typeof currentPrefs.reputation !== "number") {
+            currentPrefs.reputation = 0;
+            needsUpdate = true;
+          }
+          if (!currentPrefs.bookmarks) {
+            currentPrefs.bookmarks = [];
+            needsUpdate = true;
+          }
+          if (!currentPrefs.defaultAnswerSort) {
+            currentPrefs.defaultAnswerSort = "highest-score";
+            needsUpdate = true;
+          }
+          
+          if (needsUpdate) {
+             const updatedUser = await account.updatePrefs<UserPrefs>(currentPrefs);
+             user.prefs = updatedUser.prefs;
+          }
 
-          ])
-          if (!user.prefs?.reputation) await account.updatePrefs<UserPrefs>({
-            reputation: 0
-          })
-
-          set({session, user, jwt})
+          set({session, user, jwt: null})
           
           return { success: true}
 
@@ -122,9 +162,70 @@ export const useAuthStore = create<IAuthStore>()(
           console.log(error)
         }
       },
+
+      async toggleBookmark(questionId: string) {
+        const user = get().user;
+        if (!user) return;
+        
+        const prefs = user.prefs || { reputation: 0 };
+        const bookmarks = Array.isArray(prefs.bookmarks) ? [...prefs.bookmarks] : [];
+        
+        const index = bookmarks.indexOf(questionId);
+        if (index > -1) {
+            bookmarks.splice(index, 1);
+        } else {
+            bookmarks.push(questionId);
+        }
+        
+        const newPrefs = { ...prefs, bookmarks };
+        
+        // Optimistic UI update
+        set((state) => {
+            if (state.user) state.user.prefs = newPrefs;
+        });
+        
+        try {
+            await account.updatePrefs<UserPrefs>(newPrefs);
+        } catch (err) {
+            // Revert on failure
+            set((state) => {
+                if (state.user) state.user.prefs = prefs;
+            });
+            throw err;
+        }
+      },
+
+      async updateAnswerSort(sort: string) {
+        const user = get().user;
+        if (!user) return;
+        
+        const prefs = user.prefs || { reputation: 0 };
+        const newPrefs = { ...prefs, defaultAnswerSort: sort };
+        
+        set((state) => {
+            if (state.user) state.user.prefs = newPrefs;
+        });
+        
+        try {
+            await account.updatePrefs<UserPrefs>(newPrefs);
+        } catch (err) {
+            set((state) => {
+                if (state.user) state.user.prefs = prefs;
+            });
+            throw err;
+        }
+      },
     })),
     {
       name: "auth",
+      partialize(state) {
+        return {
+          user: state.user,
+          session: null,
+          jwt: null,
+          hydrated: state.hydrated,
+        } as Partial<IAuthStore>;
+      },
       onRehydrateStorage(){
         return (state, error) => {
           if (!error) state?.setHydrated()

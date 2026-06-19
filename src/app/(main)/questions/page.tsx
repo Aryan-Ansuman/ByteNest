@@ -4,6 +4,7 @@ import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
 import QuestionsClient from "./QuestionsClient";
 import type { Question } from "./QuestionsClient";
+import { getAuthorsById } from "@/lib/authors";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -43,13 +44,13 @@ const Page = async ({
     }
 
     const questions = await databases.listDocuments(db, questionCollection, queries);
+    const authorById = await getAuthorsById(questions.documents.map((q) => q.authorId as string));
 
     // Vote totals are now read directly from the denormalized `totalVotes`
     // field — no vote-document listing per question.
     const enriched: Question[] = await Promise.all(
         questions.documents.map(async (ques) => {
-            const [author, answers, latestAnswer] = await Promise.all([
-                users.get<UserPrefs>(ques.authorId),
+            const [answers, latestAnswer] = await Promise.all([
                 databases.listDocuments(db, answerCollection, [
                     Query.equal("questionId", ques.$id),
                     Query.limit(1),
@@ -60,6 +61,7 @@ const Page = async ({
                     Query.limit(1),
                 ]),
             ]);
+            const author = authorById.get(ques.authorId as string);
 
             const lastAnswerAt = latestAnswer.documents[0]?.$createdAt;
             const activityAt =
@@ -80,9 +82,9 @@ const Page = async ({
                 totalVotes: Number(ques.totalVotes ?? 0),
                 totalViews: Number(ques.views ?? ques.totalViews ?? 0),
                 author: {
-                    $id: author.$id,
-                    name: author.name,
-                    reputation: Number(author.prefs.reputation ?? 0),
+                    $id: author?.$id ?? "deleted",
+                    name: author?.name ?? "Deleted User",
+                    reputation: author?.reputation ?? 0,
                 },
             };
         })

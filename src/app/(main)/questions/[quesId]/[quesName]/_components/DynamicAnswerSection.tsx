@@ -49,6 +49,13 @@ interface CommentDoc {
 interface DynamicPayload {
     answers: { total: number; documents: AnswerDoc[] };
     comments: { total: number; documents: CommentDoc[] };
+    acceptedAnswerId?: string | null;
+    answerPagination?: {
+        total: number;
+        loaded: number;
+        hasMore: boolean;
+        nextCursor?: string | null;
+    };
 }
 
 interface Props {
@@ -56,19 +63,25 @@ interface Props {
 }
 
 export default function DynamicAnswerSection({ questionId }: Props) {
-    const { hydrateDynamic } = useQuestionDetail();
+    const { appendDynamicAnswers, answerPagination, hydrateDynamic } = useQuestionDetail();
     const [isLoading, setIsLoading] = React.useState(true);
+    const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+    const [loadError, setLoadError] = React.useState<string | null>(null);
     const [announcement, setAnnouncement] = React.useState("");
+    const [reloadToken, setReloadToken] = React.useState(0);
     const sectionRef = React.useRef<HTMLDivElement>(null);
-    const hasFetched = React.useRef(false);
+    const fetchedKey = React.useRef<string | null>(null);
 
     React.useEffect(() => {
-        if (hasFetched.current) return;
-        hasFetched.current = true;
+        const requestKey = `${questionId}:${reloadToken}`;
+        if (fetchedKey.current === requestKey) return;
+        fetchedKey.current = requestKey;
 
         const controller = new AbortController();
 
         async function load() {
+            setIsLoading(true);
+            setLoadError(null);
             try {
                 const res = await fetch(
                     `/api/question-dynamic?questionId=${encodeURIComponent(questionId)}`,
@@ -81,7 +94,12 @@ export default function DynamicAnswerSection({ questionId }: Props) {
                 }
 
                 const payload: DynamicPayload = await res.json();
-                hydrateDynamic(payload.answers, payload.comments);
+                hydrateDynamic(
+                    payload.answers,
+                    payload.comments,
+                    payload.answerPagination,
+                    payload.acceptedAnswerId
+                );
                 const answerTotal = payload.answers.total;
                 setAnnouncement(
                     `${answerTotal} answer${answerTotal === 1 ? "" : "s"} loaded.`
@@ -92,6 +110,7 @@ export default function DynamicAnswerSection({ questionId }: Props) {
             } catch (err: any) {
                 if (err?.name === "AbortError") return;
                 console.error("[DynamicAnswerSection] fetch failed:", err);
+                setLoadError(err?.message ?? "Could not load answers.");
                 toast.error("Could not load answers — please refresh.");
             } finally {
                 setIsLoading(false);
@@ -100,7 +119,45 @@ export default function DynamicAnswerSection({ questionId }: Props) {
 
         load();
         return () => controller.abort();
-    }, [questionId, hydrateDynamic]);
+    }, [questionId, hydrateDynamic, reloadToken]);
+
+    const loadMoreAnswers = React.useCallback(async () => {
+        if (!answerPagination.hasMore || !answerPagination.nextCursor || isLoadingMore) return;
+
+        setIsLoadingMore(true);
+        setLoadError(null);
+        try {
+            const params = new URLSearchParams({
+                questionId,
+                cursor: answerPagination.nextCursor,
+            });
+            const res = await fetch(`/api/question-dynamic?${params.toString()}`);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error ?? "Failed to load more answers");
+            }
+
+            const payload: DynamicPayload = await res.json();
+            appendDynamicAnswers(
+                payload.answers,
+                payload.comments,
+                payload.answerPagination,
+                payload.acceptedAnswerId
+            );
+        } catch (err: any) {
+            console.error("[DynamicAnswerSection] load more failed:", err);
+            setLoadError(err?.message ?? "Could not load more answers.");
+            toast.error("Could not load more answers.");
+        } finally {
+            setIsLoadingMore(false);
+        }
+    }, [
+        answerPagination.hasMore,
+        answerPagination.nextCursor,
+        appendDynamicAnswers,
+        isLoadingMore,
+        questionId,
+    ]);
 
     // ContentTabs reads from context — it renders correctly whether answers
     // have loaded yet or not (shows 0 answers until hydrateDynamic fires).
@@ -115,7 +172,28 @@ export default function DynamicAnswerSection({ questionId }: Props) {
             <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
                 {announcement}
             </p>
-            <ContentTabs isLoadingDynamic={isLoading} />
+            {loadError && (
+                <div
+                    role="alert"
+                    className="mb-4 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-100"
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span>{loadError}</span>
+                        <button
+                            type="button"
+                            onClick={() => setReloadToken((token) => token + 1)}
+                            className="rounded-lg border border-red-300/20 px-3 py-1 text-xs font-semibold text-red-100 transition hover:bg-red-300/10"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            )}
+            <ContentTabs
+                isLoadingDynamic={isLoading}
+                isLoadingMoreAnswers={isLoadingMore}
+                onLoadMoreAnswers={loadMoreAnswers}
+            />
         </div>
     );
 }

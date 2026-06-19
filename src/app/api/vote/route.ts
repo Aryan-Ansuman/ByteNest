@@ -1,12 +1,13 @@
 import { answerCollection, db, questionCollection, voteCollection } from "@/models/name";
 import { databases } from "@/models/server/config";
 import { NextRequest, NextResponse } from "next/server";
-import { ID, Query } from "node-appwrite";
+import { Query } from "node-appwrite";
 import { ApiValidationError, parseJsonBody, requireEnum, requireString } from "@/lib/api-validation";
-import { withMutex } from "@/lib/mutex";
 import { adjustReputation } from "@/lib/reputation";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getAuthenticatedUserId } from "@/lib/auth";
+import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
+import { createHash } from "crypto";
 
 const VOTE_TYPES = ["question", "answer"] as const;
 const VOTE_STATUSES = ["upvoted", "downvoted"] as const;
@@ -24,35 +25,23 @@ function collectionFor(type: VoteType) {
 async function adjustVoteCounter(type: VoteType, typeId: string, delta: number): Promise<number> {
     const collection = collectionFor(type);
 
-    if (delta === 0) {
-        const doc = await databases.getDocument(db, collection, typeId);
-        return Number(doc.totalVotes ?? 0);
-    }
-
-    try {
-        const updated =
-            delta > 0
-                ? await (databases as any).incrementDocumentAttribute(db, collection, typeId, "totalVotes", delta)
-                : await (databases as any).decrementDocumentAttribute(
-                      db,
-                      collection,
-                      typeId,
-                      "totalVotes",
-                      Math.abs(delta)
-                  );
-        return Number(updated.totalVotes ?? 0);
-    } catch (err) {
-        console.warn(
-            "[vote] atomic increment/decrement unavailable, falling back to read-then-write",
-            err
-        );
-        return withMutex(`votecounter:${type}:${typeId}`, async () => {
-            const doc = await databases.getDocument(db, collection, typeId);
-            const next = Number(doc.totalVotes ?? 0) + delta;
-            await databases.updateDocument(db, collection, typeId, { totalVotes: next });
-            return next;
-        });
-    }
+    const [upvotes, downvotes] = await Promise.all([
+        databases.listDocuments(db, voteCollection, [
+            Query.equal("type", type),
+            Query.equal("typeId", typeId),
+            Query.equal("voteStatus", "upvoted"),
+            Query.limit(1),
+        ]),
+        databases.listDocuments(db, voteCollection, [
+            Query.equal("type", type),
+            Query.equal("typeId", typeId),
+            Query.equal("voteStatus", "downvoted"),
+            Query.limit(1),
+        ]),
+    ]);
+    const next = upvotes.total - downvotes.total;
+    await databases.updateDocument(db, collection, typeId, { totalVotes: next });
+    return next;
 }
 
 export async function GET(request: NextRequest) {
@@ -71,6 +60,13 @@ export async function GET(request: NextRequest) {
 
         const type = requireEnum(typeParam, VOTE_TYPES, "type");
         const collection = type === "question" ? questionCollection : answerCollection;
+
+        if (votedById) {
+            const requesterId = await getAuthenticatedUserId();
+            if (votedById !== requesterId) {
+                return NextResponse.json({ error: "Unauthorized: votedById mismatch" }, { status: 403 });
+            }
+        }
 
         const [voteResponse, targetDoc] = await Promise.all([
             votedById
@@ -94,6 +90,7 @@ export async function GET(request: NextRequest) {
             { status: 200 }
         );
     } catch (error: any) {
+        if (error instanceof Response) return error;
         if (error instanceof ApiValidationError) {
             return NextResponse.json({ error: error.message }, { status: error.status });
         }
@@ -120,7 +117,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Rate limit per user
-        const rl = rateLimit({
+        const rl = await rateLimit({
             key: `vote:${votedById}`,
             limit: VOTE_RATE_LIMIT,
             windowMs: VOTE_WINDOW_MS,
@@ -134,9 +131,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const collection = collectionFor(type);
-
-        return await withMutex(`vote:${type}:${typeId}:${votedById}`, async () => {
+        {
+            const collection = collectionFor(type);
             let targetDoc;
             try {
                 targetDoc = await databases.getDocument(db, collection, typeId);
@@ -159,23 +155,27 @@ export async function POST(request: NextRequest) {
                 Query.equal("type", type),
                 Query.equal("typeId", typeId),
                 Query.equal("votedById", votedById),
-                Query.limit(1),
+                Query.limit(10),
             ]);
 
             const previousVote = existing.documents[0] ?? null;
             const previousStatus = (previousVote?.voteStatus as VoteStatusValue) ?? null;
-
-            if (previousVote) {
-                await databases.deleteDocument(db, voteCollection, previousVote.$id);
-            }
+            const duplicateVotes = existing.documents.slice(1);
+            await Promise.allSettled(
+                duplicateVotes.map((vote) =>
+                    databases.deleteDocument(db, voteCollection, vote.$id)
+                )
+            );
 
             if (previousStatus === voteStatus) {
                 const undoDelta = previousStatus === "upvoted" ? -1 : 1;
+                await databases.deleteDocument(db, voteCollection, previousVote.$id);
 
                 const [newTotal] = await Promise.all([
                     adjustVoteCounter(type, typeId, undoDelta),
                     adjustReputation(targetDoc.authorId, undoDelta),
                 ]);
+                await revalidateVotedTarget(type, targetDoc);
 
                 return NextResponse.json(
                     { data: { document: null, voteResult: newTotal }, message: "Vote withdrawn" },
@@ -183,12 +183,17 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const newVoteDoc = await databases.createDocument(db, voteCollection, ID.unique(), {
-                type,
-                typeId,
-                voteStatus,
-                votedById,
-            });
+            const voteDocId = voteDocumentId(type, typeId, votedById);
+            const newVoteDoc = previousVote
+                ? await databases.updateDocument(db, voteCollection, previousVote.$id, {
+                      voteStatus,
+                  })
+                : await createDeterministicVoteDocument(voteDocId, {
+                      type,
+                      typeId,
+                      voteStatus,
+                      votedById,
+                  });
 
             let delta = voteStatus === "upvoted" ? 1 : -1;
             if (previousVote) {
@@ -199,6 +204,7 @@ export async function POST(request: NextRequest) {
                 adjustVoteCounter(type, typeId, delta),
                 adjustReputation(targetDoc.authorId, delta),
             ]);
+            await revalidateVotedTarget(type, targetDoc);
 
             return NextResponse.json(
                 {
@@ -207,8 +213,9 @@ export async function POST(request: NextRequest) {
                 },
                 { status: 201, headers: rlHeaders }
             );
-        });
+        }
     } catch (error: any) {
+        if (error instanceof Response) return error;
         console.error("VOTE API ERROR:", error);
         if (error instanceof ApiValidationError) {
             return NextResponse.json({ message: error.message }, { status: error.status });
@@ -218,4 +225,42 @@ export async function POST(request: NextRequest) {
             { status: error?.status || error?.code || 500 }
         );
     }
+}
+
+function voteDocumentId(type: VoteType, typeId: string, votedById: string) {
+    return createHash("sha256")
+        .update(`${type}:${typeId}:${votedById}`)
+        .digest("hex")
+        .slice(0, 32);
+}
+
+async function createDeterministicVoteDocument(
+    documentId: string,
+    data: {
+        type: VoteType;
+        typeId: string;
+        voteStatus: VoteStatusValue;
+        votedById: string;
+    }
+) {
+    try {
+        return await databases.createDocument(db, voteCollection, documentId, data);
+    } catch (error: any) {
+        if (error?.code !== 409) throw error;
+        return databases.updateDocument(db, voteCollection, documentId, {
+            voteStatus: data.voteStatus,
+        });
+    }
+}
+
+async function revalidateVotedTarget(
+    type: VoteType,
+    targetDoc: Awaited<ReturnType<typeof databases.getDocument>>
+) {
+    if (type === "question") {
+        await revalidateQuestionCaches(targetDoc.$id, [targetDoc.title as string]);
+        return;
+    }
+
+    await revalidateQuestionCaches(targetDoc.questionId as string);
 }

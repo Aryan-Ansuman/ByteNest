@@ -6,6 +6,8 @@ import { UserPrefs } from "@/store/Auth";
 import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { sanitizeMarkdownSource } from "@/lib/sanitize";
+import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
+import { listAllDocuments } from "@/lib/appwrite-pagination";
 
 // Rate limit: 50 answers per user per 10 minutes
 const ANSWER_RATE_LIMIT = 50;
@@ -16,7 +18,7 @@ export async function POST(request: NextRequest) {
         const requesterId = await getAuthenticatedUserId();
 
         // Rate limit per authenticated user
-        const rl = rateLimit({
+        const rl = await rateLimit({
             key: `answer:${requesterId}`,
             limit: ANSWER_RATE_LIMIT,
             windowMs: ANSWER_WINDOW_MS,
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
         await users.updatePrefs(authorId, {
             reputation: Number(prefs.reputation) + 1,
         });
+        await revalidateQuestionCaches(questionId);
 
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
@@ -86,6 +89,24 @@ export async function PATCH(request: NextRequest) {
             return forbiddenResponse("Only the question author can accept or unaccept answers");
         }
 
+        const targetAnswer = await databases.getDocument(db, answerCollection, answerId);
+        if (targetAnswer.questionId !== questionId) {
+            return NextResponse.json(
+                { error: "Answer does not belong to this question" },
+                { status: 400 }
+            );
+        }
+
+        const currentAcceptedAnswerId =
+            typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId
+                ? question.acceptedAnswerId
+                : null;
+        const nextAcceptedAnswerId = accept ? answerId : currentAcceptedAnswerId === answerId ? null : currentAcceptedAnswerId;
+
+        await databases.updateDocument(db, questionCollection, questionId, {
+            acceptedAnswerId: nextAcceptedAnswerId,
+        });
+
         if (accept) {
             const alreadyAccepted = await databases.listDocuments(db, answerCollection, [
                 Query.equal("questionId", questionId),
@@ -104,8 +125,9 @@ export async function PATCH(request: NextRequest) {
         }
 
         const updated = await databases.updateDocument(db, answerCollection, answerId, {
-            isAccepted: accept,
+            isAccepted: nextAcceptedAnswerId === answerId,
         });
+        await revalidateQuestionCaches(questionId, [question.title as string]);
 
         return NextResponse.json({ data: updated }, { status: 200 });
     } catch (error: unknown) {
@@ -149,24 +171,55 @@ export async function DELETE(request: NextRequest) {
         }
 
         const authorId = answer.authorId as string;
-
-        const prefsSnapshot = await users.getPrefs<UserPrefs>(authorId);
-        const reputationBefore = Number(prefsSnapshot.reputation ?? 0);
+        const questionId = answer.questionId as string;
 
         const [votes, comments] = await Promise.all([
-            databases.listDocuments(db, voteCollection, [
+            listAllDocuments(voteCollection, [
                 Query.equal("type", "answer"),
                 Query.equal("typeId", answerId),
-                Query.limit(5000),
             ]),
-            databases.listDocuments(db, commentCollection, [
+            listAllDocuments(commentCollection, [
                 Query.equal("type", "answer"),
                 Query.equal("typeId", answerId),
-                Query.limit(5000),
             ]),
         ]);
 
-        await databases.deleteDocument(db, answerCollection, answerId);
+        const prefsSnapshot = await users.getPrefs<UserPrefs>(authorId);
+        const reputationBefore = Number(prefsSnapshot.reputation ?? 0);
+        try {
+            await users.updatePrefs<UserPrefs>(authorId, {
+                reputation: reputationBefore - 1,
+            });
+        } catch (repError: any) {
+            console.error("[answer/DELETE] reputation decrement failed before deletion", {
+                answerId,
+                authorId,
+                reputationBefore,
+                error: repError?.message,
+            });
+            return NextResponse.json(
+                { error: "Could not update reputation; answer was not deleted" },
+                { status: 500 }
+            );
+        }
+
+        try {
+            await databases.deleteDocument(db, answerCollection, answerId);
+        } catch (deleteError: any) {
+            await users
+                .updatePrefs<UserPrefs>(authorId, { reputation: reputationBefore })
+                .catch((rollbackError: any) => {
+                    console.error("[answer/DELETE] reputation rollback failed", {
+                        answerId,
+                        authorId,
+                        error: rollbackError?.message,
+                    });
+                });
+            return NextResponse.json(
+                { error: deleteError?.message || "Failed to delete answer" },
+                { status: deleteError?.status || deleteError?.code || 500 }
+            );
+        }
 
         await Promise.allSettled([
             ...votes.documents.map((v) =>
@@ -177,25 +230,7 @@ export async function DELETE(request: NextRequest) {
             ),
         ]);
 
-        try {
-            const freshPrefs = await users.getPrefs<UserPrefs>(authorId);
-            await users.updatePrefs<UserPrefs>(authorId, {
-                reputation: Number(freshPrefs.reputation ?? 0) - 1,
-            });
-        } catch (repError: any) {
-            console.error(
-                "[answer/DELETE] reputation decrement failed after document deletion",
-                { answerId, authorId, reputationBefore, error: repError?.message }
-            );
-            return NextResponse.json(
-                {
-                    data: { $id: answerId },
-                    warning:
-                        "Answer deleted but reputation update failed. This will be reconciled.",
-                },
-                { status: 207 }
-            );
-        }
+        await revalidateQuestionCaches(questionId);
 
         return NextResponse.json(
             { data: { $id: answerId }, message: "Answer deleted" },

@@ -23,21 +23,11 @@ import {
     useQuestionDetail,
 } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
+import MarkdownPreview from "@/components/MarkdownPreview";
 import { Avatar, ConfirmDialog } from "./shared";
+import { useAuthStore } from "@/store/Auth";
 
-const MarkdownPreview = dynamic(
-    () => import("@uiw/react-md-editor").then((module) => module.default.Markdown),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="space-y-3 p-4">
-                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.08]" />
-                <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 w-5/6 animate-pulse rounded bg-white/[0.06]" />
-            </div>
-        ),
-    }
-);
+
 
 // ─── MoreMenu ─────────────────────────────────────────────────────────────────
 
@@ -143,63 +133,25 @@ export default function QuestionHero() {
         isDeletingQuestion,
     } = useQuestionDetail();
 
-    const BOOKMARK_KEY = `bn_bookmark_q_${question.$id}`;
-    const [bookmarked, setBookmarked] = React.useState(false);
-    const [bookmarkReady, setBookmarkReady] = React.useState(false);
-    const [canPersistBookmark, setCanPersistBookmark] = React.useState(true);
+    const userPrefs = useAuthStore((s) => s.user?.prefs);
+    const toggleBookmarkStore = useAuthStore((s) => s.toggleBookmark);
+    
+    const bookmarked = userPrefs?.bookmarks?.includes(question.$id) ?? false;
     const [copied, setCopied] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
-    React.useEffect(() => {
-        try {
-            setBookmarked(window.localStorage.getItem(BOOKMARK_KEY) === "1");
-            setCanPersistBookmark(true);
-        } catch {
-            setCanPersistBookmark(false);
-        } finally {
-            setBookmarkReady(true);
-        }
-    }, [BOOKMARK_KEY]);
-
-    const persistBookmark = (next: boolean) => {
-        if (!canPersistBookmark) {
-            toast.warning(
-                next
-                    ? "Bookmark saved for this session only"
-                    : "Bookmark removed for this session",
-                {
-                    description: "Your browser is blocking persistent storage.",
-                }
-            );
+    const toggleBookmark = async () => {
+        if (!currentUser) {
+            toast.error("Please login to bookmark questions");
             return;
         }
-
+        
         try {
-            if (next) {
-                window.localStorage.setItem(BOOKMARK_KEY, "1");
-                toast.success("Question bookmarked");
-            } else {
-                window.localStorage.removeItem(BOOKMARK_KEY);
-                toast("Bookmark removed");
-            }
+            await toggleBookmarkStore(question.$id);
+            toast.success(bookmarked ? "Bookmark removed" : "Question bookmarked");
         } catch {
-            setCanPersistBookmark(false);
-            toast.warning(
-                next
-                    ? "Bookmark saved for this session only"
-                    : "Bookmark removed for this session",
-                {
-                    description: "Your browser is blocking persistent storage.",
-                }
-            );
+            toast.error("Failed to update bookmark");
         }
-    };
-
-    const toggleBookmark = () => {
-        if (!bookmarkReady) return;
-        const next = !bookmarked;
-        setBookmarked(next);
-        persistBookmark(next);
     };
 
     const votedStatus = getVoteStatus("question", question.$id);
@@ -233,12 +185,12 @@ export default function QuestionHero() {
                 <aside className="relative flex flex-col items-center pt-2">
                     <div className="flex shrink-0 flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
                         <button
-                            onClick={() => voteQuestion("upvoted")}
-                            disabled={isDeletingQuestion}
+                            onClick={(e) => { if (isDeletingQuestion) e.preventDefault(); else voteQuestion("upvoted"); }}
+                            aria-disabled={isDeletingQuestion}
                             aria-label={`Upvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
                             aria-pressed={votedStatus === "upvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50",
+                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500 aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
                                 votedStatus === "upvoted" ? "text-orange-500" : "text-zinc-500"
                             )}
                         >
@@ -257,12 +209,12 @@ export default function QuestionHero() {
                             {questionVoteScore}
                         </span>
                         <button
-                            onClick={() => voteQuestion("downvoted")}
-                            disabled={isDeletingQuestion}
+                            onClick={(e) => { if (isDeletingQuestion) e.preventDefault(); else voteQuestion("downvoted"); }}
+                            aria-disabled={isDeletingQuestion}
                             aria-label={`Downvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
                             aria-pressed={votedStatus === "downvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50",
+                                "flex h-8 w-full items-center justify-center transition hover:text-red-400 aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
                                 votedStatus === "downvoted" ? "text-red-400" : "text-zinc-500"
                             )}
                         >
@@ -275,14 +227,9 @@ export default function QuestionHero() {
 
                     <button
                         onClick={toggleBookmark}
-                        aria-label={
-                            !bookmarkReady
-                                ? "Loading bookmark state"
-                                : bookmarked
-                                ? "Remove bookmark"
-                                : "Bookmark question"
-                        }
-                        disabled={isDeletingQuestion || !bookmarkReady}
+                        aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
+                        aria-pressed={bookmarked}
+                        disabled={isDeletingQuestion}
                         className={cn(
                             "flex shrink-0 size-10 items-center justify-center rounded-xl border transition-all disabled:cursor-not-allowed disabled:opacity-50",
                             bookmarked
@@ -355,7 +302,12 @@ export default function QuestionHero() {
                         </div>
                     </header>
 
-                    <div className="question-detail-markdown mt-5" data-color-mode="dark">
+                    <div
+                        className="question-detail-markdown mt-5"
+                        data-color-mode="dark"
+                        role="region"
+                        aria-label="Question body"
+                    >
                         <MarkdownPreview source={String(question.content ?? "")} />
                     </div>
 
@@ -367,7 +319,6 @@ export default function QuestionHero() {
                                 fill
                                 sizes="(min-width: 1280px) 900px, 100vw"
                                 className="object-contain p-2"
-                                unoptimized
                             />
                         </div>
                     ) : null}

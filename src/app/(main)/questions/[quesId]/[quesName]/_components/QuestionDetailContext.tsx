@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
+import { useAuthStore } from "@/store/Auth";
 
 export type VoteStatus = "upvoted" | "downvoted";
 export type AnswerSort = "Oldest" | "Active" | "Votes";
@@ -44,6 +45,9 @@ export interface QuestionDocument extends AppDocument {
     tags?: string[];
     views?: number;
     totalViews?: number;
+    totalVotes?: number;
+    totalAnswers?: number;
+    acceptedAnswerId?: string | null;
     attachmentId?: string;
 }
 
@@ -72,6 +76,7 @@ export interface AnswerDoc extends AppDocument {
     author: Author;
     /** True only when the question author explicitly marked this answer accepted. */
     isAccepted: boolean;
+    totalVotes?: number;
     upvotesDocuments: DocumentList<VoteDocument>;
     downvotesDocuments: DocumentList<VoteDocument>;
     comments: DocumentList<CommentDoc>;
@@ -181,7 +186,15 @@ interface QuestionDetailContextValue {
     deleteQuestion: () => Promise<boolean>;
     hydrateDynamic: (
         dynamicAnswers: { total: number; documents: AnswerDoc[] },
-        dynamicComments: { total: number; documents: CommentDoc[] }
+        dynamicComments: { total: number; documents: CommentDoc[] },
+        dynamicPagination?: Partial<AnswerPaginationState>,
+        dynamicAcceptedAnswerId?: string | null
+    ) => void;
+    appendDynamicAnswers: (
+        dynamicAnswers: { total: number; documents: AnswerDoc[] },
+        dynamicComments: { total: number; documents: CommentDoc[] },
+        dynamicPagination?: Partial<AnswerPaginationState>,
+        dynamicAcceptedAnswerId?: string | null
     ) => void;
 }
 
@@ -234,13 +247,25 @@ export function QuestionDetailProvider({
     children,
 }: QuestionDetailProviderProps) {
     const router = useRouter();
-    const [answers, setAnswers] = React.useState<DocumentList<AnswerDoc>>(initialAnswers);
+    const [answers, setAnswers] = React.useState<DocumentList<AnswerDoc>>(() => ({
+        ...initialAnswers,
+        documents: enforceSingleAcceptedAnswer(initialAnswers.documents),
+    }));
     const [questionComments, setQuestionComments] =
         React.useState<DocumentList<CommentDoc>>(initialComments);
-    const [answerSort, setAnswerSort] = React.useState<AnswerSort>("Votes");
+        
+    const userPrefs = useAuthStore((s) => s.user?.prefs);
+    const updateAnswerSortStore = useAuthStore((s) => s.updateAnswerSort);
+    
+    const [answerSort, setAnswerSortState] = React.useState<AnswerSort>("Votes");
+    const [paginationOverride, setPaginationOverride] =
+        React.useState<Partial<AnswerPaginationState> | null>(answerPagination ?? null);
     const [answerComposerOpen, setAnswerComposerOpen] = React.useState(false);
-    const [questionVoteScore, setQuestionVoteScore] = React.useState(
-        upvotes.total - downvotes.total
+    const [acceptedAnswerId, setAcceptedAnswerId] = React.useState<string | null>(() =>
+        getInitialAcceptedAnswerId(question, initialAnswers.documents)
+    );
+    const [questionVoteScore, setQuestionVoteScore] = React.useState(() =>
+        getInitialQuestionScore(question, upvotes, downvotes)
     );
     const [answerVoteScores, setAnswerVoteScores] = React.useState<Record<string, number>>(() =>
         Object.fromEntries(
@@ -258,6 +283,22 @@ export function QuestionDetailProvider({
 
     // Whether the current user is the question author (controls accept button visibility).
     const isQuestionAuthor = currentUser?.$id === question.authorId;
+
+    React.useEffect(() => {
+        if (userPrefs?.defaultAnswerSort && isAnswerSort(userPrefs.defaultAnswerSort)) {
+            setAnswerSortState(userPrefs.defaultAnswerSort as AnswerSort);
+        }
+    }, [userPrefs?.defaultAnswerSort]);
+
+    const setAnswerSort = React.useCallback(
+        (sort: AnswerSort) => {
+            setAnswerSortState(sort);
+            if (currentUser) {
+                updateAnswerSortStore(sort).catch(console.error);
+            }
+        },
+        [currentUser, updateAnswerSortStore]
+    );
 
     const promptSignIn = React.useCallback(
         (title: string) => {
@@ -281,13 +322,18 @@ export function QuestionDetailProvider({
         ? `${formatCollectiveName(questionTags[0])} Collective`
         : "ByteNest Collective";
 
+    const displayAnswers = React.useMemo(
+        () => answers.documents.map((answer) => withAcceptedState(answer, acceptedAnswerId)),
+        [acceptedAnswerId, answers.documents]
+    );
+
     const getAnswerScore = React.useCallback(
         (answer: AnswerDoc) => answerVoteScores[answer.$id] ?? getInitialAnswerScore(answer),
         [answerVoteScores]
     );
 
     const sortedAnswers = React.useMemo(() => {
-        return [...answers.documents].sort((a, b) => {
+        return [...displayAnswers].sort((a, b) => {
             // Accepted answer always floats to the top regardless of sort mode.
             if (a.isAccepted && !b.isAccepted) return -1;
             if (!a.isAccepted && b.isAccepted) return 1;
@@ -300,12 +346,12 @@ export function QuestionDetailProvider({
             }
             return getAnswerScore(b) - getAnswerScore(a);
         });
-    }, [answers.documents, answerSort, getAnswerScore]);
+    }, [displayAnswers, answerSort, getAnswerScore]);
 
     // bestAnswer is the explicitly accepted one — NOT just the top vote-getter.
     const bestAnswer = React.useMemo(
-        () => answers.documents.find((a) => a.isAccepted) ?? null,
-        [answers.documents]
+        () => (acceptedAnswerId ? displayAnswers.find((a) => a.$id === acceptedAnswerId) ?? null : null),
+        [acceptedAnswerId, displayAnswers]
     );
 
     const communityAnswers = React.useMemo(
@@ -318,11 +364,11 @@ export function QuestionDetailProvider({
 
     const totalAnswerComments = React.useMemo(
         () =>
-            answers.documents.reduce(
+            displayAnswers.reduce(
                 (total, answer) => total + Number(answer.comments?.total ?? 0),
                 0
             ),
-        [answers.documents]
+        [displayAnswers]
     );
 
     const totalComments = questionComments.total + totalAnswerComments;
@@ -332,12 +378,12 @@ export function QuestionDetailProvider({
         return {
             total: answers.total,
             loaded,
-            hasMore: answerPagination?.hasMore ?? loaded < answers.total,
-            nextCursor: answerPagination?.nextCursor ?? null,
+            hasMore: paginationOverride?.hasMore ?? loaded < answers.total,
+            nextCursor: paginationOverride?.nextCursor ?? null,
         };
     }, [
-        answerPagination?.hasMore,
-        answerPagination?.nextCursor,
+        paginationOverride?.hasMore,
+        paginationOverride?.nextCursor,
         answers.documents.length,
         answers.total,
     ]);
@@ -454,10 +500,10 @@ export function QuestionDetailProvider({
 
     React.useEffect(() => {
         if (!currentUser) return;
-        const ids = answers.documents.map((a) => a.$id);
+        const ids = displayAnswers.map((a) => a.$id);
         void ensureAnswerVoteStates(ids);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentUser?.$id, answers.documents]);
+    }, [currentUser?.$id, displayAnswers]);
 
     // ── Vote mutations ────────────────────────────────────────────────────
 
@@ -619,18 +665,17 @@ export function QuestionDetailProvider({
             const current = answers.documents.find((a) => a.$id === answerId);
             if (!current) return;
 
-            const willAccept = !current.isAccepted;
-            const previousAcceptedState = new Map(
-                answers.documents.map((answer) => [answer.$id, answer.isAccepted])
-            );
+            const willAccept = acceptedAnswerId !== answerId;
+            const previousAcceptedAnswerId = acceptedAnswerId;
 
             // Optimistic update: flip the target; clear all others.
             setAcceptingAnswerId(answerId);
+            setAcceptedAnswerId(willAccept ? answerId : null);
             setAnswers((prev) => ({
                 ...prev,
                 documents: prev.documents.map((a) => ({
                     ...a,
-                    isAccepted: a.$id === answerId ? willAccept : willAccept ? false : a.isAccepted,
+                    isAccepted: willAccept ? a.$id === answerId : false,
                 })),
             }));
 
@@ -647,11 +692,12 @@ export function QuestionDetailProvider({
                 toast.success(willAccept ? "Answer accepted" : "Acceptance removed");
             } catch (error) {
                 // Roll back optimistic update.
+                setAcceptedAnswerId(previousAcceptedAnswerId);
                 setAnswers((prev) => ({
                     ...prev,
                     documents: prev.documents.map((a) => ({
                         ...a,
-                        isAccepted: previousAcceptedState.get(a.$id) ?? a.isAccepted,
+                        isAccepted: previousAcceptedAnswerId === a.$id,
                     })),
                 }));
                 toast.error(getErrorMessage(error, "Failed to update accepted answer"));
@@ -661,6 +707,7 @@ export function QuestionDetailProvider({
         },
         [
             acceptingAnswerId,
+            acceptedAnswerId,
             answers.documents,
             currentUser,
             isDeletingQuestion,
@@ -749,11 +796,13 @@ export function QuestionDetailProvider({
             }
             const answer = answers.documents.find((item) => item.$id === answerId);
             if (!answer) return false;
+            const wasAccepted = acceptedAnswerId === answerId;
 
             setAnswers((prev) => ({
                 total: Math.max(prev.total - 1, 0),
                 documents: prev.documents.filter((item) => item.$id !== answerId),
             }));
+            if (wasAccepted) setAcceptedAnswerId(null);
 
             try {
                 await apiFetch<{ data: unknown }>("/api/answer", {
@@ -767,11 +816,12 @@ export function QuestionDetailProvider({
                     total: prev.total + 1,
                     documents: [answer, ...prev.documents],
                 }));
+                if (wasAccepted) setAcceptedAnswerId(answerId);
                 toast.error(getErrorMessage(error, "Failed to delete answer"));
                 return false;
             }
         },
-        [answers.documents, currentUser?.$id, isDeletingQuestion]
+        [acceptedAnswerId, answers.documents, currentUser?.$id, isDeletingQuestion]
     );
 
     // ── Comments ──────────────────────────────────────────────────────────
@@ -935,20 +985,57 @@ export function QuestionDetailProvider({
     const hydrateDynamic = React.useCallback(
         (
             dynamicAnswers: { total: number; documents: AnswerDoc[] },
-            dynamicComments: { total: number; documents: CommentDoc[] }
+            dynamicComments: { total: number; documents: CommentDoc[] },
+            dynamicPagination?: Partial<AnswerPaginationState>,
+            dynamicAcceptedAnswerId?: string | null
         ) => {
-            setAnswers(dynamicAnswers);
-            setQuestionComments(dynamicComments);
-            setAnswerVoteScores(
-                Object.fromEntries(
-                    dynamicAnswers.documents.map((answer) => [
-                        answer.$id,
-                        getInitialAnswerScore(answer),
-                    ])
-                )
+            if (dynamicAcceptedAnswerId !== undefined) {
+                setAcceptedAnswerId(dynamicAcceptedAnswerId);
+            }
+            setAnswers((prev) =>
+                mergeAnswerLists(dynamicAnswers, prev, dynamicAcceptedAnswerId ?? acceptedAnswerId)
             );
+            setQuestionComments((prev) => mergeCommentLists(dynamicComments, prev));
+            setAnswerVoteScores((prev) => {
+                const next = { ...prev };
+                for (const answer of dynamicAnswers.documents) {
+                    next[answer.$id] = getInitialAnswerScore(answer);
+                }
+                return next;
+            });
+            if (dynamicPagination) {
+                setPaginationOverride(dynamicPagination);
+            }
         },
-        []
+        [acceptedAnswerId]
+    );
+
+    const appendDynamicAnswers = React.useCallback(
+        (
+            dynamicAnswers: { total: number; documents: AnswerDoc[] },
+            dynamicComments: { total: number; documents: CommentDoc[] },
+            dynamicPagination?: Partial<AnswerPaginationState>,
+            dynamicAcceptedAnswerId?: string | null
+        ) => {
+            if (dynamicAcceptedAnswerId !== undefined) {
+                setAcceptedAnswerId(dynamicAcceptedAnswerId);
+            }
+            setAnswers((prev) =>
+                appendAnswerLists(prev, dynamicAnswers, dynamicAcceptedAnswerId ?? acceptedAnswerId)
+            );
+            setQuestionComments((prev) => mergeCommentLists(dynamicComments, prev));
+            setAnswerVoteScores((prev) => {
+                const next = { ...prev };
+                for (const answer of dynamicAnswers.documents) {
+                    next[answer.$id] = getInitialAnswerScore(answer);
+                }
+                return next;
+            });
+            if (dynamicPagination) {
+                setPaginationOverride(dynamicPagination);
+            }
+        },
+        [acceptedAnswerId]
     );
 
     const value = React.useMemo<QuestionDetailContextValue>(
@@ -993,6 +1080,7 @@ export function QuestionDetailProvider({
             deleteComment,
             deleteQuestion,
             hydrateDynamic,
+            appendDynamicAnswers,
         }),
         [
             question,
@@ -1005,6 +1093,7 @@ export function QuestionDetailProvider({
             questionVoteScore,
             answerVoteScores,
             answerSort,
+            setAnswerSort,
             answerComposerOpen,
             answers,
             sortedAnswers,
@@ -1034,6 +1123,7 @@ export function QuestionDetailProvider({
             openAnswerComposer,
             closeAnswerComposer,
             hydrateDynamic,
+            appendDynamicAnswers,
         ]
     );
 
@@ -1115,6 +1205,12 @@ function targetKey(type: CommentTargetType, typeId: string) {
     return `${type}:${typeId}`;
 }
 
+
+
+function isAnswerSort(value: unknown): value is AnswerSort {
+    return value === "Votes" || value === "Active" || value === "Oldest";
+}
+
 function statusWeight(status: VoteStatus | null | undefined) {
     if (status === "upvoted") return 1;
     if (status === "downvoted") return -1;
@@ -1129,10 +1225,129 @@ function voteDelta(
 }
 
 function getInitialAnswerScore(answer: AnswerDoc) {
+    if (typeof answer.totalVotes === "number") {
+        return Number(answer.totalVotes);
+    }
+
     return (
         Number(answer.upvotesDocuments?.total ?? 0) -
         Number(answer.downvotesDocuments?.total ?? 0)
     );
+}
+
+function getInitialQuestionScore(
+    question: QuestionDocument,
+    upvotes: DocumentList<VoteDocument>,
+    downvotes: DocumentList<VoteDocument>
+) {
+    if (typeof question.totalVotes === "number") {
+        return Number(question.totalVotes);
+    }
+
+    return upvotes.total - downvotes.total;
+}
+
+function getInitialAcceptedAnswerId(question: QuestionDocument, documents: AnswerDoc[]) {
+    if (typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId) {
+        return question.acceptedAnswerId;
+    }
+    return documents.find((answer) => answer.isAccepted)?.$id ?? null;
+}
+
+function withAcceptedState(answer: AnswerDoc, acceptedAnswerId: string | null): AnswerDoc {
+    return {
+        ...answer,
+        isAccepted: acceptedAnswerId ? answer.$id === acceptedAnswerId : false,
+    };
+}
+
+function mergeAnswerLists(
+    remote: DocumentList<AnswerDoc>,
+    local: DocumentList<AnswerDoc>,
+    acceptedAnswerId: string | null
+): DocumentList<AnswerDoc> {
+    const localById = new Map(local.documents.map((answer) => [answer.$id, answer]));
+    const remoteIds = new Set(remote.documents.map((answer) => answer.$id));
+
+    const localOnly = local.documents.filter((answer) => !remoteIds.has(answer.$id));
+    const mergedRemote = remote.documents.map((answer) => {
+        const localAnswer = localById.get(answer.$id);
+        if (!localAnswer) return withAcceptedState(hydrateAnswerShape(answer), acceptedAnswerId);
+
+        return withAcceptedState(hydrateAnswerShape({
+            ...answer,
+            comments: mergeCommentLists(answer.comments, localAnswer.comments),
+        }), acceptedAnswerId);
+    });
+
+    const documents = [...localOnly.map((answer) => withAcceptedState(answer, acceptedAnswerId)), ...mergedRemote];
+
+    return {
+        total: Math.max(remote.total + localOnly.length, documents.length),
+        documents,
+    };
+}
+
+function appendAnswerLists(
+    local: DocumentList<AnswerDoc>,
+    remote: DocumentList<AnswerDoc>,
+    acceptedAnswerId: string | null
+): DocumentList<AnswerDoc> {
+    const localIds = new Set(local.documents.map((answer) => answer.$id));
+    const appended = remote.documents
+        .filter((answer) => !localIds.has(answer.$id))
+        .map((answer) => withAcceptedState(hydrateAnswerShape(answer), acceptedAnswerId));
+    const documents = [
+        ...local.documents.map((answer) => withAcceptedState(answer, acceptedAnswerId)),
+        ...appended,
+    ];
+
+    return {
+        total: Math.max(remote.total, documents.length),
+        documents,
+    };
+}
+
+function mergeCommentLists(
+    remote: DocumentList<CommentDoc> | undefined,
+    local: DocumentList<CommentDoc> | undefined
+): DocumentList<CommentDoc> {
+    const remoteList = remote ?? { total: 0, documents: [] };
+    const localList = local ?? { total: 0, documents: [] };
+    const remoteIds = new Set(remoteList.documents.map((comment) => comment.$id));
+    const localOnly = localList.documents.filter((comment) => !remoteIds.has(comment.$id));
+    const documents = [...localOnly, ...remoteList.documents];
+
+    return {
+        total: Math.max(remoteList.total + localOnly.length, documents.length),
+        documents,
+    };
+}
+
+function hydrateAnswerShape(answer: AnswerDoc): AnswerDoc {
+    const totalVotes =
+        typeof answer.totalVotes === "number" ? answer.totalVotes : getInitialAnswerScore(answer);
+
+    return {
+        ...answer,
+        totalVotes,
+        isAccepted: answer.isAccepted ?? false,
+        upvotesDocuments: answer.upvotesDocuments ?? { total: 0, documents: [] },
+        downvotesDocuments: answer.downvotesDocuments ?? { total: 0, documents: [] },
+        comments: answer.comments ?? { total: 0, documents: [] },
+    };
+}
+
+function enforceSingleAcceptedAnswer(documents: AnswerDoc[]): AnswerDoc[] {
+    let acceptedSeen = false;
+    return documents.map((answer) => {
+        if (!answer.isAccepted) return answer;
+        if (!acceptedSeen) {
+            acceptedSeen = true;
+            return answer;
+        }
+        return { ...answer, isAccepted: false };
+    });
 }
 
 function authorFromUser(user: CurrentUser): Author {
@@ -1159,6 +1374,7 @@ function createOptimisticAnswer(
         authorId: user.$id,
         author: authorFromUser(user),
         isAccepted: false,
+        totalVotes: 0,
         upvotesDocuments: { total: 0, documents: [] },
         downvotesDocuments: { total: 0, documents: [] },
         comments: { total: 0, documents: [] },
@@ -1171,6 +1387,7 @@ function hydrateAnswer(answer: AnswerDoc, user: CurrentUser): AnswerDoc {
         ...answer,
         author: answer.author ?? authorFromUser(user),
         isAccepted: answer.isAccepted ?? false,
+        totalVotes: answer.totalVotes ?? getInitialAnswerScore(answer),
         upvotesDocuments: answer.upvotesDocuments ?? { total: 0, documents: [] },
         downvotesDocuments: answer.downvotesDocuments ?? { total: 0, documents: [] },
         comments: answer.comments ?? { total: 0, documents: [] },

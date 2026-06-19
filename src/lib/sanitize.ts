@@ -28,8 +28,11 @@ const DANGEROUS_HTML_RE =
     /<\s*\/?\s*(script|iframe|object|embed|form|input|button|select|textarea|link|meta|base|style|svg|math|template|slot|portal|applet|frame|frameset|noframes|noscript|plaintext|xmp)[^>]*>/gi;
 
 const HTML_TAG_RE = /<[^>]+>/g;
+const SAFE_MARKDOWN_HTML_TAGS = new Set(["br", "code", "kbd", "mark", "small", "sub", "sup"]);
 const HTML_ENTITY_ON_OWN_RE = /&(?:javascript|vbscript|data|on\w+):/gi;
 const EVENT_ATTR_RE = /\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/g;
+const ZERO_WIDTH_RE = /[\u200B-\u200D\uFEFF]/g;
 
 /**
  * Sanitize a markdown *source* string before persisting it.
@@ -42,12 +45,32 @@ export function sanitizeMarkdownSource(source: string): string {
     return source
         // Remove dangerous block-level tags entirely (script, iframe, …)
         .replace(DANGEROUS_HTML_RE, "")
-        // Remove all remaining HTML tags — markdown doesn't need them
-        .replace(HTML_TAG_RE, "")
+        // Preserve a tiny safe subset of markdown-friendly inline HTML.
+        .replace(HTML_TAG_RE, sanitizeHtmlTag)
         // Strip javascript: / vbscript: entity tricks
         .replace(HTML_ENTITY_ON_OWN_RE, "")
         // Strip inline event handlers that somehow survive
         .replace(EVENT_ATTR_RE, "")
+        .trim();
+}
+
+function sanitizeHtmlTag(tag: string) {
+    const match = tag.match(/^<\s*(\/?)\s*([a-z0-9-]+)/i);
+    if (!match) return "";
+
+    const [, closing, rawName] = match;
+    const name = rawName.toLowerCase();
+    if (!SAFE_MARKDOWN_HTML_TAGS.has(name)) return "";
+    if (name === "br") return "<br>";
+    return closing ? `</${name}>` : `<${name}>`;
+}
+
+export function sanitizeTitleSource(source: string): string {
+    return sanitizeMarkdownSource(source)
+        .normalize("NFKC")
+        .replace(BIDI_CONTROL_RE, "")
+        .replace(ZERO_WIDTH_RE, "")
+        .replace(/\s+/g, " ")
         .trim();
 }
 

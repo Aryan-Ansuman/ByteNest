@@ -32,6 +32,7 @@ import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailCo
 import QuestionHero from "./QuestionHero";
 import QuestionSidebar from "./QuestionSidebar";
 import DynamicAnswerSection from "./DynamicAnswerSection";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface StaticQuestion {
     $id: string;
@@ -42,6 +43,7 @@ interface StaticQuestion {
     authorId: string;
     tags: string[];
     attachmentId: string | null;
+    acceptedAnswerId: string | null;
     views: number;
     totalVotes: number;
     totalAnswers: number;
@@ -77,31 +79,21 @@ export default function QuestionStaticShell({
     const breadcrumbTag = question.tags[0] ?? "";
     const breadcrumbLabel = breadcrumbTag ? formatCollectiveName(breadcrumbTag) : "Uncategorized";
 
-    // Synthetic vote lists so QuestionDetailProvider initialises with the
-    // ISR-cached net score immediately, before the client vote-status fetch
-    // completes. The provider computes score = upvotes.total - downvotes.total.
-    const syntheticUpvotes = {
-        total: question.totalVotes >= 0 ? question.totalVotes : 0,
-        documents: [] as any[],
-    };
-    const syntheticDownvotes = {
-        total: question.totalVotes < 0 ? Math.abs(question.totalVotes) : 0,
-        documents: [] as any[],
-    };
-
     return (
         <QuestionDetailProvider
             question={question as any}
             author={author as any}
             currentUser={user as any}
-            // Answers and comments start empty — DynamicAnswerSection fetches them
+            // Answers and comments start empty — DynamicAnswerSection fetches them.
+            // Vote totals now come from denormalized totalVotes, not a fabricated split.
             answers={{ total: 0, documents: [] }}
-            upvotes={syntheticUpvotes as any}
-            downvotes={syntheticDownvotes as any}
+            upvotes={{ total: 0, documents: [] } as any}
+            downvotes={{ total: 0, documents: [] } as any}
             comments={{ total: 0, documents: [] }}
             attachmentUrl={attachmentUrl}
             similarQuestions={similarQuestions}
         >
+            <QuestionViewTracker questionId={question.$id} />
             <div className="relative mx-auto w-full max-w-[1420px] pb-20">
                 {/* Ambient glow */}
                 <div className="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[500px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(207,232,213,0.08),transparent)]" />
@@ -138,7 +130,9 @@ export default function QuestionStaticShell({
                          * fetches answers from the server.
                          */}
                         <React.Suspense fallback={<AnswersSkeleton expectedAnswerCount={question.totalAnswers} />}>
-                            <DynamicAnswerSection questionId={question.$id} />
+                            <ErrorBoundary>
+                                <DynamicAnswerSection questionId={question.$id} />
+                            </ErrorBoundary>
                         </React.Suspense>
                     </main>
 
@@ -148,6 +142,26 @@ export default function QuestionStaticShell({
             </div>
         </QuestionDetailProvider>
     );
+}
+
+const trackedQuestionViews = new Set<string>();
+
+function QuestionViewTracker({ questionId }: { questionId: string }) {
+    React.useEffect(() => {
+        if (trackedQuestionViews.has(questionId)) return;
+        trackedQuestionViews.add(questionId);
+
+        fetch("/api/question-view", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ questionId }),
+            keepalive: true,
+        }).catch(() => {
+            trackedQuestionViews.delete(questionId);
+        });
+    }, [questionId]);
+
+    return null;
 }
 
 // ─── Skeleton shown while answers load ───────────────────────────────────────

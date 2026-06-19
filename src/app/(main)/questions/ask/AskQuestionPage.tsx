@@ -39,10 +39,7 @@ import "@uiw/react-markdown-preview/markdown.css";
 
 // ─── Lazy-load the markdown editor (SSR incompatible) ─────────────────────────
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
-const MarkdownPreview = dynamic(
-    () => import("@uiw/react-md-editor").then((m) => m.default.Markdown),
-    { ssr: false }
-);
+import MarkdownPreview from "@/components/MarkdownPreview";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = "title" | "body" | "tags" | "image" | "preview";
@@ -201,6 +198,7 @@ export default function AskQuestionPage() {
 
         setIsSubmitting(true);
         setError("");
+        let uploadedAttachmentId: string | null = null;
 
         try {
             const docData: any = {
@@ -217,6 +215,7 @@ export default function AskQuestionPage() {
                     attachment
                 );
                 docData.attachmentId = stored.$id;
+                uploadedAttachmentId = stored.$id;
             }
 
             const doc = await apiFetch("/api/question", {
@@ -229,6 +228,11 @@ export default function AskQuestionPage() {
                 router.push(`/questions/${doc.$id}/${slugify(title)}`);
             }, 1200);
         } catch (err: any) {
+            if (uploadedAttachmentId) {
+                await storage
+                    .deleteFile(questionAttachmentBucket, uploadedAttachmentId)
+                    .catch(() => undefined);
+            }
             setError(err?.message || "Something went wrong. Please try again.");
             setIsSubmitting(false);
         }

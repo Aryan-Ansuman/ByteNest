@@ -1,13 +1,13 @@
+import { ID, Query } from "node-appwrite";
+import { db, rateLimitCollection } from "@/models/name";
+import { databases } from "@/models/server/config";
+
 /**
- * Sliding-window rate limiter backed by an in-process Map.
+ * Fixed-window rate limiter backed by Appwrite documents.
  *
- * Works correctly within a single Node.js process (dev, single-instance
- * serverless, long-running server). Across horizontally-scaled instances
- * you'd swap the store out for Redis — the interface stays the same.
- *
- * Usage:
- *   const result = rateLimit({ key: `vote:${userId}`, limit: 10, windowMs: 60_000 });
- *   if (!result.success) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+ * Each request creates one short-lived event document, then counts events in
+ * the current window. Because the store is Appwrite, separate serverless
+ * instances share the same counters instead of relying on process memory.
  */
 
 interface RateLimitOptions {
@@ -27,30 +27,59 @@ interface RateLimitResult {
     resetAt: number;
 }
 
-/** Map<key, sorted array of request timestamps (ms)> */
-const store = new Map<string, number[]>();
-
-export function rateLimit({ key, limit, windowMs }: RateLimitOptions): RateLimitResult {
+export async function rateLimit({ key, limit, windowMs }: RateLimitOptions): Promise<RateLimitResult> {
     const now = Date.now();
-    const windowStart = now - windowMs;
+    const bucketStart = Math.floor(now / windowMs) * windowMs;
+    const bucket = String(bucketStart);
+    const resetAt = bucketStart + windowMs;
+    let currentDocumentId: string | null = null;
 
-    // Retrieve and prune timestamps outside the current window.
-    const timestamps = (store.get(key) ?? []).filter((t) => t > windowStart);
+    try {
+        const created = await databases.createDocument(db, rateLimitCollection, ID.unique(), {
+            key,
+            bucket,
+            createdAt: now,
+            expiresAt: resetAt,
+        });
+        currentDocumentId = created.$id;
 
-    if (timestamps.length >= limit) {
-        // Oldest timestamp tells us when the first slot frees up.
-        const resetAt = timestamps[0] + windowMs;
+        const count = await databases.listDocuments(db, rateLimitCollection, [
+            Query.equal("key", key),
+            Query.equal("bucket", bucket),
+            Query.limit(1),
+        ]);
+
+        cleanupExpiredRateLimitEvents(now).catch(() => undefined);
+
+        if (count.total > limit) {
+            await databases
+                .deleteDocument(db, rateLimitCollection, currentDocumentId)
+                .catch(() => undefined);
+            return { success: false, remaining: 0, resetAt };
+        }
+
+        return {
+            success: true,
+            remaining: Math.max(limit - count.total, 0),
+            resetAt,
+        };
+    } catch (error) {
+        console.error("[rate-limit] persistent limiter failed", error);
         return { success: false, remaining: 0, resetAt };
     }
+}
 
-    timestamps.push(now);
-    store.set(key, timestamps);
+async function cleanupExpiredRateLimitEvents(now: number) {
+    const expired = await databases.listDocuments(db, rateLimitCollection, [
+        Query.lessThan("expiresAt", now),
+        Query.limit(50),
+    ]);
 
-    return {
-        success: true,
-        remaining: limit - timestamps.length,
-        resetAt: now + windowMs,
-    };
+    await Promise.allSettled(
+        expired.documents.map((doc) =>
+            databases.deleteDocument(db, rateLimitCollection, doc.$id)
+        )
+    );
 }
 
 /**
