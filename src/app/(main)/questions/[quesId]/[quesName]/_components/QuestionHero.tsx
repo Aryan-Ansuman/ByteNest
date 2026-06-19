@@ -185,12 +185,9 @@ export default function QuestionHero() {
     return (
         <>
             <article id="question" className="relative grid grid-cols-[56px_minmax(0,1fr)] gap-5">
-                {/* Thread line */}
-                <div className="absolute bottom-[-20px] left-[28px] top-[140px] w-px bg-white/[0.08]" />
-
                 {/* Left Column: Vote Rail */}
-                <aside className="relative flex flex-col items-center gap-3 pt-2">
-                    <div className="flex flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
+                <aside className="relative flex flex-col items-center pt-2">
+                    <div className="flex shrink-0 flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
                         <button
                             onClick={() => voteQuestion("upvoted")}
                             className={cn(
@@ -223,11 +220,14 @@ export default function QuestionHero() {
                         </button>
                     </div>
 
+                    {/* Connector line */}
+                    <div className="w-px h-3 bg-white/[0.08] shrink-0" />
+
                     <button
                         onClick={toggleBookmark}
                         aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
                         className={cn(
-                            "mt-2 flex size-10 items-center justify-center rounded-xl border transition-all",
+                            "flex shrink-0 size-10 items-center justify-center rounded-xl border transition-all",
                             bookmarked
                                 ? "border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
                                 : "border-white/[0.08] bg-white/[0.03] text-zinc-500 hover:border-white/15 hover:text-zinc-200"
@@ -235,6 +235,9 @@ export default function QuestionHero() {
                     >
                         <Bookmark className="size-4" fill={bookmarked ? "currentColor" : "none"} />
                     </button>
+
+                    {/* Thread line extending down */}
+                    <div className="w-px bg-white/[0.08] flex-1 mt-3" style={{ marginBottom: "-20px" }} />
                 </aside>
 
                 {/* Right Column: Content */}

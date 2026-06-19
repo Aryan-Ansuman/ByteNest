@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const { content, authorId, type, typeId } = await request.json();
+        const { content, authorId, type, typeId, parentId } = await request.json();
 
         if (!content?.trim() || !authorId || !type || !typeId) {
             return NextResponse.json(
@@ -105,18 +105,45 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const normalizedParentId =
+            typeof parentId === "string" && parentId.trim()
+                ? parentId.trim()
+                : null;
+
+        if (normalizedParentId) {
+            const parentComment = await databases
+                .getDocument(db, commentCollection, normalizedParentId)
+                .catch(() => null);
+
+            if (!parentComment) {
+                return NextResponse.json(
+                    { error: "Parent comment not found" },
+                    { status: 404, headers: rlHeaders }
+                );
+            }
+
+            if (parentComment.type !== type || parentComment.typeId !== typeId) {
+                return NextResponse.json(
+                    { error: "Parent comment belongs to a different thread" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+        }
+
         const [comment, author] = await Promise.all([
             databases.createDocument(db, commentCollection, ID.unique(), {
                 content: sanitized,
                 authorId,
                 type,
                 typeId,
+                ...(normalizedParentId ? { parentId: normalizedParentId } : {}),
             }),
             users.get<UserPrefs>(authorId),
         ]);
 
         const hydrated = {
             ...comment,
+            parentId: (comment.parentId as string | undefined) ?? null,
             author: {
                 $id: author.$id,
                 name: author.name,
@@ -165,10 +192,21 @@ export async function DELETE(request: NextRequest) {
             return forbiddenResponse("You are not the author of this comment");
         }
 
-        const response = await databases.deleteDocument(db, commentCollection, commentId);
+        const relatedComments = await databases.listDocuments(db, commentCollection, [
+            Query.equal("type", comment.type as string),
+            Query.equal("typeId", comment.typeId as string),
+            Query.limit(5000),
+        ]);
+        const deletedIds = Array.from(
+            getCommentSubtreeIds(relatedComments.documents as any[], commentId)
+        );
+
+        await Promise.all(
+            deletedIds.map((id) => databases.deleteDocument(db, commentCollection, id))
+        );
 
         return NextResponse.json(
-            { data: response, message: "Comment deleted" },
+            { data: { $id: commentId, deletedIds }, message: "Comment deleted" },
             { status: 200 }
         );
     } catch (error: unknown) {
@@ -179,4 +217,31 @@ export async function DELETE(request: NextRequest) {
             { status: e?.status || e?.code || 500 }
         );
     }
+}
+
+function getCommentSubtreeIds(
+    comments: Array<{ $id: string; parentId?: string | null }>,
+    rootId: string
+) {
+    const ids = new Set<string>();
+    const childrenByParent = new Map<string, Array<{ $id: string }>>();
+
+    for (const comment of comments) {
+        if (!comment.parentId) continue;
+        const siblings = childrenByParent.get(comment.parentId) ?? [];
+        siblings.push(comment);
+        childrenByParent.set(comment.parentId, siblings);
+    }
+
+    const visit = (commentId: string) => {
+        if (ids.has(commentId)) return;
+        ids.add(commentId);
+        for (const child of childrenByParent.get(commentId) ?? []) {
+            visit(child.$id);
+        }
+    };
+
+    visit(rootId);
+
+    return ids;
 }

@@ -18,6 +18,7 @@ export default async function createCommentCollection() {
         databases.createStringAttribute(db, commentCollection, "content", 10000, true),
         databases.createEnumAttribute(db, commentCollection, "type", ["answer", "question"], true),
         databases.createStringAttribute(db, commentCollection, "typeId", 50, true),
+        databases.createStringAttribute(db, commentCollection, "parentId", 50, false),
         databases.createStringAttribute(db, commentCollection, "authorId", 50, true),
     ]);
     console.log("Comment Attributes Created");

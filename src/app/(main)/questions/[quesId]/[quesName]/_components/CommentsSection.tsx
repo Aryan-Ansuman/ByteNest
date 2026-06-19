@@ -4,7 +4,6 @@ import React from "react";
 import Link from "next/link";
 import {
     MessageCircle,
-    Send,
     Trash2,
     ThumbsUp,
     Reply,
@@ -15,8 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
-import { CommentDoc, CommentTargetType, useQuestionDetail } from "./QuestionDetailContext";
+import { Author, CommentDoc, CommentTargetType, useQuestionDetail } from "./QuestionDetailContext";
 import { Avatar, ConfirmDialog } from "./shared";
+
+type HydratedComment = CommentDoc & { author: Author };
+type ThreadedComment = HydratedComment & { replies: ThreadedComment[] };
 
 // ─── Comment composer ─────────────────────────────────────────────────────────
 
@@ -79,13 +81,7 @@ function CommentComposer({
                     />
 
                     <div className="flex items-center gap-2 shrink-0">
-                        <button
-                            type="button"
-                            title="Emoji"
-                            className="flex size-8 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 transition"
-                        >
-                            <Smile className="size-4" />
-                        </button>
+
                         <button
                             type="button"
                             title="Attach image"
@@ -96,7 +92,7 @@ function CommentComposer({
                         <button
                             type="submit"
                             disabled={isPosting || !value.trim()}
-                            className="h-8 rounded-lg bg-green-500/10 text-green-500 px-4 text-xs font-semibold hover:bg-green-500/20 disabled:opacity-50 transition"
+                            className="h-8 rounded-lg bg-white/[0.06] text-zinc-300 px-4 text-xs font-semibold hover:bg-white/[0.12] hover:text-white disabled:opacity-50 transition"
                         >
                             {isPosting ? "Posting…" : "Post"}
                         </button>
@@ -168,6 +164,7 @@ function CommentRow({
                 </p>
 
                 {/* Action row */}
+                {!comment.isDeleted && (
                 <div className="mt-2 flex items-center gap-4">
                     <button
                         onClick={() => {
@@ -201,6 +198,7 @@ function CommentRow({
                         </button>
                     )}
                 </div>
+                )}
             </div>
         </div>
     );
@@ -228,7 +226,7 @@ export default function CommentsSection({
     const [expanded, setExpanded] = React.useState(false);
     const [newComment, setNewComment] = React.useState("");
     const [isPosting, setIsPosting] = React.useState(false);
-    const [commentToDelete, setCommentToDelete] = React.useState<CommentDoc | null>(null);
+    const [commentToDelete, setCommentToDelete] = React.useState<HydratedComment | null>(null);
     const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
     const [replyText, setReplyText] = React.useState("");
     const [isPostingReply, setIsPostingReply] = React.useState(false);
@@ -241,38 +239,26 @@ export default function CommentsSection({
                   documents: [],
               };
 
-    // Sort oldest first
-    const sortedComments = [...comments.documents].sort(
-        (a, b) => new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime()
+    const INITIAL_SHOW = 3;
+    const commentTree = React.useMemo(
+        () => buildCommentTree(comments.documents as HydratedComment[]),
+        [comments.documents]
+    );
+    const visibleComments = React.useMemo(
+        () => (expanded ? commentTree : sliceCommentTree(commentTree, INITIAL_SHOW)),
+        [commentTree, expanded]
     );
 
-    // Build threaded list
-    const threadedComments: (typeof sortedComments[0] & { isReplyObj?: boolean })[] = [];
-    const placedIds = new Set<string>();
-
-    sortedComments.forEach((comment) => {
-        if (placedIds.has(comment.$id)) return;
-
-        threadedComments.push(comment);
-        placedIds.add(comment.$id);
-
-        // Find replies to this comment (mentions author)
-        const replies = sortedComments.filter(
-            (c) => !placedIds.has(c.$id) && c.content.includes(`@${comment.author.name}`)
-        );
-
-        replies.forEach((reply) => {
-            threadedComments.push({ ...reply, isReplyObj: true });
-            placedIds.add(reply.$id);
-        });
-    });
-
-    const INITIAL_SHOW = 3;
-    const visibleComments = expanded
-        ? threadedComments
-        : threadedComments.slice(0, INITIAL_SHOW);
-
-    const hiddenCount = comments.total - INITIAL_SHOW;
+    const visibleCount = React.useMemo(
+        () => countThreadedComments(visibleComments),
+        [visibleComments]
+    );
+    const hiddenCount = Math.max(comments.total - visibleCount, 0);
+    const shouldShowToggle = expanded ? comments.total > INITIAL_SHOW : hiddenCount > 0;
+    const answerAuthorId =
+        type === "answer"
+            ? answers.documents.find((a) => a.$id === typeId)?.authorId
+            : null;
 
     const handlePost = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -290,7 +276,7 @@ export default function CommentsSection({
         e.preventDefault();
         if (!replyText.trim() || !replyingTo) return;
         setIsPostingReply(true);
-        const posted = await addComment(type, typeId, replyText);
+        const posted = await addComment(type, typeId, replyText, replyingTo);
         setIsPostingReply(false);
         if (posted) {
             setReplyText("");
@@ -305,36 +291,60 @@ export default function CommentsSection({
         if (deleted) setCommentToDelete(null);
     };
 
-    return (
-        <div className={cn("", className)}>
-            {/* Comment list */}
-            {visibleComments.length > 0 && (
-                <div className="flex flex-col">
-                    {visibleComments.map((comment) => {
-                        const isReply = comment.isReplyObj || false;
-                        const answerAuthorId = type === "answer" ? answers.documents.find((a) => a.$id === typeId)?.authorId : null;
-                        const isAnswerAuthor = answerAuthorId === comment.authorId;
-                        return (
-                        <React.Fragment key={comment.$id}>
-                            <CommentRow
-                                comment={comment as any}
-                                currentUserId={currentUser?.$id}
-                                isReply={isReply}
-                                isAnswerAuthor={isAnswerAuthor}
-                                onDelete={() => setCommentToDelete(comment as any)}
-                                onReply={() => {
-                                    setReplyingTo(
-                                        replyingTo === comment.$id ? null : comment.$id
-                                    );
-                                    setReplyText(
-                                        `@${(comment as any).author?.name ?? "user"} `
-                                    );
-                                }}
-                            />
+    const renderCommentThread = (
+        thread: ThreadedComment[],
+        isNested = false
+    ): React.ReactNode =>
+        thread.map((comment, index) => {
+            const isAnswerAuthor = answerAuthorId === comment.authorId;
+            const isReplyComposerOpen = replyingTo === comment.$id;
+            const hasChildren = comment.replies.length > 0;
+            const isLast = index === thread.length - 1;
 
+            return (
+                <div key={comment.$id} className="relative">
+                    {/* If nested, draw the L-curve and the vertical line to the next sibling */}
+                    {isNested && (
+                        <>
+                            <div
+                                className="pointer-events-none absolute -left-6 top-0 w-6 border-b border-l border-white/[0.18] rounded-bl-xl"
+                                style={{ height: "32px" }}
+                            />
+                            {!isLast && (
+                                <div className="pointer-events-none absolute -left-6 top-[32px] bottom-0 w-px bg-white/[0.18]" />
+                            )}
+                        </>
+                    )}
+
+                    <div className="relative z-10">
+                        {/* Parent drop line: only needed if there are children or composer */}
+                        {(isReplyComposerOpen || hasChildren) && (
+                            <div className="pointer-events-none absolute left-[16px] top-[48px] bottom-0 w-px bg-white/[0.18] z-0" />
+                        )}
+                        <CommentRow
+                            comment={comment}
+                            currentUserId={currentUser?.$id}
+                            isAnswerAuthor={isAnswerAuthor}
+                            onDelete={() => setCommentToDelete(comment)}
+                            onReply={() => {
+                                setReplyingTo(replyingTo === comment.$id ? null : comment.$id);
+                                setReplyText(`@${comment.author?.name ?? "user"} `);
+                            }}
+                        />
+                    </div>
+
+                    {(isReplyComposerOpen || hasChildren) && (
+                        <div className="ml-4 pl-6 relative z-0">
                             {/* Inline reply composer */}
-                            {replyingTo === comment.$id && (
-                                <div className="pb-2 pl-11">
+                            {isReplyComposerOpen && (
+                                <div className="relative pb-2">
+                                    <div
+                                        className="pointer-events-none absolute -left-6 top-0 w-6 border-b border-l border-white/[0.18] rounded-bl-xl"
+                                        style={{ height: "32px" }}
+                                    />
+                                    {hasChildren && (
+                                        <div className="pointer-events-none absolute -left-6 top-[32px] bottom-0 w-px bg-white/[0.18]" />
+                                    )}
                                     <CommentComposer
                                         currentUser={currentUser}
                                         isPosting={isPostingReply}
@@ -345,19 +355,30 @@ export default function CommentsSection({
                                             setReplyingTo(null);
                                             setReplyText("");
                                         }}
-                                        placeholder={`Reply to ${(comment as any).author?.name ?? "user"}…`}
+                                        placeholder={`Reply to ${comment.author?.name ?? "user"}…`}
                                         compact={false}
                                     />
                                 </div>
                             )}
-                        </React.Fragment>
-                    );
-                })}
+
+                            {hasChildren && renderCommentThread(comment.replies, true)}
+                        </div>
+                    )}
+                </div>
+            );
+        });
+
+    return (
+        <div className={cn("", className)}>
+            {/* Comment list */}
+            {visibleComments.length > 0 && (
+                <div className="flex flex-col">
+                    {renderCommentThread(visibleComments)}
                 </div>
             )}
 
             {/* Show more / less */}
-            {comments.total > INITIAL_SHOW && (
+            {shouldShowToggle && (
                 <button
                     onClick={() => setExpanded((v) => !v)}
                     className="mt-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 transition"
@@ -393,5 +414,81 @@ export default function CommentsSection({
                 onConfirm={handleDelete}
             />
         </div>
+    );
+}
+
+function buildCommentTree(comments: HydratedComment[]): ThreadedComment[] {
+    const sortedComments = [...comments].sort(
+        (a, b) => new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime()
+    );
+    const nodesById = new Map<string, ThreadedComment>(
+        sortedComments.map((comment) => [comment.$id, { ...comment, replies: [] }])
+    );
+    const parentById = new Map(
+        sortedComments.map((comment) => [comment.$id, comment.parentId ?? null])
+    );
+    const roots: ThreadedComment[] = [];
+
+    for (const comment of sortedComments) {
+        const node = nodesById.get(comment.$id);
+        if (!node) continue;
+
+        const parentId = comment.parentId ?? null;
+        const parent = parentId ? nodesById.get(parentId) : null;
+
+        if (
+            parent &&
+            parentId &&
+            parentId !== comment.$id &&
+            !wouldCreateCommentCycle(comment.$id, parentId, parentById)
+        ) {
+            parent.replies.push(node);
+        } else {
+            roots.push(node);
+        }
+    }
+
+    return roots;
+}
+
+function wouldCreateCommentCycle(
+    commentId: string,
+    parentId: string,
+    parentById: Map<string, string | null>
+) {
+    let currentId: string | null = parentId;
+    const visited = new Set<string>();
+
+    while (currentId) {
+        if (currentId === commentId || visited.has(currentId)) return true;
+        visited.add(currentId);
+        currentId = parentById.get(currentId) ?? null;
+    }
+
+    return false;
+}
+
+function sliceCommentTree(comments: ThreadedComment[], limit: number): ThreadedComment[] {
+    let remaining = limit;
+
+    const visit = (nodes: ThreadedComment[]): ThreadedComment[] => {
+        const visible: ThreadedComment[] = [];
+
+        for (const node of nodes) {
+            if (remaining <= 0) break;
+            remaining -= 1;
+            visible.push({ ...node, replies: visit(node.replies) });
+        }
+
+        return visible;
+    };
+
+    return visit(comments);
+}
+
+function countThreadedComments(comments: ThreadedComment[]): number {
+    return comments.reduce(
+        (total, comment) => total + 1 + countThreadedComments(comment.replies),
+        0
     );
 }

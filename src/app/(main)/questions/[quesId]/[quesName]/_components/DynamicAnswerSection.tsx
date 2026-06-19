@@ -42,6 +42,7 @@ interface CommentDoc {
     authorId: string;
     type: "question" | "answer";
     typeId: string;
+    parentId?: string | null;
     author: { $id: string; name: string; reputation: number };
 }
 

@@ -58,8 +58,10 @@ export interface CommentDoc extends AppDocument {
     content: string;
     type?: CommentTargetType;
     typeId?: string;
+    parentId?: string | null;
     authorId: string;
     author: Author;
+    isDeleted?: boolean;
     optimistic?: boolean;
 }
 
@@ -168,7 +170,12 @@ interface QuestionDetailContextValue {
     acceptAnswer: (answerId: string) => Promise<void>;
     submitAnswer: (content: string) => Promise<boolean>;
     deleteAnswer: (answerId: string) => Promise<boolean>;
-    addComment: (type: CommentTargetType, typeId: string, content: string) => Promise<boolean>;
+    addComment: (
+        type: CommentTargetType,
+        typeId: string,
+        content: string,
+        parentId?: string | null
+    ) => Promise<boolean>;
     deleteComment: (type: CommentTargetType, typeId: string, commentId: string) => Promise<boolean>;
     deleteQuestion: () => Promise<boolean>;
     hydrateDynamic: (
@@ -718,7 +725,12 @@ export function QuestionDetailProvider({
     // ── Comments ──────────────────────────────────────────────────────────
 
     const addComment = React.useCallback(
-        async (type: CommentTargetType, typeId: string, content: string) => {
+        async (
+            type: CommentTargetType,
+            typeId: string,
+            content: string,
+            parentId?: string | null
+        ) => {
             if (!currentUser) {
                 router.push("/login");
                 return false;
@@ -727,13 +739,15 @@ export function QuestionDetailProvider({
             const trimmed = content.trim();
             if (!trimmed) return false;
 
+            const normalizedParentId = parentId?.trim() || null;
             const optimisticId = `optimistic-comment-${crypto.randomUUID()}`;
             const optimisticComment = createOptimisticComment(
                 trimmed,
                 type,
                 typeId,
                 currentUser,
-                optimisticId
+                optimisticId,
+                normalizedParentId
             );
             addCommentToState(type, typeId, optimisticComment, setQuestionComments, setAnswers);
 
@@ -745,6 +759,7 @@ export function QuestionDetailProvider({
                         authorId: currentUser.$id,
                         type,
                         typeId,
+                        parentId: normalizedParentId,
                     }),
                 });
 
@@ -759,10 +774,10 @@ export function QuestionDetailProvider({
                 toast.success("Comment posted");
                 return true;
             } catch (error) {
-                removeCommentFromState(
+                removeCommentsFromState(
                     type,
                     typeId,
-                    optimisticId,
+                    [optimisticId],
                     setQuestionComments,
                     setAnswers
                 );
@@ -775,10 +790,22 @@ export function QuestionDetailProvider({
 
     const deleteComment = React.useCallback(
         async (type: CommentTargetType, typeId: string, commentId: string) => {
-            const comment = findComment(type, typeId, commentId, questionComments, answers);
-            if (!comment) return false;
+            const commentsToRemove = findCommentSubtree(
+                type,
+                typeId,
+                commentId,
+                questionComments,
+                answers
+            );
+            if (commentsToRemove.length === 0) return false;
 
-            removeCommentFromState(type, typeId, commentId, setQuestionComments, setAnswers);
+            removeCommentsFromState(
+                type,
+                typeId,
+                commentsToRemove.map((comment) => comment.$id),
+                setQuestionComments,
+                setAnswers
+            );
 
             try {
                 await apiFetch<{ data: unknown }>("/api/comment", {
@@ -788,7 +815,13 @@ export function QuestionDetailProvider({
                 toast.success("Comment deleted");
                 return true;
             } catch (error) {
-                addCommentToState(type, typeId, comment, setQuestionComments, setAnswers);
+                addCommentsToState(
+                    type,
+                    typeId,
+                    commentsToRemove,
+                    setQuestionComments,
+                    setAnswers
+                );
                 toast.error(getErrorMessage(error, "Failed to delete comment"));
                 return false;
             }
@@ -1082,7 +1115,8 @@ function createOptimisticComment(
     type: CommentTargetType,
     typeId: string,
     user: CurrentUser,
-    id: string
+    id: string,
+    parentId: string | null = null
 ): CommentDoc {
     const now = new Date().toISOString();
     return {
@@ -1092,6 +1126,7 @@ function createOptimisticComment(
         content,
         type,
         typeId,
+        parentId,
         authorId: user.$id,
         author: authorFromUser(user),
         optimistic: true,
@@ -1105,10 +1140,22 @@ function addCommentToState(
     setQuestionComments: React.Dispatch<React.SetStateAction<DocumentList<CommentDoc>>>,
     setAnswers: React.Dispatch<React.SetStateAction<DocumentList<AnswerDoc>>>
 ) {
+    addCommentsToState(type, typeId, [comment], setQuestionComments, setAnswers);
+}
+
+function addCommentsToState(
+    type: CommentTargetType,
+    typeId: string,
+    comments: CommentDoc[],
+    setQuestionComments: React.Dispatch<React.SetStateAction<DocumentList<CommentDoc>>>,
+    setAnswers: React.Dispatch<React.SetStateAction<DocumentList<AnswerDoc>>>
+) {
+    if (comments.length === 0) return;
+
     if (type === "question") {
         setQuestionComments((prev) => ({
-            total: prev.total + 1,
-            documents: [comment, ...prev.documents],
+            total: prev.total + comments.length,
+            documents: [...comments, ...prev.documents],
         }));
         return;
     }
@@ -1120,8 +1167,8 @@ function addCommentToState(
                 ? {
                       ...answer,
                       comments: {
-                          total: answer.comments.total + 1,
-                          documents: [comment, ...answer.comments.documents],
+                          total: answer.comments.total + comments.length,
+                          documents: [...comments, ...answer.comments.documents],
                       },
                   }
                 : answer
@@ -1165,17 +1212,20 @@ function replaceCommentInState(
     }));
 }
 
-function removeCommentFromState(
+function removeCommentsFromState(
     type: CommentTargetType,
     typeId: string,
-    commentId: string,
+    commentIds: string[],
     setQuestionComments: React.Dispatch<React.SetStateAction<DocumentList<CommentDoc>>>,
     setAnswers: React.Dispatch<React.SetStateAction<DocumentList<AnswerDoc>>>
 ) {
+    const ids = new Set(commentIds);
+    if (ids.size === 0) return;
+
     if (type === "question") {
         setQuestionComments((prev) => ({
-            total: Math.max(prev.total - 1, 0),
-            documents: prev.documents.filter((comment) => comment.$id !== commentId),
+            total: Math.max(prev.total - ids.size, 0),
+            documents: prev.documents.filter((comment) => !ids.has(comment.$id)),
         }));
         return;
     }
@@ -1187,9 +1237,9 @@ function removeCommentFromState(
                 ? {
                       ...answer,
                       comments: {
-                          total: Math.max(answer.comments.total - 1, 0),
+                          total: Math.max(answer.comments.total - ids.size, 0),
                           documents: answer.comments.documents.filter(
-                              (comment) => comment.$id !== commentId
+                              (comment) => !ids.has(comment.$id)
                           ),
                       },
                   }
@@ -1198,22 +1248,45 @@ function removeCommentFromState(
     }));
 }
 
-function findComment(
+function findCommentSubtree(
     type: CommentTargetType,
     typeId: string,
     commentId: string,
     questionComments: DocumentList<CommentDoc>,
     answers: DocumentList<AnswerDoc>
 ) {
-    if (type === "question") {
-        return (
-            questionComments.documents.find((comment) => comment.$id === commentId) ?? null
-        );
+    const documents =
+        type === "question"
+            ? questionComments.documents
+            : answers.documents.find((answer) => answer.$id === typeId)?.comments.documents ??
+              [];
+    const ids = getCommentSubtreeIds(documents, commentId);
+
+    return documents.filter((comment) => ids.has(comment.$id));
+}
+
+function getCommentSubtreeIds(comments: CommentDoc[], rootId: string) {
+    const ids = new Set<string>();
+    const childrenByParent = new Map<string, CommentDoc[]>();
+
+    for (const comment of comments) {
+        if (!comment.parentId) continue;
+        const siblings = childrenByParent.get(comment.parentId) ?? [];
+        siblings.push(comment);
+        childrenByParent.set(comment.parentId, siblings);
     }
 
-    return (
-        answers.documents
-            .find((answer) => answer.$id === typeId)
-            ?.comments.documents.find((comment) => comment.$id === commentId) ?? null
-    );
+    const visit = (commentId: string) => {
+        if (ids.has(commentId)) return;
+        ids.add(commentId);
+        for (const child of childrenByParent.get(commentId) ?? []) {
+            visit(child.$id);
+        }
+    };
+
+    if (comments.some((comment) => comment.$id === rootId)) {
+        visit(rootId);
+    }
+
+    return ids;
 }
