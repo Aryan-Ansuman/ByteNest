@@ -2,13 +2,11 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import { MessageCircle, Sparkles, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type AnswerSort, useQuestionDetail } from "./QuestionDetailContext";
 import AnswerCard from "./AnswerCard";
 import "@uiw/react-md-editor/markdown-editor.css";
-
-type Tab = "ai" | "answers" | "discussion";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 
@@ -21,89 +19,56 @@ export default function ContentTabs({
     isLoadingMoreAnswers?: boolean;
     onLoadMoreAnswers?: () => void;
 }) {
-    const [activeTab, setActiveTab] = React.useState<Tab>("answers");
     const { answers, bestAnswer, communityAnswers } = useQuestionDetail();
+
+    if (isLoadingDynamic) return <AnswersSkeleton />;
 
     return (
         <div className="mt-10">
-            {/* Tabs Header */}
-            <div className="flex items-center gap-6 border-b border-white/[0.08]">
-                <TabButton
-                    active={activeTab === "ai"}
-                    onClick={() => setActiveTab("ai")}
-                    icon={<Sparkles className="size-4" />}
-                    label="AI Answer"
-                />
-                <TabButton
-                    active={activeTab === "answers"}
-                    onClick={() => setActiveTab("answers")}
-                    label={`Answers`}
-                    count={answers.total}
-                />
-                <TabButton
-                    active={activeTab === "discussion"}
-                    onClick={() => setActiveTab("discussion")}
-                    label="Discussion"
-                />
-            </div>
-
-            {/* Tab Content */}
-            <div className="mt-6">
-                {activeTab === "ai" && <AiAnswerTab />}
-                {activeTab === "answers" && (
-                    <AnswersTab
-                        bestAnswer={bestAnswer}
-                        communityAnswers={communityAnswers}
-                        total={answers.total}
-                        isLoadingMore={isLoadingMoreAnswers}
-                        onLoadMore={onLoadMoreAnswers}
-                    />
-                )}
-                {activeTab === "discussion" && <DiscussionTab />}
-            </div>
+            <AnswersTab
+                bestAnswer={bestAnswer}
+                communityAnswers={communityAnswers}
+                total={answers.total}
+                isLoadingMore={isLoadingMoreAnswers}
+                onLoadMore={onLoadMoreAnswers}
+            />
         </div>
     );
 }
 
-function TabButton({ active, onClick, icon, label, count }: { active: boolean; onClick: () => void; icon?: React.ReactNode; label: string; count?: number }) {
+export function AnswersSkeleton() {
     return (
-        <button
-            onClick={onClick}
-            className={cn(
-                "relative flex items-center gap-2 pb-3 text-[14px] font-medium transition-colors",
-                active ? "text-[#CFE8D5]" : "text-zinc-500 hover:text-zinc-300"
-            )}
-        >
-            {icon && <span className={active ? "text-[#CFE8D5]" : "text-zinc-500"}>{icon}</span>}
-            {label}
-            {count !== undefined && (
-                <span className={cn(
-                    "ml-1 flex h-5 items-center justify-center rounded-full px-2 text-[11px]",
-                    active ? "bg-[#CFE8D5]/10 text-[#CFE8D5]" : "bg-white/[0.05] text-zinc-400"
-                )}>
-                    {count}
-                </span>
-            )}
-
-            {active && (
-                <div className="absolute inset-x-0 bottom-[-1px] h-0.5 bg-[#CFE8D5]" />
-            )}
-        </button>
-    );
-}
-
-function AiAnswerTab() {
-    // Honest placeholder: no AI integration exists yet, so this is explicitly
-    // marked "not available" rather than an infinite fake-loading skeleton.
-    return (
-        <div className="rounded-xl border border-white/[0.08] bg-black/20 p-8 text-center">
-            <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full border border-[#CFE8D5]/20 bg-[#CFE8D5]/10 text-[#CFE8D5]">
-                <Sparkles className="size-5" />
+        <div className="mt-10 space-y-4" aria-busy="true" aria-label="Loading answers">
+            <div className="flex items-center justify-between gap-4">
+                <div className="h-5 w-28 animate-pulse rounded bg-white/[0.07]" />
+                <div className="h-9 w-44 animate-pulse rounded-lg bg-white/[0.05]" />
             </div>
-            <h3 className="text-lg font-bold text-zinc-100">AI Answers coming soon</h3>
-            <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
-                This feature isn&apos;t wired up yet. Check the Answers tab for responses from the community in the meantime.
-            </p>
+            {Array.from({ length: 2 }, (_, index) => (
+                <div
+                    key={index}
+                    className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 rounded-xl border border-white/[0.06] bg-white/[0.015] p-4 sm:grid-cols-[48px_minmax(0,1fr)] sm:gap-5 sm:p-6"
+                >
+                    <div className="flex flex-col items-center gap-3 pt-2">
+                        <div className="size-8 animate-pulse rounded-full bg-white/[0.07]" />
+                        <div className="h-5 w-6 animate-pulse rounded bg-white/[0.07]" />
+                        <div className="size-8 animate-pulse rounded-full bg-white/[0.07]" />
+                    </div>
+                    <div className="min-w-0 space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="size-9 animate-pulse rounded-full bg-white/[0.07]" />
+                            <div className="space-y-1.5">
+                                <div className="h-3.5 w-28 animate-pulse rounded bg-white/[0.07]" />
+                                <div className="h-3 w-20 animate-pulse rounded bg-white/[0.05]" />
+                            </div>
+                        </div>
+                        <div className="space-y-2 pt-2">
+                            <div className="h-3.5 w-full animate-pulse rounded bg-white/[0.06]" />
+                            <div className="h-3.5 w-5/6 animate-pulse rounded bg-white/[0.06]" />
+                            <div className="h-3.5 w-4/6 animate-pulse rounded bg-white/[0.05]" />
+                        </div>
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
@@ -270,17 +235,6 @@ function AnswersTab({
                     </div>
                 )}
             </div>
-        </div>
-    );
-}
-
-function DiscussionTab() {
-    return (
-        <div className="rounded-xl border border-white/[0.08] bg-black/20 p-8 text-center">
-            <h3 className="text-lg font-bold text-zinc-100">Discussion thread</h3>
-            <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
-                Comments and discussion will appear here.
-            </p>
         </div>
     );
 }

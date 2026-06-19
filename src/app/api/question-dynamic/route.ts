@@ -41,9 +41,7 @@ export async function GET(request: NextRequest) {
 
         // ── 1. Fetch answers + question-level comments in parallel ────────
         const [question, answers, comments] = await Promise.all([
-            databases.getDocument(db, questionCollection, questionId, [
-                Query.select(["acceptedAnswerId"]),
-            ]),
+            databases.getDocument(db, questionCollection, questionId),
             databases.listDocuments(db, answerCollection, [
                 Query.orderDesc("$createdAt"),
                 Query.equal("questionId", questionId),
@@ -60,10 +58,14 @@ export async function GET(request: NextRequest) {
             ]),
         ]);
 
-        const acceptedAnswerId =
+        const storedAcceptedAnswerId =
             typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId
                 ? question.acceptedAnswerId
                 : null;
+        const acceptedAnswerId =
+            storedAcceptedAnswerId ??
+            answers.documents.find((answer) => Boolean(answer.isAccepted))?.$id ??
+            null;
         const answerIds = answers.documents.map((a) => a.$id);
         const nextCursor =
             answers.documents.length > 0

@@ -10,8 +10,6 @@ import {
     Copy,
     Flag,
     MessageCircle,
-    Share2,
-    Bookmark,
     Trash2,
     MoreHorizontal,
     Loader2,
@@ -25,6 +23,7 @@ import slugify from "@/utils/slugify";
 import { AnswerDoc, useQuestionDetail } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
 import { Avatar, ConfirmDialog } from "./shared";
+import ShareMenu, { copyText } from "./ShareMenu";
 
 // ─── AnswerMoreMenu ───────────────────────────────────────────────────────────
 
@@ -65,10 +64,12 @@ function AnswerMoreMenu({
     const handleCopyLink = async () => {
         setOpen(false);
         const url = `${window.location.origin}${window.location.pathname}#answer-${answerId}`;
-        await navigator.clipboard.writeText(url);
-        toast("Answer link copied", {
-            description: "Link copied to clipboard.",
-        });
+        try {
+            await copyText(url);
+            toast.success("Answer link copied");
+        } catch {
+            toast.error("Could not copy the answer link");
+        }
     };
 
     const handleReport = () => {
@@ -151,6 +152,7 @@ function VoteRail({
     isQuestionAuthor,
     onAccept,
     isAccepting = false,
+    votePending = false,
     disabled = false,
 }: {
     score: number;
@@ -161,17 +163,19 @@ function VoteRail({
     isQuestionAuthor: boolean;
     onAccept: () => void;
     isAccepting?: boolean;
+    votePending?: boolean;
     disabled?: boolean;
 }) {
     return (
         <div className="flex shrink-0 flex-col items-center gap-1.5 pt-1 w-10">
             <button
-                onClick={(e) => { if (disabled) e.preventDefault(); else onUpvote(); }}
-                aria-disabled={disabled}
+                onClick={onUpvote}
+                disabled={disabled || votePending}
+                aria-busy={votePending}
                 aria-label={`Upvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
                 aria-pressed={votedStatus === "upvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center rounded-full transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
+                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                     votedStatus === "upvoted"
                         ? "text-[#CFE8D5]"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
@@ -194,12 +198,13 @@ function VoteRail({
             </span>
 
             <button
-                onClick={(e) => { if (disabled) e.preventDefault(); else onDownvote(); }}
-                aria-disabled={disabled}
+                onClick={onDownvote}
+                disabled={disabled || votePending}
+                aria-busy={votePending}
                 aria-label={`Downvote answer. Current score ${score}. ${formatVoteStatusForLabel(votedStatus)}.`}
                 aria-pressed={votedStatus === "downvoted"}
                 className={cn(
-                    "flex size-9 items-center justify-center rounded-full transition-colors aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
+                    "flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                     votedStatus === "downvoted"
                         ? "text-red-400"
                         : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
@@ -208,7 +213,7 @@ function VoteRail({
                 <ChevronDown className="size-8" strokeWidth={1.5} />
             </button>
 
-            <div className="mt-2 flex flex-col items-center gap-3">
+            <div className="mt-2 flex flex-col items-center">
                 {isQuestionAuthor ? (
                     <button
                         onClick={onAccept}
@@ -236,14 +241,6 @@ function VoteRail({
                         <Check className="size-6" strokeWidth={2.5} />
                     </div>
                 ) : null}
-                
-                <button
-                    disabled={disabled}
-                    aria-label="Bookmark answer"
-                    className="flex size-8 items-center justify-center text-zinc-600 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    <Bookmark className="size-5" />
-                </button>
             </div>
         </div>
     );
@@ -261,6 +258,7 @@ export default function AnswerCard({
     const {
         currentUser,
         getVoteStatus,
+        isVotePending,
         voteAnswer,
         getAnswerScore,
         deleteAnswer,
@@ -282,6 +280,7 @@ export default function AnswerCard({
     const isBest = variant === "best" || answer.isAccepted;
     const interactionsDisabled = isDeletingQuestion || isDeleting;
     const isAccepting = acceptingAnswerId === answer.$id;
+    const answerVotePending = isVotePending("answer", answer.$id);
     const commentComposerId = `comment-composer-answer-${answer.$id}`;
     const createdAtMs = new Date(answer.$createdAt).getTime();
     const updatedAtMs = new Date(answer.$updatedAt).getTime();
@@ -293,15 +292,6 @@ export default function AnswerCard({
         const deleted = await deleteAnswer(answer.$id);
         setIsDeleting(false);
         if (deleted) setDeleteDialogOpen(false);
-    };
-
-    const handleShare = async () => {
-        if (interactionsDisabled) return;
-        const url = `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`;
-        await navigator.clipboard.writeText(url);
-        toast("Answer link copied", {
-            description: "Link copied to clipboard.",
-        });
     };
 
     const focusCommentComposer = () => {
@@ -316,7 +306,7 @@ export default function AnswerCard({
     return (
         <article
             id={`answer-${answer.$id}`}
-            className="relative flex gap-4 w-full transition-all duration-200"
+            className="relative flex w-full gap-2 transition-all duration-200 sm:gap-4"
         >
             {/* Vote rail - Outside on the left */}
             <VoteRail
@@ -328,19 +318,20 @@ export default function AnswerCard({
                 isQuestionAuthor={isQuestionAuthor}
                 onAccept={() => acceptAnswer(answer.$id)}
                 isAccepting={isAccepting}
+                votePending={answerVotePending}
                 disabled={interactionsDisabled}
             />
 
             {/* Content Container - Bordered box */}
             <div
                 className={cn(
-                    "flex-1 min-w-0 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-5",
+                    "min-w-0 flex-1 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-3 sm:p-5",
                     isBest && "border-[#CFE8D5]/20 bg-[#CFE8D5]/[0.025]"
                 )}
             >
                 {/* Author row */}
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Avatar name={answer.author.name} />
                         <Link
                             href={`/users/${answer.author.$id}/${slugify(answer.author.name)}`}
@@ -359,7 +350,7 @@ export default function AnswerCard({
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                         {wasEdited && (
                             <span className="text-xs text-zinc-600">Edited {convertDateToRelativeTime(new Date(answer.$updatedAt))}</span>
                         )}
@@ -393,14 +384,16 @@ export default function AnswerCard({
                         Comment
                     </button>
 
-                    <button
-                        onClick={handleShare}
+                    <ShareMenu
+                        getUrl={() =>
+                            `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`
+                        }
+                        title={`Answer to: ${question.title}`}
+                        text={markdownToPlainExcerpt(answer.content, 180)}
                         disabled={interactionsDisabled}
-                        className="flex items-center gap-2 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <Share2 className="size-4" />
-                        Share
-                    </button>
+                        variant="inline"
+                        align="left"
+                    />
                 </div>
 
                 {/* Discussion thread */}

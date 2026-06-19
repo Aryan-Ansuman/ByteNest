@@ -15,10 +15,96 @@ import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { sanitizeMarkdownSource, sanitizeTitleSource } from "@/lib/sanitize";
 import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
 import { listAllDocuments } from "@/lib/appwrite-pagination";
+import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 
 // Rate limit: 3 questions per user per 10 minutes
 const QUESTION_RATE_LIMIT = 3;
 const QUESTION_WINDOW_MS = 10 * 60_000;
+
+export async function GET(request: NextRequest) {
+    try {
+        const ids = Array.from(
+            new Set(
+                (request.nextUrl.searchParams.get("ids") ?? "")
+                    .split(",")
+                    .map((id) => id.trim())
+                    .filter(Boolean)
+            )
+        );
+
+        if (ids.length === 0) {
+            return NextResponse.json({ data: { documents: [] } }, { status: 200 });
+        }
+        if (ids.length > 100) {
+            return NextResponse.json(
+                { error: "A maximum of 100 question IDs can be requested" },
+                { status: 413 }
+            );
+        }
+
+        const questionResults = await Promise.all(
+            ids.map((id) =>
+                databases.getDocument(db, questionCollection, id).catch(() => null)
+            )
+        );
+        const questions = questionResults.filter(
+            (question): question is NonNullable<typeof question> => Boolean(question)
+        );
+        const answers =
+            questions.length > 0
+                ? await listAllDocuments<any>(answerCollection, [
+                      Query.equal(
+                          "questionId",
+                          questions.map((question) => question.$id)
+                      ),
+                  ])
+                : { total: 0, documents: [] as any[] };
+        const answerCountByQuestion = new Map<string, number>();
+        answers.documents.forEach((answer) => {
+            const questionId = answer.questionId as string;
+            answerCountByQuestion.set(
+                questionId,
+                (answerCountByQuestion.get(questionId) ?? 0) + 1
+            );
+        });
+
+        const authors = await getAuthorsById(
+            questions.map((question) => question.authorId as string)
+        );
+        const questionById = new Map(
+            questions.map((question) => [
+                question.$id,
+                {
+                    $id: question.$id,
+                    $createdAt: question.$createdAt,
+                    title: question.title as string,
+                    content: question.content as string,
+                    tags: (question.tags as string[]) ?? [],
+                    totalVotes: Number(question.totalVotes ?? 0),
+                    totalAnswers: answerCountByQuestion.get(question.$id) ?? 0,
+                    author:
+                        authors.get(question.authorId as string) ?? deletedAuthor,
+                },
+            ])
+        );
+
+        return NextResponse.json(
+            {
+                data: {
+                    documents: ids
+                        .map((id) => questionById.get(id))
+                        .filter(Boolean),
+                },
+            },
+            { status: 200, headers: { "Cache-Control": "no-store" } }
+        );
+    } catch (error: any) {
+        return NextResponse.json(
+            { error: error?.message || "Error fetching questions" },
+            { status: error?.status || error?.code || 500 }
+        );
+    }
+}
 
 export async function POST(request: NextRequest) {
     try {

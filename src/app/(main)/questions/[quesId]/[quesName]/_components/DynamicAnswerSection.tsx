@@ -78,6 +78,7 @@ export default function DynamicAnswerSection({ questionId }: Props) {
         fetchedKey.current = requestKey;
 
         const controller = new AbortController();
+        let settled = false;
 
         async function load() {
             setIsLoading(true);
@@ -113,12 +114,18 @@ export default function DynamicAnswerSection({ questionId }: Props) {
                 setLoadError(err?.message ?? "Could not load answers.");
                 toast.error("Could not load answers — please refresh.");
             } finally {
+                settled = true;
                 setIsLoading(false);
             }
         }
 
         load();
-        return () => controller.abort();
+        return () => {
+            controller.abort();
+            if (!settled && fetchedKey.current === requestKey) {
+                fetchedKey.current = null;
+            }
+        };
     }, [questionId, hydrateDynamic, reloadToken]);
 
     const loadMoreAnswers = React.useCallback(async () => {

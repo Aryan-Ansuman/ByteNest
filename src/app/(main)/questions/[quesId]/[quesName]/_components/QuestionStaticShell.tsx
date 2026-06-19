@@ -32,6 +32,7 @@ import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailCo
 import QuestionHero from "./QuestionHero";
 import QuestionSidebar from "./QuestionSidebar";
 import DynamicAnswerSection from "./DynamicAnswerSection";
+import { AnswersSkeleton } from "./ContentTabs";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface StaticQuestion {
@@ -46,7 +47,6 @@ interface StaticQuestion {
     acceptedAnswerId: string | null;
     views: number;
     totalVotes: number;
-    totalAnswers: number;
 }
 
 interface StaticAuthor {
@@ -74,7 +74,7 @@ export default function QuestionStaticShell({
     attachmentUrl,
     similarQuestions,
 }: Props) {
-    const { user } = useAuthStore();
+    const { session, user } = useAuthStore();
 
     const breadcrumbTag = question.tags[0] ?? "";
     const breadcrumbLabel = breadcrumbTag ? formatCollectiveName(breadcrumbTag) : "Uncategorized";
@@ -83,7 +83,7 @@ export default function QuestionStaticShell({
         <QuestionDetailProvider
             question={question as any}
             author={author as any}
-            currentUser={user as any}
+            currentUser={(session ? user : null) as any}
             // Answers and comments start empty — DynamicAnswerSection fetches them.
             // Vote totals now come from denormalized totalVotes, not a fabricated split.
             answers={{ total: 0, documents: [] }}
@@ -129,7 +129,7 @@ export default function QuestionStaticShell({
                          * Suspense boundary shows a skeleton while the client
                          * fetches answers from the server.
                          */}
-                        <React.Suspense fallback={<AnswersSkeleton expectedAnswerCount={question.totalAnswers} />}>
+                        <React.Suspense fallback={<AnswersSkeleton />}>
                             <ErrorBoundary>
                                 <DynamicAnswerSection questionId={question.$id} />
                             </ErrorBoundary>
@@ -162,55 +162,4 @@ function QuestionViewTracker({ questionId }: { questionId: string }) {
     }, [questionId]);
 
     return null;
-}
-
-// ─── Skeleton shown while answers load ───────────────────────────────────────
-
-function AnswersSkeleton({ expectedAnswerCount }: { expectedAnswerCount: number }) {
-    const placeholderCount = Math.min(Math.max(expectedAnswerCount, 0), 5);
-
-    return (
-        <div className="mt-10 space-y-4" aria-busy="true" aria-label="Loading answers…">
-            {/* Tab bar placeholder */}
-            <div className="flex items-center gap-6 border-b border-white/[0.08] pb-3">
-                {["AI Answer", "Answers", "Discussion"].map((label) => (
-                    <div key={label} className="h-4 w-20 animate-pulse rounded-full bg-white/[0.07]" />
-                ))}
-            </div>
-            <p className="text-xs text-zinc-600">
-                {expectedAnswerCount > 0
-                    ? `Loading ${expectedAnswerCount} answer${expectedAnswerCount !== 1 ? "s" : ""}...`
-                    : "Checking for answers..."}
-            </p>
-            {/* Answer card placeholders */}
-            {Array.from({ length: placeholderCount }, (_, i) => i + 1).map((i) => (
-                <div
-                    key={i}
-                    className="grid grid-cols-[56px_minmax(0,1fr)] gap-5 rounded-2xl border border-white/[0.06] bg-white/[0.015] p-6"
-                >
-                    {/* Vote rail */}
-                    <div className="flex flex-col items-center gap-3 pt-2">
-                        <div className="h-8 w-8 animate-pulse rounded-full bg-white/[0.07]" />
-                        <div className="h-5 w-6 animate-pulse rounded bg-white/[0.07]" />
-                        <div className="h-8 w-8 animate-pulse rounded-full bg-white/[0.07]" />
-                    </div>
-                    {/* Content */}
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                            <div className="size-10 animate-pulse rounded-full bg-white/[0.07]" />
-                            <div className="space-y-1.5">
-                                <div className="h-3.5 w-28 animate-pulse rounded bg-white/[0.07]" />
-                                <div className="h-3 w-20 animate-pulse rounded bg-white/[0.05]" />
-                            </div>
-                        </div>
-                        <div className="space-y-2 pt-2">
-                            <div className="h-3.5 w-full animate-pulse rounded bg-white/[0.06]" />
-                            <div className="h-3.5 w-5/6 animate-pulse rounded bg-white/[0.06]" />
-                            <div className="h-3.5 w-4/6 animate-pulse rounded bg-white/[0.05]" />
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
 }

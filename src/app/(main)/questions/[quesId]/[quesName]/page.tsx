@@ -18,7 +18,7 @@
  *   confirm the vote count they already saw.
  */
 
-import { answerCollection, db, questionCollection } from "@/models/name";
+import { db, questionCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
@@ -48,7 +48,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
 
     // ── 2. Parallel static fetches (all ISR-cached) ──────────────────────
     // author + similar questions are rarely-changing — safe to cache.
-    const [author, similar, answerCount] = await Promise.all([
+    const [author, similar] = await Promise.all([
         users.get<UserPrefs>(question.authorId),
         tags.length > 0
             ? databases
@@ -71,10 +71,6 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                   })
                   .catch(() => [] as any[])
             : Promise.resolve([] as any[]),
-        databases.listDocuments(db, answerCollection, [
-            Query.equal("questionId", params.quesId),
-            Query.limit(1),
-        ]),
     ]);
 
     const similarQuestions = similar.map((q) => ({
@@ -99,7 +95,6 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             // Pass the denormalized total so the client shows a number immediately
             // without waiting for the vote API response.
             totalVotes: Number(question.totalVotes ?? 0),
-            totalAnswers: Number(answerCount.total ?? 0),
         },
         author: {
             $id: author.$id,

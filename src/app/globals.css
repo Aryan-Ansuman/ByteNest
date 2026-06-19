@@ -53,6 +53,8 @@
 
 @layer components {
     .question-detail-markdown .wmde-markdown {
+        max-width: 100%;
+        overflow-x: hidden;
         background: transparent !important;
         color: rgb(228 228 231);
         font-size: 0.97rem;
@@ -78,7 +80,11 @@
 
     .question-detail-markdown .wmde-markdown pre {
         position: relative;
-        overflow: hidden;
+        width: 100%;
+        max-width: 100%;
+        contain: inline-size;
+        overflow-x: auto;
+        overflow-y: hidden;
         border: 1px solid rgb(255 255 255 / 0.11);
         border-radius: 0.875rem;
         background:
@@ -122,6 +128,10 @@
     }
 
     .question-detail-markdown .wmde-markdown pre code {
+        display: block;
+        width: max-content;
+        min-width: 100%;
+        overflow: visible;
         background: transparent;
         color: inherit;
     }
@@ -135,7 +145,9 @@
     }
 
     .question-detail-markdown .wmde-markdown table {
-        overflow: hidden;
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
         border-radius: 0.75rem;
         border-color: rgb(255 255 255 / 0.1);
     }

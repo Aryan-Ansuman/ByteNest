@@ -6,9 +6,7 @@ import {
     Activity,
     BookOpen,
     ChevronRight,
-    Sparkles,
     Trophy,
-    Wand2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuestionDetail } from "./QuestionDetailContext";
@@ -86,28 +84,6 @@ export default function QuestionSidebar() {
 
     return (
         <aside aria-label="Question sidebar" className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-            {/* ── AI Summary — honest coming-soon ── */}
-            <SidebarCard className="border-[#CFE8D5]/20 bg-[linear-gradient(135deg,rgba(207,232,213,0.05),rgba(255,255,255,0.01))]">
-                <div className="flex items-center gap-2 text-sm font-bold text-zinc-100">
-                    <span className="flex size-6 items-center justify-center rounded-full bg-[#CFE8D5]/10 text-[#CFE8D5]">
-                        <Sparkles className="size-3.5" />
-                    </span>
-                    AI Summary
-                    <span className="rounded bg-[#CFE8D5]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#CFE8D5]">
-                        Beta
-                    </span>
-                </div>
-                <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-[#CFE8D5]/10 bg-[#CFE8D5]/[0.03] px-4 py-5 text-center">
-                    <div className="flex size-9 items-center justify-center rounded-full border border-[#CFE8D5]/20 bg-[#CFE8D5]/10 text-[#CFE8D5]">
-                        <Wand2 className="size-4" />
-                    </div>
-                    <p className="text-[13px] font-medium text-zinc-200">AI summaries coming soon</p>
-                    <p className="text-[12px] leading-relaxed text-zinc-500">
-                        One-click summaries of this thread aren&apos;t wired up yet. Check the community answers in the meantime.
-                    </p>
-                </div>
-            </SidebarCard>
-
             {/* ── Best Solution ── */}
             <SidebarCard className="border-[#CFE8D5]/20 bg-[linear-gradient(135deg,rgba(207,232,213,0.03),rgba(255,255,255,0.01))]">
                 <div className="flex items-center gap-2 text-sm font-bold text-[#CFE8D5]">

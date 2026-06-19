@@ -30,6 +30,8 @@ import slugify from "@/utils/slugify";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import { useAuthStore } from "@/store/Auth";
 import { avatars } from "@/models/client/config";
+import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,13 @@ interface Props {
     developerNews: { title: string; time: string; $id: string; slug: string }[];
 }
 
+type VoteStatus = "upvoted" | "downvoted";
+type FeedVoteState = {
+    score: number;
+    status: VoteStatus | null;
+    pending: boolean;
+};
+
 // ─── Feed Tab Config ──────────────────────────────────────────────────────────
 
 const feedTabs = [
@@ -82,10 +91,152 @@ export default function HomeClient({
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const { session, user } = useAuthStore();
+    const { session, user, toggleBookmark } = useAuthStore();
 
     const [activeFilter, setActiveFilter] = React.useState(initialFilter === "Newest" ? "For you" : initialFilter);
     const [askInput, setAskInput] = React.useState("");
+    const [feedVotes, setFeedVotes] = React.useState<Record<string, FeedVoteState>>(
+        () =>
+            Object.fromEntries(
+                questions.map((question) => [
+                    question.$id,
+                    { score: question.totalVotes, status: null, pending: false },
+                ])
+            )
+    );
+    const pendingFeedVotes = React.useRef<Set<string>>(new Set());
+
+    React.useEffect(() => {
+        setFeedVotes((previous) =>
+            Object.fromEntries(
+                questions.map((question) => [
+                    question.$id,
+                    previous[question.$id] ?? {
+                        score: question.totalVotes,
+                        status: null,
+                        pending: false,
+                    },
+                ])
+            )
+        );
+    }, [questions]);
+
+    React.useEffect(() => {
+        if (!session || !user || questions.length === 0) return;
+        const ids = questions.map((question) => question.$id);
+        const params = new URLSearchParams({
+            type: "question",
+            typeIds: ids.join(","),
+            votedById: user.$id,
+        });
+
+        apiFetch<{
+            data: { documents: Array<{ typeId: string; voteStatus: VoteStatus }> };
+        }>(`/api/vote/batch?${params.toString()}`)
+            .then((response) => {
+                const statuses = new Map(
+                    response.data.documents.map((document) => [
+                        document.typeId,
+                        document.voteStatus,
+                    ])
+                );
+                setFeedVotes((previous) => {
+                    const next = { ...previous };
+                    ids.forEach((id) => {
+                        const current = next[id];
+                        if (current && !current.pending) {
+                            next[id] = { ...current, status: statuses.get(id) ?? null };
+                        }
+                    });
+                    return next;
+                });
+            })
+            .catch(() => undefined);
+    }, [questions, session, user]);
+
+    const handleFeedVote = React.useCallback(
+        async (question: Question, status: VoteStatus) => {
+            if (!session || !user) {
+                toast.warning("Sign in to vote", {
+                    action: { label: "Sign in", onClick: () => router.push("/login") },
+                });
+                return;
+            }
+
+            const current = feedVotes[question.$id] ?? {
+                score: question.totalVotes,
+                status: null,
+                pending: false,
+            };
+            if (current.pending || pendingFeedVotes.current.has(question.$id)) return;
+            pendingFeedVotes.current.add(question.$id);
+
+            const nextStatus = current.status === status ? null : status;
+            const optimisticScore =
+                current.score + voteDelta(current.status, nextStatus);
+            setFeedVotes((previous) => ({
+                ...previous,
+                [question.$id]: {
+                    score: optimisticScore,
+                    status: nextStatus,
+                    pending: true,
+                },
+            }));
+
+            try {
+                const response = await apiFetch<{
+                    data: {
+                        document: { voteStatus: VoteStatus } | null;
+                        voteResult: number;
+                    };
+                }>("/api/vote", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        votedById: user.$id,
+                        voteStatus: status,
+                        type: "question",
+                        typeId: question.$id,
+                    }),
+                });
+                setFeedVotes((previous) => ({
+                    ...previous,
+                    [question.$id]: {
+                        score: response.data.voteResult,
+                        status: response.data.document?.voteStatus ?? null,
+                        pending: false,
+                    },
+                }));
+            } catch (error: any) {
+                setFeedVotes((previous) => ({
+                    ...previous,
+                    [question.$id]: { ...current, pending: false },
+                }));
+                toast.error(error?.message ?? "Vote failed");
+            } finally {
+                pendingFeedVotes.current.delete(question.$id);
+            }
+        },
+        [feedVotes, router, session, user]
+    );
+
+    const handleBookmark = React.useCallback(
+        async (questionId: string) => {
+            if (!session || !user) {
+                toast.warning("Sign in to bookmark questions", {
+                    action: { label: "Sign in", onClick: () => router.push("/login") },
+                });
+                return;
+            }
+            const isBookmarked = user.prefs?.bookmarks?.includes(questionId) ?? false;
+            try {
+                await toggleBookmark(questionId);
+                toast.success(isBookmarked ? "Bookmark removed" : "Question bookmarked");
+            } catch {
+                toast.error("Could not update bookmark");
+            }
+        },
+        [router, session, toggleBookmark, user]
+    );
 
     const handleFilterChange = (filter: string) => {
         setActiveFilter(filter);
@@ -190,7 +341,20 @@ export default function HomeClient({
                                 className="space-y-3"
                             >
                                 {displayedQuestions.map((q) => (
-                                    <QuestionCard key={q.$id} question={q} />
+                                    <QuestionCard
+                                        key={q.$id}
+                                        question={q}
+                                        voteState={
+                                            feedVotes[q.$id] ?? {
+                                                score: q.totalVotes,
+                                                status: null,
+                                                pending: false,
+                                            }
+                                        }
+                                        onVote={(status) => handleFeedVote(q, status)}
+                                        bookmarked={user?.prefs?.bookmarks?.includes(q.$id) ?? false}
+                                        onBookmark={() => handleBookmark(q.$id)}
+                                    />
                                 ))}
                             </motion.div>
                         )}
@@ -312,7 +476,7 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             ),
         },
         {
-            value: 1,
+            value: totalQuestions,
             label: "Questions",
             sub: "Keep asking!",
             icon: (
@@ -322,7 +486,7 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             ),
         },
         {
-            value: 0,
+            value: totalAnswers,
             label: "Answers",
             sub: "Help others grow!",
             icon: (
@@ -367,8 +531,20 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
 
 // ─── QuestionCard ─────────────────────────────────────────────────────────────
 
-function QuestionCard({ question }: { question: Question }) {
-    const [bookmarked, setBookmarked] = React.useState(false);
+function QuestionCard({
+    question,
+    voteState,
+    onVote,
+    bookmarked,
+    onBookmark,
+}: {
+    question: Question;
+    voteState: FeedVoteState;
+    onVote: (status: VoteStatus) => void;
+    bookmarked: boolean;
+    onBookmark: () => Promise<void>;
+}) {
+    const [bookmarkPending, setBookmarkPending] = React.useState(false);
 
     const excerpt = question.content
         .replace(/```[\s\S]*?```/g, "[code]")
@@ -386,16 +562,42 @@ function QuestionCard({ question }: { question: Question }) {
             <div className="flex gap-4 p-5">
                 {/* Vote Controls */}
                 <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
-                    <button className="flex size-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/10 hover:text-[#a7c8b3]">
+                    <button
+                        type="button"
+                        onClick={() => onVote("upvoted")}
+                        disabled={voteState.pending}
+                        aria-busy={voteState.pending}
+                        aria-pressed={voteState.status === "upvoted"}
+                        aria-label={`Upvote ${question.title}`}
+                        className={cn(
+                            "flex size-7 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+                            voteState.status === "upvoted"
+                                ? "text-[#a7c8b3]"
+                                : "text-zinc-600 hover:text-[#a7c8b3]"
+                        )}
+                    >
                         <ArrowUp className="size-4" />
                     </button>
                     <span className={cn(
                         "text-sm font-bold",
-                        question.totalVotes > 0 ? "text-[#a7c8b3]" : question.totalVotes < 0 ? "text-red-400" : "text-zinc-400"
+                        voteState.score > 0 ? "text-[#a7c8b3]" : voteState.score < 0 ? "text-red-400" : "text-zinc-400"
                     )}>
-                        {question.totalVotes}
+                        {voteState.score}
                     </span>
-                    <button className="flex size-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/10 hover:text-red-400">
+                    <button
+                        type="button"
+                        onClick={() => onVote("downvoted")}
+                        disabled={voteState.pending}
+                        aria-busy={voteState.pending}
+                        aria-pressed={voteState.status === "downvoted"}
+                        aria-label={`Downvote ${question.title}`}
+                        className={cn(
+                            "flex size-7 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+                            voteState.status === "downvoted"
+                                ? "text-red-400"
+                                : "text-zinc-600 hover:text-red-400"
+                        )}
+                    >
                         <ArrowDown className="size-4" />
                     </button>
                 </div>
@@ -409,9 +611,19 @@ function QuestionCard({ question }: { question: Question }) {
                             </h2>
                         </Link>
                         <button
-                            onClick={() => setBookmarked(!bookmarked)}
+                            type="button"
+                            onClick={async () => {
+                                if (bookmarkPending) return;
+                                setBookmarkPending(true);
+                                await onBookmark();
+                                setBookmarkPending(false);
+                            }}
+                            disabled={bookmarkPending}
+                            aria-busy={bookmarkPending}
+                            aria-pressed={bookmarked}
+                            aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
                             className={cn(
-                                "shrink-0 transition",
+                                "shrink-0 transition disabled:cursor-not-allowed disabled:opacity-50",
                                 bookmarked ? "text-[#a7c8b3]" : "text-zinc-600 hover:text-zinc-300"
                             )}
                         >
@@ -471,6 +683,12 @@ function QuestionCard({ question }: { question: Question }) {
             </div>
         </motion.article>
     );
+}
+
+function voteDelta(previous: VoteStatus | null, next: VoteStatus | null) {
+    const value = (status: VoteStatus | null) =>
+        status === "upvoted" ? 1 : status === "downvoted" ? -1 : 0;
+    return value(next) - value(previous);
 }
 
 // ─── Community Highlights ─────────────────────────────────────────────────────

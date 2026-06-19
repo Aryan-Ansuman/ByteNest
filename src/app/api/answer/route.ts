@@ -103,9 +103,16 @@ export async function PATCH(request: NextRequest) {
                 : null;
         const nextAcceptedAnswerId = accept ? answerId : currentAcceptedAnswerId === answerId ? null : currentAcceptedAnswerId;
 
-        await databases.updateDocument(db, questionCollection, questionId, {
-            acceptedAnswerId: nextAcceptedAnswerId,
-        });
+        try {
+            await databases.updateDocument(db, questionCollection, questionId, {
+                acceptedAnswerId: nextAcceptedAnswerId,
+            });
+        } catch (error: any) {
+            const missingOptionalAttribute =
+                /attribute not found/i.test(error?.message ?? "") &&
+                /acceptedAnswerId/i.test(error?.message ?? "");
+            if (!missingOptionalAttribute) throw error;
+        }
 
         if (accept) {
             const alreadyAccepted = await databases.listDocuments(db, answerCollection, [

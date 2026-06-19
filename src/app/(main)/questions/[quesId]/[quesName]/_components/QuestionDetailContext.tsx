@@ -169,6 +169,7 @@ interface QuestionDetailContextValue {
     acceptingAnswerId: string | null;
     isQuestionAuthor: boolean;
     getVoteStatus: (type: CommentTargetType, typeId: string) => VoteStatus | null | undefined;
+    isVotePending: (type: CommentTargetType, typeId: string) => boolean;
     ensureVoteState: (type: CommentTargetType, typeId: string) => Promise<VoteStatus | null>;
     getAnswerScore: (answer: AnswerDoc) => number;
     voteQuestion: (status: VoteStatus) => Promise<void>;
@@ -275,11 +276,14 @@ export function QuestionDetailProvider({
     const [voteStatusByTarget, setVoteStatusByTarget] = React.useState<
         Record<string, VoteStatus | null | undefined>
     >({});
+    const [pendingVoteTargets, setPendingVoteTargets] = React.useState<Set<string>>(
+        () => new Set()
+    );
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
     const [acceptingAnswerId, setAcceptingAnswerId] = React.useState<string | null>(null);
 
     const pendingVoteLookups = React.useRef<Set<string>>(new Set());
-    const voteAbortControllers = React.useRef<Map<string, AbortController>>(new Map());
+    const pendingVoteMutations = React.useRef<Set<string>>(new Set());
 
     // Whether the current user is the question author (controls accept button visibility).
     const isQuestionAuthor = currentUser?.$id === question.authorId;
@@ -394,6 +398,12 @@ export function QuestionDetailProvider({
         [voteStatusByTarget]
     );
 
+    const isVotePending = React.useCallback(
+        (type: CommentTargetType, typeId: string) =>
+            pendingVoteTargets.has(targetKey(type, typeId)),
+        [pendingVoteTargets]
+    );
+
     const ensureVoteState = React.useCallback(
         async (type: CommentTargetType, typeId: string) => {
             const key = targetKey(type, typeId);
@@ -489,9 +499,9 @@ export function QuestionDetailProvider({
 
     React.useEffect(() => {
         setVoteStatusByTarget({});
+        setPendingVoteTargets(new Set());
         pendingVoteLookups.current.clear();
-        voteAbortControllers.current.forEach((ctrl) => ctrl.abort());
-        voteAbortControllers.current.clear();
+        pendingVoteMutations.current.clear();
     }, [currentUser?.$id]);
 
     React.useEffect(() => {
@@ -519,21 +529,26 @@ export function QuestionDetailProvider({
             }
 
             const key = targetKey("question", question.$id);
-            const previousStatus =
-                voteStatusByTarget[key] ??
-                (await ensureVoteState("question", question.$id));
-            const nextStatus = previousStatus === status ? null : status;
+            if (pendingVoteMutations.current.has(key)) return;
+            pendingVoteMutations.current.add(key);
+            setPendingVoteTargets((prev) => new Set(prev).add(key));
+
+            let previousStatus: VoteStatus | null = null;
             const previousScore = questionVoteScore;
-
-            setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
-            setQuestionVoteScore((score) => score + voteDelta(previousStatus, nextStatus));
-
-            const existing = voteAbortControllers.current.get(key);
-            existing?.abort();
-            const controller = new AbortController();
-            voteAbortControllers.current.set(key, controller);
+            let optimisticApplied = false;
 
             try {
+                previousStatus =
+                    voteStatusByTarget[key] ??
+                    (await ensureVoteState("question", question.$id));
+                const nextStatus = previousStatus === status ? null : status;
+
+                setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
+                setQuestionVoteScore((score) =>
+                    score + voteDelta(previousStatus, nextStatus)
+                );
+                optimisticApplied = true;
+
                 const response = await apiFetch<VoteMutationResponse>("/api/vote", {
                     method: "POST",
                     body: JSON.stringify({
@@ -542,7 +557,6 @@ export function QuestionDetailProvider({
                         type: "question",
                         typeId: question.$id,
                     }),
-                    signal: controller.signal,
                 });
 
                 setQuestionVoteScore(response.data.voteResult);
@@ -551,14 +565,18 @@ export function QuestionDetailProvider({
                     [key]: response.data.document?.voteStatus ?? null,
                 }));
             } catch (error) {
-                if (isAbortError(error)) return;
-                setQuestionVoteScore(previousScore);
-                setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
+                if (optimisticApplied) {
+                    setQuestionVoteScore(previousScore);
+                    setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
+                }
                 toast.error(getErrorMessage(error, "Vote failed"));
             } finally {
-                if (voteAbortControllers.current.get(key) === controller) {
-                    voteAbortControllers.current.delete(key);
-                }
+                pendingVoteMutations.current.delete(key);
+                setPendingVoteTargets((prev) => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
             }
         },
         [
@@ -584,25 +602,29 @@ export function QuestionDetailProvider({
             }
 
             const key = targetKey("answer", answerId);
-            const previousStatus =
-                voteStatusByTarget[key] ??
-                (await ensureVoteState("answer", answerId));
-            const nextStatus = previousStatus === status ? null : status;
+            if (pendingVoteMutations.current.has(key)) return;
+            pendingVoteMutations.current.add(key);
+            setPendingVoteTargets((prev) => new Set(prev).add(key));
+
+            let previousStatus: VoteStatus | null = null;
             const previousScore = answerVoteScores[answerId] ?? 0;
-
-            setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
-            setAnswerVoteScores((prev) => ({
-                ...prev,
-                [answerId]:
-                    (prev[answerId] ?? previousScore) + voteDelta(previousStatus, nextStatus),
-            }));
-
-            const existing = voteAbortControllers.current.get(key);
-            existing?.abort();
-            const controller = new AbortController();
-            voteAbortControllers.current.set(key, controller);
+            let optimisticApplied = false;
 
             try {
+                previousStatus =
+                    voteStatusByTarget[key] ??
+                    (await ensureVoteState("answer", answerId));
+                const nextStatus = previousStatus === status ? null : status;
+
+                setVoteStatusByTarget((prev) => ({ ...prev, [key]: nextStatus }));
+                setAnswerVoteScores((prev) => ({
+                    ...prev,
+                    [answerId]:
+                        (prev[answerId] ?? previousScore) +
+                        voteDelta(previousStatus, nextStatus),
+                }));
+                optimisticApplied = true;
+
                 const response = await apiFetch<VoteMutationResponse>("/api/vote", {
                     method: "POST",
                     body: JSON.stringify({
@@ -611,7 +633,6 @@ export function QuestionDetailProvider({
                         type: "answer",
                         typeId: answerId,
                     }),
-                    signal: controller.signal,
                 });
 
                 setAnswerVoteScores((prev) => ({
@@ -623,14 +644,18 @@ export function QuestionDetailProvider({
                     [key]: response.data.document?.voteStatus ?? null,
                 }));
             } catch (error) {
-                if (isAbortError(error)) return;
-                setAnswerVoteScores((prev) => ({ ...prev, [answerId]: previousScore }));
-                setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
+                if (optimisticApplied) {
+                    setAnswerVoteScores((prev) => ({ ...prev, [answerId]: previousScore }));
+                    setVoteStatusByTarget((prev) => ({ ...prev, [key]: previousStatus }));
+                }
                 toast.error(getErrorMessage(error, "Vote failed"));
             } finally {
-                if (voteAbortControllers.current.get(key) === controller) {
-                    voteAbortControllers.current.delete(key);
-                }
+                pendingVoteMutations.current.delete(key);
+                setPendingVoteTargets((prev) => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
             }
         },
         [
@@ -1069,6 +1094,7 @@ export function QuestionDetailProvider({
             acceptingAnswerId,
             isQuestionAuthor,
             getVoteStatus,
+            isVotePending,
             ensureVoteState,
             getAnswerScore,
             voteQuestion,
@@ -1110,6 +1136,7 @@ export function QuestionDetailProvider({
             acceptingAnswerId,
             isQuestionAuthor,
             getVoteStatus,
+            isVotePending,
             ensureVoteState,
             getAnswerScore,
             voteQuestion,

@@ -297,7 +297,7 @@ function CommentThreadNode({
     const isReplyComposerOpen = ctx.replyingTo === comment.$id;
     const isContinued = ctx.continuedIds.has(comment.$id);
     const atDepthCap = depth >= MAX_VISUAL_DEPTH && !isContinued;
-    const childDepth = isContinued ? 0 : depth + 1;
+    const childDepth = Math.min(depth + 1, MAX_VISUAL_DEPTH);
 
     return (
         <div className="relative">
@@ -377,8 +377,8 @@ function CommentThreadNode({
                                         className="flex items-center gap-1.5 py-1.5 text-[12.5px] font-medium text-[#8fb89c] transition hover:text-[#a7c8b3]"
                                     >
                                         <CornerDownRight className="size-3.5" />
-                                        View more replies
-                                        <span className="text-zinc-600">({descendantCount})</span>
+                                        View {comment.replies.length} direct{" "}
+                                        {comment.replies.length === 1 ? "reply" : "replies"}
                                     </button>
                                 </div>
                             </div>

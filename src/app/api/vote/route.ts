@@ -7,6 +7,7 @@ import { adjustReputation } from "@/lib/reputation";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
+import { withDistributedLock } from "@/lib/distributed-lock";
 import { createHash } from "crypto";
 
 const VOTE_TYPES = ["question", "answer"] as const;
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        {
+        return await withDistributedLock(`vote:${type}:${typeId}:${votedById}`, async () => {
             const collection = collectionFor(type);
             let targetDoc;
             try {
@@ -213,7 +214,7 @@ export async function POST(request: NextRequest) {
                 },
                 { status: 201, headers: rlHeaders }
             );
-        }
+        });
     } catch (error: any) {
         if (error instanceof Response) return error;
         console.error("VOTE API ERROR:", error);

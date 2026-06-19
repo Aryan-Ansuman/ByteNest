@@ -1,17 +1,14 @@
 "use client";
 
 import React from "react";
-import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import {
     ArrowDown,
     ArrowUp,
     Bookmark,
-    Check,
     Flag,
     MoreHorizontal,
-    Share2,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +23,7 @@ import CommentsSection from "./CommentsSection";
 import MarkdownPreview from "@/components/MarkdownPreview";
 import { Avatar, ConfirmDialog } from "./shared";
 import { useAuthStore } from "@/store/Auth";
+import ShareMenu from "./ShareMenu";
 
 
 
@@ -127,6 +125,7 @@ export default function QuestionHero() {
         totalViews,
         questionVoteScore,
         getVoteStatus,
+        isVotePending,
         voteQuestion,
         currentUser,
         deleteQuestion,
@@ -137,7 +136,6 @@ export default function QuestionHero() {
     const toggleBookmarkStore = useAuthStore((s) => s.toggleBookmark);
     
     const bookmarked = userPrefs?.bookmarks?.includes(question.$id) ?? false;
-    const [copied, setCopied] = React.useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
     const toggleBookmark = async () => {
@@ -155,16 +153,7 @@ export default function QuestionHero() {
     };
 
     const votedStatus = getVoteStatus("question", question.$id);
-
-    const handleShareCopy = async () => {
-        if (isDeletingQuestion) return;
-        await navigator.clipboard.writeText(window.location.href);
-        setCopied(true);
-        toast("Question link copied", {
-            description: "Link copied to clipboard.",
-        });
-        window.setTimeout(() => setCopied(false), 2000);
-    };
+    const questionVotePending = isVotePending("question", question.$id);
 
     const handleReport = () => {
         toast("Report submitted. Thanks for keeping ByteNest safe.");
@@ -180,17 +169,21 @@ export default function QuestionHero() {
 
     return (
         <>
-            <article id="question" className="relative grid grid-cols-[56px_minmax(0,1fr)] gap-5">
+            <article
+                id="question"
+                className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-3 sm:grid-cols-[56px_minmax(0,1fr)] sm:gap-5"
+            >
                 {/* Left Column: Vote Rail */}
                 <aside className="relative flex flex-col items-center pt-2">
                     <div className="flex shrink-0 flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
                         <button
-                            onClick={(e) => { if (isDeletingQuestion) e.preventDefault(); else voteQuestion("upvoted"); }}
-                            aria-disabled={isDeletingQuestion}
+                            onClick={() => voteQuestion("upvoted")}
+                            disabled={isDeletingQuestion || questionVotePending}
+                            aria-busy={questionVotePending}
                             aria-label={`Upvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
                             aria-pressed={votedStatus === "upvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500 aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
+                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500 disabled:cursor-not-allowed disabled:opacity-50",
                                 votedStatus === "upvoted" ? "text-orange-500" : "text-zinc-500"
                             )}
                         >
@@ -209,12 +202,13 @@ export default function QuestionHero() {
                             {questionVoteScore}
                         </span>
                         <button
-                            onClick={(e) => { if (isDeletingQuestion) e.preventDefault(); else voteQuestion("downvoted"); }}
-                            aria-disabled={isDeletingQuestion}
+                            onClick={() => voteQuestion("downvoted")}
+                            disabled={isDeletingQuestion || questionVotePending}
+                            aria-busy={questionVotePending}
                             aria-label={`Downvote question. Current score ${questionVoteScore}. ${formatQuestionVoteStatusForLabel(votedStatus)}.`}
                             aria-pressed={votedStatus === "downvoted"}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-red-400 aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
+                                "flex h-8 w-full items-center justify-center transition hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50",
                                 votedStatus === "downvoted" ? "text-red-400" : "text-zinc-500"
                             )}
                         >
@@ -284,14 +278,12 @@ export default function QuestionHero() {
                             </div>
 
                             <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleShareCopy}
+                                <ShareMenu
+                                    getUrl={() => window.location.href.split("#")[0]}
+                                    title={question.title}
+                                    text="Join the discussion on ByteNest."
                                     disabled={isDeletingQuestion}
-                                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 text-[13px] font-medium text-zinc-300 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
-                                    Share
-                                </button>
+                                />
                                 <MoreMenu
                                     isOwner={isOwner}
                                     onDelete={() => setDeleteDialogOpen(true)}
@@ -324,18 +316,7 @@ export default function QuestionHero() {
                     ) : null}
 
                     {/* Author row */}
-                    <div
-                        className={cn(
-                            "mt-8 flex flex-col gap-4 sm:flex-row sm:items-center",
-                            wasEdited ? "sm:justify-between" : "sm:justify-end"
-                        )}
-                    >
-                        {wasEdited && (
-                            <span className="text-[13px] text-zinc-500">
-                                Edited {convertDateToRelativeTime(new Date(question.$updatedAt))}
-                            </span>
-                        )}
-
+                    <div className="mt-8 flex justify-end">
                         <div className="flex items-center gap-2 rounded-xl bg-white/[0.03] p-1.5 pr-4">
                             <Avatar name={author.name} />
                             <div className="flex flex-col">
