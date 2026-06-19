@@ -1,10 +1,10 @@
-import { Query } from "node-appwrite";
+import { Query, Models } from "node-appwrite";
 import { db } from "@/models/name";
 import { databases } from "@/models/server/config";
 
 const PAGE_SIZE = 100;
 
-export async function listAllDocuments<TDocument extends { $id: string }>(
+export async function listAllDocuments<TDocument extends Models.Document>(
     collectionId: string,
     queries: string[] = [],
     pageSize = PAGE_SIZE
@@ -13,7 +13,7 @@ export async function listAllDocuments<TDocument extends { $id: string }>(
     let cursor: string | null = null;
 
     for (;;) {
-        const page = await databases.listDocuments<TDocument>(db, collectionId, [
+        const page: Models.DocumentList<TDocument> = await databases.listDocuments(db, collectionId, [
             ...queries,
             Query.limit(pageSize),
             ...(cursor ? [Query.cursorAfter(cursor)] : []),

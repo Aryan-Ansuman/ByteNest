@@ -187,14 +187,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     const [answers, questionVotes, questionComments] = await Promise.all([
-        listAllDocuments(answerCollection, [
+        listAllDocuments<any>(answerCollection, [
             Query.equal("questionId", questionId),
         ]),
-        listAllDocuments(voteCollection, [
+        listAllDocuments<any>(voteCollection, [
             Query.equal("type", "question"),
             Query.equal("typeId", questionId),
         ]),
-        listAllDocuments(commentCollection, [
+        listAllDocuments<any>(commentCollection, [
             Query.equal("type", "question"),
             Query.equal("typeId", questionId),
         ]),
@@ -203,11 +203,11 @@ export async function DELETE(request: NextRequest) {
     const perAnswerData = await Promise.all(
         answers.documents.map(async (answer) => {
             const [answerVotes, answerComments] = await Promise.all([
-                listAllDocuments(voteCollection, [
+                listAllDocuments<any>(voteCollection, [
                     Query.equal("type", "answer"),
                     Query.equal("typeId", answer.$id),
                 ]),
-                listAllDocuments(commentCollection, [
+                listAllDocuments<any>(commentCollection, [
                     Query.equal("type", "answer"),
                     Query.equal("typeId", answer.$id),
                 ]),
