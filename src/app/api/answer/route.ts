@@ -4,10 +4,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
 import { UserPrefs } from "@/store/Auth";
 import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
+import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { sanitizeMarkdownSource } from "@/lib/sanitize";
+
+// Rate limit: 5 answers per user per 10 minutes
+const ANSWER_RATE_LIMIT = 5;
+const ANSWER_WINDOW_MS = 10 * 60_000;
 
 export async function POST(request: NextRequest) {
     try {
         const requesterId = await getAuthenticatedUserId();
+
+        // Rate limit per authenticated user
+        const rl = rateLimit({
+            key: `answer:${requesterId}`,
+            limit: ANSWER_RATE_LIMIT,
+            windowMs: ANSWER_WINDOW_MS,
+        });
+        const rlHeaders = rateLimitHeaders(rl, ANSWER_RATE_LIMIT);
+
+        if (!rl.success) {
+            return NextResponse.json(
+                { error: "Too many answers posted. Please slow down." },
+                { status: 429, headers: rlHeaders }
+            );
+        }
 
         const { questionId, answer, authorId } = await request.json();
 
@@ -15,8 +36,17 @@ export async function POST(request: NextRequest) {
             return forbiddenResponse("authorId does not match authenticated user");
         }
 
+        // Sanitize answer content before storing
+        const sanitized = sanitizeMarkdownSource(answer ?? "");
+        if (sanitized.length < 10) {
+            return NextResponse.json(
+                { error: "Answer content is too short (minimum 10 characters)" },
+                { status: 400, headers: rlHeaders }
+            );
+        }
+
         const response = await databases.createDocument(db, answerCollection, ID.unique(), {
-            content: answer,
+            content: sanitized,
             authorId,
             questionId,
             isAccepted: false,
@@ -27,7 +57,7 @@ export async function POST(request: NextRequest) {
             reputation: Number(prefs.reputation) + 1,
         });
 
-        return NextResponse.json(response, { status: 201 });
+        return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;

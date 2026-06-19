@@ -4,6 +4,12 @@ import { UserPrefs } from "@/store/Auth";
 import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
 import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
+import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { sanitizeMarkdownSource } from "@/lib/sanitize";
+
+// Rate limit: 20 comments per user per 5 minutes
+const COMMENT_RATE_LIMIT = 20;
+const COMMENT_WINDOW_MS = 5 * 60_000;
 
 export async function GET(request: NextRequest) {
     try {
@@ -61,24 +67,47 @@ export async function POST(request: NextRequest) {
         return unauthorizedResponse("Authentication required");
     }
 
+    // Rate limit per authenticated user
+    const rl = rateLimit({
+        key: `comment:${requesterId}`,
+        limit: COMMENT_RATE_LIMIT,
+        windowMs: COMMENT_WINDOW_MS,
+    });
+    const rlHeaders = rateLimitHeaders(rl, COMMENT_RATE_LIMIT);
+
+    if (!rl.success) {
+        return NextResponse.json(
+            { error: "Too many comments. Please slow down." },
+            { status: 429, headers: rlHeaders }
+        );
+    }
+
     try {
         const { content, authorId, type, typeId } = await request.json();
 
         if (!content?.trim() || !authorId || !type || !typeId) {
             return NextResponse.json(
                 { error: "content, authorId, type, and typeId are required" },
-                { status: 400 }
+                { status: 400, headers: rlHeaders }
             );
         }
 
-        // The client sends the user's own ID; verify it matches the session.
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
         }
 
+        // Sanitize before storing
+        const sanitized = sanitizeMarkdownSource(content.trim());
+        if (sanitized.length < 1) {
+            return NextResponse.json(
+                { error: "Comment content is empty after sanitization" },
+                { status: 400, headers: rlHeaders }
+            );
+        }
+
         const [comment, author] = await Promise.all([
             databases.createDocument(db, commentCollection, ID.unique(), {
-                content: content.trim(),
+                content: sanitized,
                 authorId,
                 type,
                 typeId,
@@ -95,13 +124,13 @@ export async function POST(request: NextRequest) {
             },
         };
 
-        return NextResponse.json({ data: hydrated }, { status: 201 });
+        return NextResponse.json({ data: hydrated }, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;
         return NextResponse.json(
             { error: e?.message || "Error creating comment" },
-            { status: e?.status || e?.code || 500 }
+            { status: e?.status || e?.code || 500, headers: rlHeaders }
         );
     }
 }
@@ -126,14 +155,12 @@ export async function DELETE(request: NextRequest) {
         try {
             comment = await databases.getDocument(db, commentCollection, commentId);
         } catch {
-            // Already deleted — idempotent success.
             return NextResponse.json(
                 { data: { $id: commentId }, message: "Comment not found or already deleted" },
                 { status: 200 }
             );
         }
 
-        // Ownership check against the live document — no client-supplied bypass possible.
         if (comment.authorId !== requesterId) {
             return forbiddenResponse("You are not the author of this comment");
         }

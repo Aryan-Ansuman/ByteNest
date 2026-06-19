@@ -11,19 +11,61 @@ import { UserPrefs } from "@/store/Auth";
 import { NextRequest, NextResponse } from "next/server";
 import { ID, Query } from "node-appwrite";
 import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from "@/lib/auth";
+import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { sanitizeMarkdownSource } from "@/lib/sanitize";
+
+// Rate limit: 3 questions per user per 10 minutes
+const QUESTION_RATE_LIMIT = 3;
+const QUESTION_WINDOW_MS = 10 * 60_000;
 
 export async function POST(request: NextRequest) {
     try {
         const requesterId = await getAuthenticatedUserId();
 
+        // Rate limit per authenticated user
+        const rl = rateLimit({
+            key: `question:${requesterId}`,
+            limit: QUESTION_RATE_LIMIT,
+            windowMs: QUESTION_WINDOW_MS,
+        });
+        const rlHeaders = rateLimitHeaders(rl, QUESTION_RATE_LIMIT);
+
+        if (!rl.success) {
+            return NextResponse.json(
+                { error: "Too many questions posted. Please slow down." },
+                { status: 429, headers: rlHeaders }
+            );
+        }
+
         const { title, content, authorId, tags, attachmentId } = await request.json();
 
-        // The client sends the user's own ID; verify it matches the session.
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
         }
 
-        const docData: Record<string, unknown> = { title, content, authorId, tags };
+        // Sanitize user-supplied markdown content before persisting
+        const sanitizedTitle = sanitizeMarkdownSource(title ?? "").slice(0, 100);
+        const sanitizedContent = sanitizeMarkdownSource(content ?? "");
+
+        if (sanitizedTitle.length < 15) {
+            return NextResponse.json(
+                { error: "Title must be at least 15 characters" },
+                { status: 400, headers: rlHeaders }
+            );
+        }
+        if (sanitizedContent.length < 30) {
+            return NextResponse.json(
+                { error: "Body must be at least 30 characters" },
+                { status: 400, headers: rlHeaders }
+            );
+        }
+
+        const docData: Record<string, unknown> = {
+            title: sanitizedTitle,
+            content: sanitizedContent,
+            authorId,
+            tags,
+        };
         if (attachmentId) docData.attachmentId = attachmentId;
 
         const response = await databases.createDocument(
@@ -33,7 +75,7 @@ export async function POST(request: NextRequest) {
             docData
         );
 
-        return NextResponse.json(response, { status: 201 });
+        return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;
@@ -55,13 +97,20 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: "questionId is required" }, { status: 400 });
         }
 
-        // Ownership check against the live document — not the client's claim.
         const question = await databases.getDocument(db, questionCollection, questionId);
         if (question.authorId !== requesterId) {
             return forbiddenResponse("You are not the author of this question");
         }
 
-        const docData: Record<string, unknown> = { title, content, tags };
+        // Sanitize on update too
+        const sanitizedTitle = sanitizeMarkdownSource(title ?? "").slice(0, 100);
+        const sanitizedContent = sanitizeMarkdownSource(content ?? "");
+
+        const docData: Record<string, unknown> = {
+            title: sanitizedTitle,
+            content: sanitizedContent,
+            tags,
+        };
 
         if (attachmentId && oldAttachmentId && oldAttachmentId !== attachmentId) {
             try {
@@ -93,7 +142,6 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-    // ── 0. Auth — must come before reading the body ──────────────────────
     let requesterId: string;
     try {
         requesterId = await getAuthenticatedUserId();
@@ -114,26 +162,20 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "questionId is required" }, { status: 400 });
     }
 
-    // ── 1. Fetch the question and verify ownership ────────────────────────
     let question: Awaited<ReturnType<typeof databases.getDocument>>;
     try {
         question = await databases.getDocument(db, questionCollection, questionId);
     } catch {
-        // Document not found — treat as already deleted (idempotent).
         return NextResponse.json(
             { data: { $id: questionId }, message: "Question not found or already deleted" },
             { status: 200 }
         );
     }
 
-    // Server-side ownership check — never trust the client-supplied authorId.
     if (question.authorId !== requesterId) {
         return forbiddenResponse("You are not the author of this question");
     }
 
-    // ── 2. Collect all dependent documents ───────────────────────────────
-    // We fetch everything before mutating so partial failures don't leave us
-    // unable to identify what still needs cleanup.
     const [answers, questionVotes, questionComments] = await Promise.all([
         databases.listDocuments(db, answerCollection, [
             Query.equal("questionId", questionId),
@@ -169,8 +211,6 @@ export async function DELETE(request: NextRequest) {
         })
     );
 
-    // ── 3. Delete in dependency order, logging each phase ────────────────
-    // Phase A: answer-level votes and comments.
     const phaseAResults = await Promise.allSettled(
         perAnswerData.flatMap(({ answerVotes, answerComments }) => [
             ...answerVotes.documents.map((v) =>
@@ -183,7 +223,6 @@ export async function DELETE(request: NextRequest) {
     );
     logSettledFailures("phase-A (answer votes/comments)", questionId, phaseAResults);
 
-    // Phase B: answer documents themselves.
     const phaseBResults = await Promise.allSettled(
         perAnswerData.map(({ answer }) =>
             databases.deleteDocument(db, answerCollection, answer.$id)
@@ -191,7 +230,6 @@ export async function DELETE(request: NextRequest) {
     );
     logSettledFailures("phase-B (answers)", questionId, phaseBResults);
 
-    // Phase C: question-level votes and comments.
     const phaseCResults = await Promise.allSettled([
         ...questionVotes.documents.map((v) =>
             databases.deleteDocument(db, voteCollection, v.$id)
@@ -202,7 +240,6 @@ export async function DELETE(request: NextRequest) {
     ]);
     logSettledFailures("phase-C (question votes/comments)", questionId, phaseCResults);
 
-    // Phase D: attachment file (non-fatal if already gone).
     if (question.attachmentId && question.attachmentId !== "none") {
         try {
             await storage.deleteFile(questionAttachmentBucket, question.attachmentId as string);
@@ -211,9 +248,6 @@ export async function DELETE(request: NextRequest) {
         }
     }
 
-    // ── 4. Delete the question document itself ────────────────────────────
-    // This is the point of no return.  If it fails we haven't lost anything
-    // permanent (dependent docs may be gone, but those are cascade data).
     try {
         await databases.deleteDocument(db, questionCollection, questionId);
     } catch (error: any) {
@@ -223,11 +257,6 @@ export async function DELETE(request: NextRequest) {
         );
     }
 
-    // ── 5. Reputation adjustments — best-effort, logged on failure ────────
-    // We snapshot all prefs first so the reputation math is based on a
-    // consistent read, then apply all writes.  A single prefs-update failure
-    // does not roll back the delete (which is already committed), but it is
-    // logged so an admin/reconciliation job can detect and fix the drift.
     const upvoteCount = questionVotes.documents.filter(
         (v) => v.voteStatus === "upvoted"
     ).length;
@@ -240,7 +269,6 @@ export async function DELETE(request: NextRequest) {
         new Set(answers.documents.map((a) => a.authorId as string))
     );
 
-    // Collect all unique author IDs that need reputation changes.
     const allAuthorIds = Array.from(
         new Set([
             ...(netQuestionReputation !== 0 ? [question.authorId as string] : []),
@@ -248,7 +276,6 @@ export async function DELETE(request: NextRequest) {
         ])
     );
 
-    // Snapshot all prefs before writing anything.
     const prefsById = new Map<string, number>();
     await Promise.allSettled(
         allAuthorIds.map(async (id) => {
@@ -261,7 +288,6 @@ export async function DELETE(request: NextRequest) {
         })
     );
 
-    // Apply reputation deltas.
     const reputationResults = await Promise.allSettled([
         ...(netQuestionReputation !== 0
             ? [
@@ -285,8 +311,6 @@ export async function DELETE(request: NextRequest) {
         { status: 200 }
     );
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function logSettledFailures(
     phase: string,

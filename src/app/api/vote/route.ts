@@ -5,23 +5,21 @@ import { ID, Query } from "node-appwrite";
 import { ApiValidationError, parseJsonBody, requireEnum, requireString } from "@/lib/api-validation";
 import { withMutex } from "@/lib/mutex";
 import { adjustReputation } from "@/lib/reputation";
+import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 const VOTE_TYPES = ["question", "answer"] as const;
 const VOTE_STATUSES = ["upvoted", "downvoted"] as const;
 type VoteType = (typeof VOTE_TYPES)[number];
 type VoteStatusValue = (typeof VOTE_STATUSES)[number];
 
+// Rate limit: 30 vote actions per user per minute
+const VOTE_RATE_LIMIT = 30;
+const VOTE_WINDOW_MS = 60_000;
+
 function collectionFor(type: VoteType) {
     return type === "question" ? questionCollection : answerCollection;
 }
 
-/**
- * Adjusts the denormalized `totalVotes` attribute via Appwrite's atomic
- * increment/decrement-attribute calls instead of read-then-write, removing
- * the counter's lost-update race entirely. Falls back to a mutex-guarded
- * read-then-write only if those calls aren't available on the installed
- * node-appwrite version.
- */
 async function adjustVoteCounter(type: VoteType, typeId: string, delta: number): Promise<number> {
     const collection = collectionFor(type);
 
@@ -94,12 +92,6 @@ export async function GET(request: NextRequest) {
     }
 }
 
-/**
- * Casts, flips, or withdraws a vote. Net delta is computed once, up front:
- * the new vote's own effect, plus (if a previous vote existed) undoing that
- * previous vote's effect — a flip from upvoted to downvoted is a swing of
- * -2, not 0.
- */
 export async function POST(request: NextRequest) {
     try {
         const body = await parseJsonBody(request);
@@ -108,6 +100,21 @@ export async function POST(request: NextRequest) {
         const typeId = requireString(body.typeId, "typeId");
         const type = requireEnum(body.type, VOTE_TYPES, "type");
         const voteStatus = requireEnum(body.voteStatus, VOTE_STATUSES, "voteStatus");
+
+        // Rate limit per user
+        const rl = rateLimit({
+            key: `vote:${votedById}`,
+            limit: VOTE_RATE_LIMIT,
+            windowMs: VOTE_WINDOW_MS,
+        });
+        const rlHeaders = rateLimitHeaders(rl, VOTE_RATE_LIMIT);
+
+        if (!rl.success) {
+            return NextResponse.json(
+                { message: "Too many vote actions. Please slow down." },
+                { status: 429, headers: rlHeaders }
+            );
+        }
 
         const collection = collectionFor(type);
 
@@ -118,14 +125,14 @@ export async function POST(request: NextRequest) {
             } catch {
                 return NextResponse.json(
                     { message: "The question or answer you're voting on no longer exists" },
-                    { status: 404 }
+                    { status: 404, headers: rlHeaders }
                 );
             }
 
             if (targetDoc.authorId === votedById) {
                 return NextResponse.json(
                     { message: "You can't vote on your own post" },
-                    { status: 403 }
+                    { status: 403, headers: rlHeaders }
                 );
             }
 
@@ -153,7 +160,7 @@ export async function POST(request: NextRequest) {
 
                 return NextResponse.json(
                     { data: { document: null, voteResult: newTotal }, message: "Vote withdrawn" },
-                    { status: 200 }
+                    { status: 200, headers: rlHeaders }
                 );
             }
 
@@ -179,7 +186,7 @@ export async function POST(request: NextRequest) {
                     data: { document: newVoteDoc, voteResult: newTotal },
                     message: previousVote ? "Vote status updated" : "Voted",
                 },
-                { status: 201 }
+                { status: 201, headers: rlHeaders }
             );
         });
     } catch (error: any) {
