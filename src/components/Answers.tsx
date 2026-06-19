@@ -11,6 +11,7 @@ import Comments from "./Comments";
 import slugify from "@/utils/slugify";
 import Link from "next/link";
 import { IconTrash } from "@tabler/icons-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const Answers = ({
     answers: _answers,
@@ -28,7 +29,7 @@ const Answers = ({
         if (!newAnswer || !user) return;
 
         try {
-            const response = await fetch("/api/answer", {
+            const data = await apiFetch<any>("/api/answer", {
                 method: "POST",
                 body: JSON.stringify({
                     questionId: questionId,
@@ -36,10 +37,6 @@ const Answers = ({
                     authorId: user.$id,
                 }),
             });
-
-            const data = await response.json();
-
-            if (!response.ok) throw data;
 
             setNewAnswer(() => "");
             setAnswers(prev => ({
@@ -62,16 +59,12 @@ const Answers = ({
 
     const deleteAnswer = async (answerId: string) => {
         try {
-            const response = await fetch("/api/answer", {
+            await apiFetch("/api/answer", {
                 method: "DELETE",
                 body: JSON.stringify({
                     answerId: answerId,
                 }),
             });
-
-            const data = await response.json();
-
-            if (!response.ok) throw data;
 
             setAnswers(prev => ({
                 total: prev.total - 1,

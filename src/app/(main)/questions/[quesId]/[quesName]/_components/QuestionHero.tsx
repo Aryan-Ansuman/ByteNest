@@ -194,8 +194,8 @@ export default function QuestionHero() {
                         <button
                             onClick={() => voteQuestion("upvoted")}
                             className={cn(
-                                "flex h-8 w-full items-center justify-center transition hover:text-[#CFE8D5]",
-                                votedStatus === "upvoted" ? "text-[#CFE8D5]" : "text-zinc-500"
+                                "flex h-8 w-full items-center justify-center transition hover:text-orange-500",
+                                votedStatus === "upvoted" ? "text-orange-500" : "text-zinc-500"
                             )}
                         >
                             <ArrowUp className="size-5" />
@@ -204,7 +204,7 @@ export default function QuestionHero() {
                             className={cn(
                                 "text-lg font-bold",
                                 votedStatus === "upvoted"
-                                    ? "text-[#CFE8D5]"
+                                    ? "text-orange-500"
                                     : votedStatus === "downvoted"
                                     ? "text-red-400"
                                     : "text-[#CFE8D5]"

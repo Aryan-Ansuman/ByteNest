@@ -32,6 +32,7 @@ import { useAuthStore } from "@/store/Auth";
 import { storage } from "@/models/client/config";
 import { questionAttachmentBucket } from "@/models/name";
 import slugify from "@/utils/slugify";
+import { apiFetch } from "@/lib/api-fetch";
 import { Models, ID } from "appwrite";
 import dynamic from "next/dynamic";
 import "@uiw/react-md-editor/markdown-editor.css";
@@ -230,14 +231,10 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                 payload.oldAttachmentId = question.attachmentId;
             }
 
-            const res = await fetch("/api/question", {
+            const data = await apiFetch("/api/question", {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to update question");
 
             setSuccess(true);
             setTimeout(() => {

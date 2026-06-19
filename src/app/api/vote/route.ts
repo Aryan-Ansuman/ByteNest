@@ -6,6 +6,7 @@ import { ApiValidationError, parseJsonBody, requireEnum, requireString } from "@
 import { withMutex } from "@/lib/mutex";
 import { adjustReputation } from "@/lib/reputation";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { getAuthenticatedUserId } from "@/lib/auth";
 
 const VOTE_TYPES = ["question", "answer"] as const;
 const VOTE_STATUSES = ["upvoted", "downvoted"] as const;
@@ -61,24 +62,35 @@ export async function GET(request: NextRequest) {
         const typeId = searchParams.get("typeId");
         const votedById = searchParams.get("votedById");
 
-        if (!typeParam || !typeId || !votedById) {
+        if (!typeParam || !typeId) {
             return NextResponse.json(
-                { error: "type, typeId, and votedById are required" },
+                { error: "type and typeId are required" },
                 { status: 400 }
             );
         }
 
         const type = requireEnum(typeParam, VOTE_TYPES, "type");
+        const collection = type === "question" ? questionCollection : answerCollection;
 
-        const response = await databases.listDocuments(db, voteCollection, [
-            Query.equal("type", type),
-            Query.equal("typeId", typeId),
-            Query.equal("votedById", votedById),
-            Query.limit(1),
+        const [voteResponse, targetDoc] = await Promise.all([
+            votedById
+                ? databases.listDocuments(db, voteCollection, [
+                      Query.equal("type", type),
+                      Query.equal("typeId", typeId),
+                      Query.equal("votedById", votedById),
+                      Query.limit(1),
+                  ])
+                : Promise.resolve({ documents: [] }),
+            databases.getDocument(db, collection, typeId).catch(() => null),
         ]);
 
         return NextResponse.json(
-            { data: { document: response.documents[0] ?? null } },
+            {
+                data: {
+                    document: voteResponse.documents[0] ?? null,
+                    totalVotes: targetDoc ? Number(targetDoc.totalVotes ?? 0) : 0,
+                },
+            },
             { status: 200 }
         );
     } catch (error: any) {
@@ -100,6 +112,12 @@ export async function POST(request: NextRequest) {
         const typeId = requireString(body.typeId, "typeId");
         const type = requireEnum(body.type, VOTE_TYPES, "type");
         const voteStatus = requireEnum(body.voteStatus, VOTE_STATUSES, "voteStatus");
+
+        const requesterId = await getAuthenticatedUserId();
+        if (votedById !== requesterId) {
+            console.error("VOTE 403 - ID Mismatch", { votedById, requesterId });
+            return NextResponse.json({ message: "Unauthorized: votedById mismatch" }, { status: 403 });
+        }
 
         // Rate limit per user
         const rl = rateLimit({
@@ -130,6 +148,7 @@ export async function POST(request: NextRequest) {
             }
 
             if (targetDoc.authorId === votedById) {
+                console.error("VOTE 403 - Own Post", { votedById, authorId: targetDoc.authorId });
                 return NextResponse.json(
                     { message: "You can't vote on your own post" },
                     { status: 403, headers: rlHeaders }
@@ -190,6 +209,7 @@ export async function POST(request: NextRequest) {
             );
         });
     } catch (error: any) {
+        console.error("VOTE API ERROR:", error);
         if (error instanceof ApiValidationError) {
             return NextResponse.json({ message: error.message }, { status: error.status });
         }

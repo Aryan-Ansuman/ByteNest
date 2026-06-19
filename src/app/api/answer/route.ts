@@ -7,8 +7,8 @@ import { getAuthenticatedUserId, forbiddenResponse, unauthorizedResponse } from 
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { sanitizeMarkdownSource } from "@/lib/sanitize";
 
-// Rate limit: 5 answers per user per 10 minutes
-const ANSWER_RATE_LIMIT = 5;
+// Rate limit: 50 answers per user per 10 minutes
+const ANSWER_RATE_LIMIT = 50;
 const ANSWER_WINDOW_MS = 10 * 60_000;
 
 export async function POST(request: NextRequest) {

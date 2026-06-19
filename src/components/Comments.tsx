@@ -10,6 +10,7 @@ import { IconTrash } from "@tabler/icons-react";
 import { ID, Models } from "appwrite";
 import Link from "next/link";
 import React from "react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const Comments = ({
     comments: _comments,
@@ -31,17 +32,20 @@ const Comments = ({
         if (!newComment || !user) return;
 
         try {
-            const response = await databases.createDocument(db, commentCollection, ID.unique(), {
-                content: newComment,
-                authorId: user.$id,
-                type: type,
-                typeId: typeId,
+            const response = await apiFetch<any>("/api/comment", {
+                method: "POST",
+                body: JSON.stringify({
+                    content: newComment,
+                    authorId: user.$id,
+                    type: type,
+                    typeId: typeId,
+                }),
             });
 
             setNewComment(() => "");
             setComments(prev => ({
                 total: prev.total + 1,
-                documents: [{ ...response, author: user }, ...prev.documents],
+                documents: [{ ...response.data, author: user }, ...prev.documents],
             }));
         } catch (error: any) {
             window.alert(error?.message || "Error creating comment");
@@ -50,7 +54,13 @@ const Comments = ({
 
     const deleteComment = async (commentId: string) => {
         try {
-            await databases.deleteDocument(db, commentCollection, commentId);
+            await apiFetch("/api/comment", {
+                method: "DELETE",
+                body: JSON.stringify({
+                    commentId: commentId,
+                    authorId: user?.$id,
+                }),
+            });
 
             setComments(prev => ({
                 total: prev.total - 1,

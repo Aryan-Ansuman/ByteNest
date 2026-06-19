@@ -103,7 +103,7 @@ export default function QuestionSidebar() {
                     </div>
                     <p className="text-[13px] font-medium text-zinc-200">AI summaries coming soon</p>
                     <p className="text-[12px] leading-relaxed text-zinc-500">
-                        One-click summaries of this thread aren't wired up yet. Check the community answers in the meantime.
+                        One-click summaries of this thread aren&apos;t wired up yet. Check the community answers in the meantime.
                     </p>
                 </div>
             </SidebarCard>

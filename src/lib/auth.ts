@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { Account, Client } from "node-appwrite";
 import env from "@/app/env";
 
@@ -14,27 +14,19 @@ import env from "@/app/env";
  * always use the ID returned from this function.
  */
 export async function getAuthenticatedUserId(): Promise<string> {
-    const cookieStore = cookies();
-
-    // Appwrite stores the session in a cookie named `a_session_<projectId>`
-    // (lowercase).  We accept both the hashed and plain variants.
-    const projectId = env.appwrite.projectId.toLowerCase();
-    const sessionCookie =
-        cookieStore.get(`a_session_${projectId}_legacy`)?.value ??
-        cookieStore.get(`a_session_${projectId}`)?.value ??
-        // Fallback: some Appwrite versions use the header set by the client SDK.
-        cookieStore.get("a_session")?.value;
-
-    if (!sessionCookie) {
-        throw unauthorizedResponse("No active session");
+    const authHeader = headers().get("authorization") || headers().get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        throw unauthorizedResponse("Missing or invalid Authorization header");
     }
+
+    const jwt = authHeader.split(" ")[1];
 
     // Build a per-request client scoped to this session — never use the
     // API-key client for session verification because that bypasses auth.
     const client = new Client()
         .setEndpoint(env.appwrite.endpoint)
         .setProject(env.appwrite.projectId)
-        .setSession(sessionCookie);
+        .setJWT(jwt);
 
     const account = new Account(client);
 

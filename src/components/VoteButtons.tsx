@@ -8,6 +8,7 @@ import { IconCaretUpFilled, IconCaretDownFilled } from "@tabler/icons-react";
 import { ID, Models, Query } from "appwrite";
 import { useRouter } from "next/navigation";
 import React from "react";
+import { apiFetch } from "@/lib/api-fetch";
 
 const VoteButtons = ({
     type,
@@ -47,7 +48,7 @@ const VoteButtons = ({
         if (votedDocument === undefined) return;
 
         try {
-            const response = await fetch(`/api/vote`, {
+            const data = await apiFetch<any>(`/api/vote`, {
                 method: "POST",
                 body: JSON.stringify({
                     votedById: user.$id,
@@ -56,10 +57,6 @@ const VoteButtons = ({
                     typeId: id,
                 }),
             });
-
-            const data = await response.json();
-
-            if (!response.ok) throw data;
 
             setVoteResult(() => data.data.voteResult);
             setVotedDocument(() => data.data.document);
@@ -74,7 +71,7 @@ const VoteButtons = ({
         if (votedDocument === undefined) return;
 
         try {
-            const response = await fetch(`/api/vote`, {
+            const data = await apiFetch<any>(`/api/vote`, {
                 method: "POST",
                 body: JSON.stringify({
                     votedById: user.$id,
@@ -83,10 +80,6 @@ const VoteButtons = ({
                     typeId: id,
                 }),
             });
-
-            const data = await response.json();
-
-            if (!response.ok) throw data;
 
             setVoteResult(() => data.data.voteResult);
             setVotedDocument(() => data.data.document);

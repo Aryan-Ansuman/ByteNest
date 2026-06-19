@@ -4,16 +4,18 @@ import React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
-    ArrowDown,
-    ArrowUp,
+    ChevronDown,
+    ChevronUp,
     Check,
     Copy,
     Flag,
     MessageCircle,
     Share2,
-    ThumbsUp,
+    Bookmark,
     Trash2,
     MoreHorizontal,
+    CheckCircle2,
+    ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,7 +44,9 @@ function AnswerMoreMenu({
         const handler = (e: MouseEvent) => {
             if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
         };
-        const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+        const keyHandler = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setOpen(false);
+        };
         document.addEventListener("mousedown", handler);
         document.addEventListener("keydown", keyHandler);
         return () => {
@@ -75,7 +79,10 @@ function AnswerMoreMenu({
                   {
                       label: "Delete answer",
                       icon: <Trash2 className="size-3.5" />,
-                      onClick: () => { setOpen(false); onDelete(); },
+                      onClick: () => {
+                          setOpen(false);
+                          onDelete();
+                      },
                       danger: true,
                   },
               ]
@@ -92,14 +99,14 @@ function AnswerMoreMenu({
         <div ref={ref} className="relative">
             <button
                 onClick={() => setOpen((v) => !v)}
-                className="text-zinc-500 transition hover:text-zinc-300"
+                className="flex size-7 items-center justify-center rounded-lg text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300"
                 aria-label="More options"
             >
                 <MoreHorizontal className="size-4" />
             </button>
 
             {open && (
-                <div className="absolute right-0 top-7 z-50 min-w-[160px] overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0c]/95 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl">
+                <div className="absolute right-0 top-8 z-50 min-w-[160px] overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0c]/98 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
                     {items.map((item) => (
                         <button
                             key={item.label}
@@ -117,6 +124,99 @@ function AnswerMoreMenu({
                     ))}
                 </div>
             )}
+        </div>
+    );
+}
+
+// ─── VoteRail ─────────────────────────────────────────────────────────────────
+
+function VoteRail({
+    score,
+    votedStatus,
+    onUpvote,
+    onDownvote,
+    isAccepted,
+    isQuestionAuthor,
+    onAccept,
+}: {
+    score: number;
+    votedStatus: string | null | undefined;
+    onUpvote: () => void;
+    onDownvote: () => void;
+    isAccepted: boolean;
+    isQuestionAuthor: boolean;
+    onAccept: () => void;
+}) {
+    return (
+        <div className="flex shrink-0 flex-col items-center gap-1.5 pt-1 w-10">
+            <button
+                onClick={onUpvote}
+                className={cn(
+                    "flex size-9 items-center justify-center transition-colors rounded-full",
+                    votedStatus === "upvoted"
+                        ? "text-green-500"
+                        : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+                )}
+                aria-label="Upvote"
+            >
+                <ChevronUp className="size-8" strokeWidth={1.5} />
+            </button>
+
+            <span
+                className={cn(
+                    "py-1 text-center text-lg font-bold leading-none",
+                    votedStatus === "upvoted"
+                        ? "text-green-500"
+                        : votedStatus === "downvoted"
+                        ? "text-red-400"
+                        : "text-zinc-300"
+                )}
+            >
+                {score}
+            </span>
+
+            <button
+                onClick={onDownvote}
+                className={cn(
+                    "flex size-9 items-center justify-center transition-colors rounded-full",
+                    votedStatus === "downvoted"
+                        ? "text-red-400"
+                        : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+                )}
+                aria-label="Downvote"
+            >
+                <ChevronDown className="size-8" strokeWidth={1.5} />
+            </button>
+
+            <div className="mt-2 flex flex-col items-center gap-3">
+                {isQuestionAuthor ? (
+                    <button
+                        onClick={onAccept}
+                        title={isAccepted ? "Unaccept this answer" : "Accept this answer"}
+                        className={cn(
+                            "flex size-8 items-center justify-center transition-all duration-200",
+                            isAccepted
+                                ? "text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]"
+                                : "text-zinc-600 hover:text-green-500"
+                        )}
+                    >
+                        <Check className="size-6" strokeWidth={2.5} />
+                    </button>
+                ) : isAccepted ? (
+                    <div
+                        title="Accepted Answer"
+                        className="flex size-8 items-center justify-center text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.4)]"
+                    >
+                        <Check className="size-6" strokeWidth={2.5} />
+                    </div>
+                ) : null}
+                
+                <button
+                    className="flex size-8 items-center justify-center text-zinc-600 hover:text-zinc-300 transition-colors"
+                >
+                    <Bookmark className="size-5" />
+                </button>
+            </div>
         </div>
     );
 }
@@ -142,10 +242,13 @@ export default function AnswerCard({
 
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
+    const [showComments, setShowComments] = React.useState(true);
 
     const votedStatus = getVoteStatus("answer", answer.$id);
     const voteScore = getAnswerScore(answer);
     const isOwner = currentUser?.$id === answer.authorId;
+    const commentCount = answer.comments?.total || 0;
+    const isBest = variant === "best" || answer.isAccepted;
 
     const handleConfirmDelete = async () => {
         setIsDeleting(true);
@@ -154,117 +257,55 @@ export default function AnswerCard({
         if (deleted) setDeleteDialogOpen(false);
     };
 
+    const handleShare = async () => {
+        const url = `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`;
+        await navigator.clipboard.writeText(url);
+        toast.success("Answer link copied");
+    };
+
     return (
         <article
             id={`answer-${answer.$id}`}
-            className="relative grid grid-cols-[56px_minmax(0,1fr)] gap-5"
+            className="relative flex gap-4 w-full transition-all duration-200"
         >
-            {/* Left Column: Vote Rail */}
-            <aside className="relative flex flex-col items-center gap-3 pt-2">
-                <div className="absolute bottom-[-60px] left-[28px] top-[140px] w-px bg-white/[0.08]" />
+            {/* Vote rail - Outside on the left */}
+            <VoteRail
+                score={voteScore}
+                votedStatus={votedStatus}
+                onUpvote={() => voteAnswer(answer.$id, "upvoted")}
+                onDownvote={() => voteAnswer(answer.$id, "downvoted")}
+                isAccepted={answer.isAccepted}
+                isQuestionAuthor={isQuestionAuthor}
+                onAccept={() => acceptAnswer(answer.$id)}
+            />
 
-                <div className="z-10 flex flex-col items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] py-2 w-[44px]">
-                    <button
-                        onClick={() => voteAnswer(answer.$id, "upvoted")}
-                        className={cn(
-                            "flex h-8 w-full items-center justify-center transition hover:text-[#CFE8D5]",
-                            votedStatus === "upvoted" ? "text-[#CFE8D5]" : "text-zinc-500"
-                        )}
-                    >
-                        <ArrowUp className="size-5" />
-                    </button>
-                    <span
-                        className={cn(
-                            "text-lg font-bold",
-                            votedStatus === "upvoted"
-                                ? "text-[#CFE8D5]"
-                                : votedStatus === "downvoted"
-                                ? "text-red-400"
-                                : "text-[#CFE8D5]"
-                        )}
-                    >
-                        {voteScore}
-                    </span>
-                    <button
-                        onClick={() => voteAnswer(answer.$id, "downvoted")}
-                        className={cn(
-                            "flex h-8 w-full items-center justify-center transition hover:text-red-400",
-                            votedStatus === "downvoted" ? "text-red-400" : "text-zinc-500"
-                        )}
-                    >
-                        <ArrowDown className="size-5" />
-                    </button>
-                </div>
-
-                {isQuestionAuthor ? (
-                    <button
-                        onClick={() => acceptAnswer(answer.$id)}
-                        className={cn(
-                            "z-10 mt-2 flex size-10 items-center justify-center rounded-full transition",
-                            answer.isAccepted
-                                ? "border border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
-                                : "text-zinc-600 hover:text-[#CFE8D5] hover:bg-[#CFE8D5]/5"
-                        )}
-                        title={answer.isAccepted ? "Unaccept this answer" : "Accept this answer"}
-                    >
-                        <Check className="size-5" />
-                    </button>
-                ) : answer.isAccepted && (
-                    <div
-                        className="z-10 mt-2 flex size-10 items-center justify-center rounded-full border border-[#CFE8D5]/35 bg-[#CFE8D5]/10 text-[#CFE8D5]"
-                        title="Accepted Answer"
-                    >
-                        <Check className="size-5" />
-                    </div>
-                )}
-            </aside>
-
-            {/* Right Column: Content */}
-            <div
-                className={cn(
-                    "min-w-0 rounded-2xl border p-6 transition-all duration-200",
-                    variant === "best"
-                        ? "border-[#CFE8D5]/20 bg-[linear-gradient(135deg,rgba(207,232,213,0.03),rgba(255,255,255,0.01))]"
-                        : "border-white/[0.07] bg-white/[0.02]"
-                )}
-            >
-                {/* Author Info */}
-                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
+            {/* Content Container - Bordered box */}
+            <div className="flex-1 min-w-0 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-5">
+                {/* Author row */}
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                         <Avatar name={answer.author.name} />
-                        <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Link
-                                    href={`/users/${answer.author.$id}/${slugify(answer.author.name)}`}
-                                    className="text-[14px] font-bold text-zinc-100 transition hover:text-[#CFE8D5]"
-                                >
-                                    {answer.author.name}
-                                </Link>
-                                {answer.author.reputation > 50 && (
-                                    <span className="rounded bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
-                                        Top Contributor
-                                    </span>
-                                )}
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-3 text-[12px] text-zinc-400">
-                                <span className="flex items-center gap-1 font-medium">
-                                    <span className="text-[#CFE8D5]">●</span>{" "}
-                                    {formatCount(answer.author.reputation)} rep
-                                </span>
-                            </div>
-                        </div>
+                        <Link
+                            href={`/users/${answer.author.$id}/${slugify(answer.author.name)}`}
+                            className="text-sm font-semibold text-zinc-200 transition hover:text-white"
+                        >
+                            {answer.author.name}
+                        </Link>
+                        {isOwner && (
+                            <span className="rounded bg-green-500/10 px-1.5 py-0.5 text-[10px] font-bold text-green-400 uppercase tracking-wide">
+                                OP
+                            </span>
+                        )}
+                        <span className="text-zinc-600 text-sm">·</span>
+                        <span className="text-sm text-zinc-500">
+                            answered {convertDateToRelativeTime(new Date(answer.$createdAt))}
+                        </span>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        {answer.isAccepted && (
-                            <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#CFE8D5]">
-                                <Check className="size-4" />
-                                Accepted
-                            </div>
+                    <div className="flex items-center gap-3">
+                        {answer.$createdAt !== answer.$updatedAt && (
+                            <span className="text-xs text-zinc-600">Edited {convertDateToRelativeTime(new Date(answer.$updatedAt))}</span>
                         )}
-                        <span className="text-[13px] text-zinc-500">
-                            {convertDateToRelativeTime(new Date(answer.$createdAt))}
-                        </span>
                         <AnswerMoreMenu
                             answerId={answer.$id}
                             isOwner={isOwner}
@@ -273,42 +314,55 @@ export default function AnswerCard({
                     </div>
                 </div>
 
-                {/* Markdown Content */}
+                {/* Markdown body */}
                 <div className="question-detail-markdown" data-color-mode="dark">
                     <AnswerMarkdown source={answer.content} />
                 </div>
 
-                {/* Footer Actions */}
-                <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.08] pt-4 text-[13px] font-medium text-zinc-400">
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={async () => {
-                                const url = `${window.location.origin}${window.location.pathname}#answer-${answer.$id}`;
-                                await navigator.clipboard.writeText(url);
-                                toast.success("Answer link copied");
-                            }}
-                            className="flex items-center gap-1.5 transition hover:text-zinc-200"
-                        >
-                            <Share2 className="size-3.5" /> Share
-                        </button>
-                    </div>
+                {/* Action bar */}
+                <div className="mt-5 flex items-center gap-6 text-[13px] font-medium text-zinc-500">
+                    <button className={cn("flex items-center gap-2 transition hover:text-zinc-300", voteScore > 0 && "text-green-500 hover:text-green-400")}>
+                        <ThumbsUp className="size-4" fill={voteScore > 0 ? "currentColor" : "none"} />
+                        <span className="font-bold">{voteScore}</span>
+                    </button>
+                    
+                    <button className="flex items-center gap-2 transition hover:text-zinc-300">
+                        <MessageCircle className="size-4" />
+                        Reply
+                    </button>
 
-                    <div className="flex items-center gap-4">
-                        <span className="text-zinc-500">Was this helpful?</span>
-                        <div className="flex items-center gap-2">
-                            <button className="flex h-8 items-center gap-1.5 rounded-lg border border-[#CFE8D5]/20 bg-[#CFE8D5]/5 px-3 text-[#CFE8D5] transition hover:bg-[#CFE8D5]/10">
-                                <ThumbsUp className="size-3.5" /> {Math.max(voteScore, 0)}
-                            </button>
-                            <button className="flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 transition hover:bg-white/[0.05] hover:text-zinc-200">
-                                <MessageCircle className="size-3.5" />{" "}
-                                {answer.comments?.total || 0}
-                            </button>
-                        </div>
-                    </div>
+                    <button
+                        onClick={handleShare}
+                        className="flex items-center gap-2 transition hover:text-zinc-300"
+                    >
+                        <Share2 className="size-4" />
+                        Share
+                    </button>
+                    
+                    <button className="flex items-center gap-2 transition hover:text-zinc-300">
+                        <MoreHorizontal className="size-4" />
+                    </button>
                 </div>
 
-                <div className="mt-4">
-                    <CommentsSection type="answer" typeId={answer.$id} />
+                {/* Discussion thread */}
+                <div className="mt-6 border-t border-white/[0.05] pt-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                            <MessageCircle className="size-4" />
+                            Comments ({commentCount})
+                        </h4>
+                        {commentCount > 0 && (
+                            <button
+                                onClick={() => setShowComments(!showComments)}
+                                className="text-xs font-medium text-zinc-500 hover:text-zinc-300 transition"
+                            >
+                                {showComments ? "Hide comments ^" : "Show comments v"}
+                            </button>
+                        )}
+                    </div>
+                    {showComments && (
+                        <CommentsSection type="answer" typeId={answer.$id} />
+                    )}
                 </div>
             </div>
 
@@ -330,10 +384,10 @@ const AnswerMarkdown = dynamic(
     {
         ssr: false,
         loading: () => (
-            <div className="space-y-3 p-4">
-                <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.08]" />
-                <div className="h-4 w-full animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.06]" />
+            <div className="space-y-3 py-2">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-white/[0.06]" />
+                <div className="h-4 w-full animate-pulse rounded bg-white/[0.05]" />
+                <div className="h-4 w-2/3 animate-pulse rounded bg-white/[0.05]" />
             </div>
         ),
     }

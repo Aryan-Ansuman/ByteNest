@@ -56,9 +56,12 @@ export default function Login() {
     };
 
     return (
-        <div className="flex min-h-screen bg-[#080808] text-zinc-100 selection:bg-[#a7c8b3]/30">
+        <div className="flex h-screen overflow-hidden bg-[#080808] text-zinc-100 selection:bg-[#a7c8b3]/30">
             {/* ── Left Panel (Marketing) ── */}
-            <div className="relative hidden w-full max-w-2xl flex-col bg-black lg:flex border-r border-white/5">
+            <div className="relative hidden w-full max-w-2xl flex-col bg-black bg-[url('/images/login-hero.png')] bg-cover bg-center bg-no-repeat lg:flex border-r border-white/5">
+                {/* Overlay for text readability */}
+                <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+                
                 {/* Subtle background glow */}
                 <div className="absolute top-1/4 -left-1/4 h-[500px] w-[500px] rounded-full bg-[#a7c8b3]/20 blur-[120px] pointer-events-none" />
                 <div className="absolute bottom-1/4 right-0 h-[400px] w-[400px] rounded-full bg-emerald-500/10 blur-[100px] pointer-events-none" />
@@ -125,21 +128,22 @@ export default function Login() {
             </div>
 
             {/* ── Right Panel (Form) ── */}
-            <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-12 lg:p-16">
-                {/* Mobile Logo */}
-                <div className="mb-12 flex items-center justify-center lg:hidden">
-                    <Link href="/" className="flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
-                            <IconCode size={20} className="text-[#a7c8b3]" />
+            <div className="flex flex-1 flex-col overflow-y-auto">
+                <div className="flex min-h-full flex-col items-center py-12 px-6 sm:px-12 lg:px-16">
+                    <div className="my-auto w-full max-w-sm">
+                        {/* Mobile Logo */}
+                        <div className="mb-12 flex items-center justify-center lg:hidden">
+                            <Link href="/" className="flex items-center gap-3">
+                                <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                                    <IconCode size={20} className="text-[#a7c8b3]" />
+                                </div>
+                                <span className="text-xl font-bold tracking-tight text-white">
+                                    ByteNest
+                                </span>
+                            </Link>
                         </div>
-                        <span className="text-xl font-bold tracking-tight text-white">
-                            ByteNest
-                        </span>
-                    </Link>
-                </div>
 
-                <div className="w-full max-w-sm">
-                    <div className="text-center lg:text-left">
+                        <div className="text-center lg:text-left">
                         <h2 className="text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
                             Welcome back
                         </h2>
@@ -251,7 +255,7 @@ export default function Login() {
                     </form>
 
                     <p className="mt-8 text-center text-sm text-zinc-500">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/register" className="font-medium text-[#a7c8b3] hover:underline">
                             Sign up
                         </Link>
@@ -262,6 +266,7 @@ export default function Login() {
                         <Link href="/terms" className="underline hover:text-zinc-400">Terms of Service</Link> and{" "}
                         <Link href="/privacy" className="underline hover:text-zinc-400">Privacy Policy</Link>.
                     </p>
+                </div>
                 </div>
             </div>
         </div>

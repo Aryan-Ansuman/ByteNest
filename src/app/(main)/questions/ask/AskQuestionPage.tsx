@@ -32,6 +32,7 @@ import { useAuthStore } from "@/store/Auth";
 import { databases, storage } from "@/models/client/config";
 import { db, questionAttachmentBucket, questionCollection } from "@/models/name";
 import slugify from "@/utils/slugify";
+import { apiFetch } from "@/lib/api-fetch";
 import dynamic from "next/dynamic";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -218,14 +219,10 @@ export default function AskQuestionPage() {
                 docData.attachmentId = stored.$id;
             }
 
-            const res = await fetch("/api/question", {
+            const doc = await apiFetch("/api/question", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(docData),
             });
-
-            const doc = await res.json();
-            if (!res.ok) throw new Error(doc.error || "Failed to create question");
 
             setSuccess(true);
             setTimeout(() => {

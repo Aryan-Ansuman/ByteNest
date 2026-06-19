@@ -192,7 +192,7 @@ export default function VotesClient({
                 />
                 <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
                     <div className={cn("flex items-center gap-1.5 text-xs text-zinc-500", netVotes >= 0 ? "text-[#a7c8b3]" : "text-red-400")}>
-                        {netVotes >= 0 ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                        {netVotes >= 0 ? <ArrowUp className="size-4 text-orange-500" /> : <ArrowDown className="size-4 text-red-400" />}
                         Net Sentiment
                     </div>
                     <p className="text-xl font-bold text-zinc-100">{netVotes > 0 ? "+" : ""}{netVotes}</p>
@@ -303,7 +303,7 @@ function VoteCard({ vote, index }: { vote: VoteItem; index: number }) {
                             : "border-red-400/25 bg-red-400/10 text-red-400"
                     )}
                 >
-                    {isUpvote ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
+                    {isUpvote ? <ArrowUp className="size-4 text-orange-500" /> : <ArrowDown className="size-4 text-red-400" />}
                     <span className="text-[10px] font-medium uppercase tracking-wide opacity-80">
                         {isUpvote ? "up" : "down"}
                     </span>

@@ -88,7 +88,7 @@ function AiAnswerTab() {
             </div>
             <h3 className="text-lg font-bold text-zinc-100">AI Answers coming soon</h3>
             <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
-                This feature isn't wired up yet. Check the Answers tab for responses from the community in the meantime.
+                This feature isn&apos;t wired up yet. Check the Answers tab for responses from the community in the meantime.
             </p>
         </div>
     );

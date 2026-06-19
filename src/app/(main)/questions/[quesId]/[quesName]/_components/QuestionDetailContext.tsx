@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { apiFetch } from "@/lib/api-fetch";
 
 export type VoteStatus = "upvoted" | "downvoted";
 export type AnswerSort = "Oldest" | "Active" | "Votes";
@@ -184,6 +185,7 @@ interface ApiErrorShape {
 interface VoteLookupResponse {
     data: {
         document: VoteDocument | null;
+        totalVotes?: number;
     };
 }
 
@@ -328,11 +330,6 @@ export function QuestionDetailProvider({
         async (type: CommentTargetType, typeId: string) => {
             const key = targetKey(type, typeId);
 
-            if (!currentUser) {
-                setVoteStatusByTarget((prev) => ({ ...prev, [key]: null }));
-                return null;
-            }
-
             const cached = voteStatusByTarget[key];
             if (cached !== undefined) return cached;
             if (pendingVoteLookups.current.has(key)) return null;
@@ -342,17 +339,22 @@ export function QuestionDetailProvider({
                 const params = new URLSearchParams({
                     type,
                     typeId,
-                    votedById: currentUser.$id,
+                    ...(currentUser && { votedById: currentUser.$id }),
                 });
                 const response = await apiFetch<VoteLookupResponse>(
                     `/api/vote?${params.toString()}`
                 );
+
+                if (type === "question" && response.data.totalVotes !== undefined) {
+                    setQuestionVoteScore(response.data.totalVotes);
+                }
+
                 const status = response.data.document?.voteStatus ?? null;
                 setVoteStatusByTarget((prev) => ({ ...prev, [key]: status }));
                 return status;
             } catch (error) {
                 setVoteStatusByTarget((prev) => ({ ...prev, [key]: null }));
-                toast.error(getErrorMessage(error, "Unable to load your vote"));
+                console.error("Unable to load vote state:", error);
                 return null;
             } finally {
                 pendingVoteLookups.current.delete(key);
@@ -425,7 +427,6 @@ export function QuestionDetailProvider({
     }, [currentUser?.$id]);
 
     React.useEffect(() => {
-        if (!currentUser) return;
         void ensureVoteState("question", question.$id);
     }, [currentUser, ensureVoteState, question.$id]);
 
@@ -983,28 +984,6 @@ export function formatCollectiveName(tag: string) {
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
-async function apiFetch<TResponse>(
-    input: RequestInfo | URL,
-    init?: RequestInit
-): Promise<TResponse> {
-    const response = await fetch(input, {
-        ...init,
-        headers: {
-            "Content-Type": "application/json",
-            ...(init?.headers ?? {}),
-        },
-    });
-
-    const payload = (await response.json().catch(() => null)) as
-        | ApiErrorShape
-        | TResponse
-        | null;
-    if (!response.ok) {
-        throw new Error(extractApiError(payload, "Request failed"));
-    }
-
-    return payload as TResponse;
-}
 
 function extractApiError(payload: ApiErrorShape | unknown, fallback: string) {
     if (isApiErrorShape(payload)) {
