@@ -170,6 +170,10 @@ interface QuestionDetailContextValue {
     addComment: (type: CommentTargetType, typeId: string, content: string) => Promise<boolean>;
     deleteComment: (type: CommentTargetType, typeId: string, commentId: string) => Promise<boolean>;
     deleteQuestion: () => Promise<boolean>;
+    hydrateDynamic: (
+        dynamicAnswers: { total: number; documents: AnswerDoc[] },
+        dynamicComments: { total: number; documents: CommentDoc[] }
+    ) => void;
 }
 
 interface ApiErrorShape {
@@ -829,6 +833,25 @@ export function QuestionDetailProvider({
         setAnswerComposerOpen(false);
     }, []);
 
+    const hydrateDynamic = React.useCallback(
+        (
+            dynamicAnswers: { total: number; documents: AnswerDoc[] },
+            dynamicComments: { total: number; documents: CommentDoc[] }
+        ) => {
+            setAnswers(dynamicAnswers);
+            setQuestionComments(dynamicComments);
+            setAnswerVoteScores(
+                Object.fromEntries(
+                    dynamicAnswers.documents.map((answer) => [
+                        answer.$id,
+                        getInitialAnswerScore(answer),
+                    ])
+                )
+            );
+        },
+        []
+    );
+
     const value = React.useMemo<QuestionDetailContextValue>(
         () => ({
             question,
@@ -869,6 +892,7 @@ export function QuestionDetailProvider({
             addComment,
             deleteComment,
             deleteQuestion,
+            hydrateDynamic,
         }),
         [
             question,
@@ -908,6 +932,7 @@ export function QuestionDetailProvider({
             deleteQuestion,
             openAnswerComposer,
             closeAnswerComposer,
+            hydrateDynamic,
         ]
     );
 

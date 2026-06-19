@@ -8,7 +8,7 @@ import AnswerCard from "./AnswerCard";
 
 type Tab = "ai" | "answers" | "discussion";
 
-export default function ContentTabs() {
+export default function ContentTabs({ isLoadingDynamic = false }: { isLoadingDynamic?: boolean }) {
     const [activeTab, setActiveTab] = React.useState<Tab>("answers");
     const { answers, bestAnswer, communityAnswers } = useQuestionDetail();
 
