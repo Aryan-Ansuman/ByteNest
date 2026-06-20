@@ -17,6 +17,9 @@ import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
 import { listAllDocuments } from "@/lib/appwrite-pagination";
 import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 
+// Phase 3 — Step 3.5: import the skill trigger
+import { triggerSkillRecalculation } from "@/lib/skills/trigger-skill-recalculation";
+
 // Rate limit: 3 questions per user per 10 minutes
 const QUESTION_RATE_LIMIT = 3;
 const QUESTION_WINDOW_MS = 10 * 60_000;
@@ -132,7 +135,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Sanitize user-supplied markdown content before persisting
-        const sanitizedTitle = sanitizeTitleSource(title ?? "").slice(0, 100);
+        const sanitizedTitle   = sanitizeTitleSource(title ?? "").slice(0, 100);
         const sanitizedContent = sanitizeMarkdownSource(content ?? "");
 
         if (sanitizedTitle.length < 15) {
@@ -166,6 +169,18 @@ export async function POST(request: NextRequest) {
         );
         await revalidateQuestionCaches(response.$id, [sanitizedTitle]);
 
+        // ── Step 3.5: Trigger skill recalculation on question posted ──
+        const questionTags = (tags as string[]) ?? [];
+        if (questionTags.length > 0) {
+            triggerSkillRecalculation({
+                userId:           authorId,
+                tags:             questionTags,
+                triggerType:      "question_posted",
+                priority:         "normal",
+                sourceDocumentId: response.$id,
+            });
+        }
+
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
         if (error instanceof Response) return error;
@@ -194,7 +209,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Sanitize on update too
-        const sanitizedTitle = sanitizeTitleSource(title ?? "").slice(0, 100);
+        const sanitizedTitle   = sanitizeTitleSource(title ?? "").slice(0, 100);
         const sanitizedContent = sanitizeMarkdownSource(content ?? "");
 
         const docData: Record<string, unknown> = {
@@ -227,6 +242,20 @@ export async function PATCH(request: NextRequest) {
             } catch {
                 // Old file may already be gone; non-fatal after the document update succeeded.
             }
+        }
+
+        // ── Step 3.5: Trigger skill recalculation on question edited ──
+        // Tags may have changed; use the new tag set so scores reflect the
+        // updated categorisation.
+        const updatedTags = (tags as string[]) ?? [];
+        if (updatedTags.length > 0) {
+            triggerSkillRecalculation({
+                userId:           question.authorId as string,
+                tags:             updatedTags,
+                triggerType:      "question_posted",
+                priority:         "normal",
+                sourceDocumentId: questionId,
+            });
         }
 
         return NextResponse.json(response, { status: 200 });
@@ -351,6 +380,18 @@ export async function DELETE(request: NextRequest) {
         );
     }
     await revalidateQuestionCaches(questionId, [question.title as string]);
+
+    // ── Step 3.5: Trigger skill recalculation on question deleted ──
+    const updatedTags = (question.tags as string[]) ?? [];
+    if (updatedTags.length > 0) {
+        triggerSkillRecalculation({
+            userId:           question.authorId as string,
+            tags:             updatedTags,
+            triggerType:      "question_posted",
+            priority:         "normal",
+            sourceDocumentId: questionId,
+        });
+    }
 
     return NextResponse.json(
         { data: { $id: questionId }, message: "Question deleted" },

@@ -10,6 +10,9 @@ import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
 import { withDistributedLock } from "@/lib/distributed-lock";
 import { createHash } from "crypto";
 
+// Phase 3 — Step 3.3 & 3.5: import the skill trigger
+import { triggerSkillRecalculation } from "@/lib/skills/trigger-skill-recalculation";
+
 const VOTE_TYPES = ["question", "answer"] as const;
 const VOTE_STATUSES = ["upvoted", "downvoted"] as const;
 type VoteType = (typeof VOTE_TYPES)[number];
@@ -106,9 +109,9 @@ export async function POST(request: NextRequest) {
     try {
         const body = await parseJsonBody(request);
 
-        const votedById = requireString(body.votedById, "votedById");
-        const typeId = requireString(body.typeId, "typeId");
-        const type = requireEnum(body.type, VOTE_TYPES, "type");
+        const votedById  = requireString(body.votedById, "votedById");
+        const typeId     = requireString(body.typeId, "typeId");
+        const type       = requireEnum(body.type, VOTE_TYPES, "type");
         const voteStatus = requireEnum(body.voteStatus, VOTE_STATUSES, "voteStatus");
 
         const requesterId = await getAuthenticatedUserId();
@@ -159,7 +162,7 @@ export async function POST(request: NextRequest) {
                 Query.limit(10),
             ]);
 
-            const previousVote = existing.documents[0] ?? null;
+            const previousVote   = existing.documents[0] ?? null;
             const previousStatus = (previousVote?.voteStatus as VoteStatusValue) ?? null;
             const duplicateVotes = existing.documents.slice(1);
             await Promise.allSettled(
@@ -168,7 +171,31 @@ export async function POST(request: NextRequest) {
                 )
             );
 
+            // ── Resolve the question document and its tags for the skill trigger ──
+            //
+            // For a question vote: targetDoc IS the question.
+            // For an answer vote: targetDoc is the answer; we need its parent question.
+            let questionTags: string[] = [];
+            let contentAuthorId: string = targetDoc.authorId as string;
+
+            if (type === "question") {
+                questionTags = (targetDoc.tags as string[]) ?? [];
+            } else {
+                // answer vote — fetch the parent question for its tags
+                try {
+                    const parentQuestion = await databases.getDocument(
+                        db,
+                        questionCollection,
+                        targetDoc.questionId as string
+                    );
+                    questionTags = (parentQuestion.tags as string[]) ?? [];
+                } catch {
+                    // Non-fatal — tags unavailable, skill trigger will be skipped below
+                }
+            }
+
             if (previousStatus === voteStatus) {
+                // Toggle off — remove the vote
                 const undoDelta = previousStatus === "upvoted" ? -1 : 1;
                 await databases.deleteDocument(db, voteCollection, previousVote.$id);
 
@@ -177,6 +204,17 @@ export async function POST(request: NextRequest) {
                 ]);
                 await revalidateVotedTarget(type, targetDoc);
 
+                // ── Step 3.3 / 3.5: Trigger skill recalculation on vote removal ──
+                if (questionTags.length > 0) {
+                    triggerSkillRecalculation({
+                        userId:           contentAuthorId,
+                        tags:             questionTags,
+                        triggerType:      "vote_cast",
+                        priority:         "normal",
+                        sourceDocumentId: previousVote.$id,
+                    });
+                }
+
                 return NextResponse.json(
                     { data: { document: null, voteResult: newTotal }, message: "Vote withdrawn" },
                     { status: 200, headers: rlHeaders }
@@ -184,19 +222,17 @@ export async function POST(request: NextRequest) {
             }
 
             const voteDocId = voteDocumentId(type, typeId, votedById);
-            
-            // For stateless Appwrite Function triggers, we ALWAYS delete the old vote before creating the new one
-            // This guarantees the function receives a `delete` event with the old status and a `create` event with the new status.
+
             if (previousVote) {
                 await databases.deleteDocument(db, voteCollection, previousVote.$id);
             }
 
             const newVoteDoc = await createDeterministicVoteDocument(voteDocId, {
-                  type,
-                  typeId,
-                  voteStatus,
-                  votedById,
-              });
+                type,
+                typeId,
+                voteStatus,
+                votedById,
+            });
 
             let delta = voteStatus === "upvoted" ? 1 : -1;
             if (previousVote) {
@@ -207,6 +243,17 @@ export async function POST(request: NextRequest) {
                 adjustVoteCounter(type, typeId, delta),
             ]);
             await revalidateVotedTarget(type, targetDoc);
+
+            // ── Step 3.3 / 3.5: Trigger skill recalculation on vote cast ──
+            if (questionTags.length > 0) {
+                triggerSkillRecalculation({
+                    userId:           contentAuthorId,
+                    tags:             questionTags,
+                    triggerType:      "vote_cast",
+                    priority:         "normal",
+                    sourceDocumentId: newVoteDoc.$id,
+                });
+            }
 
             return NextResponse.json(
                 {

@@ -1,13 +1,13 @@
 /**
- * Phase 2 — Skills Engine Public API
+ * Skills Engine Public API
  *
- * Re-exports everything needed by Phase 3 (event-driven triggers)
- * and Phase 4 (API layer) from a single import path:
+ * Re-exports everything needed by Phase 3 (event-driven triggers),
+ * Phase 4 (API layer), and Phase 5 (UI) from a single import path:
  *
- *   import { recalculateUserTagScore, runTemporalDecayJob } from "@/lib/skills";
+ *   import { recalculateUserTagScore, runTemporalDecayJob, triggerSkillRecalculation } from "@/lib/skills";
  */
 
-// Step 2.1 — Pure scoring functions
+// Phase 2 — Step 2.1: Pure scoring functions
 export {
     computeAnswerQualityScore,
     computeQuestionQualityScore,
@@ -21,7 +21,7 @@ export type {
     PeerVoter,
 } from "./scoring-functions";
 
-// Step 2.2 — Composite aggregator
+// Phase 2 — Step 2.2: Composite aggregator
 export {
     aggregateScore,
     getTier,
@@ -37,11 +37,11 @@ export type {
     TrendDirection,
 } from "./composite-aggregator";
 
-// Step 2.3 — Per-user-per-tag calculator
+// Phase 2 — Step 2.3: Per-user-per-tag calculator
 export { recalculateUserTagScore } from "./per-tag-calculator";
 export type { RecalcResult } from "./per-tag-calculator";
 
-// Step 2.4 — Full user recalculation job
+// Phase 2 — Step 2.4: Full user recalculation job
 export {
     recalculateAllTagsForUser,
     batchRecalculateUsers,
@@ -49,10 +49,22 @@ export {
 
 export type { BatchRecalcOptions } from "./full-user-recalculation";
 
-// Step 2.5 — Temporal decay job
+// Phase 2 — Step 2.5: Temporal decay job
 export {
     runTemporalDecayJob,
     decayJobHandler,
 } from "./temporal-decay-job";
 
 export type { DecayRunSummary } from "./temporal-decay-job";
+
+// Phase 3 — Step 3.2: Event-driven trigger utility
+export {
+    triggerSkillRecalculation,
+    tagsFromQuestion,
+} from "./trigger-skill-recalculation";
+
+export type {
+    SkillTriggerType,
+    SkillTriggerPriority,
+    TriggerSkillRecalculationOptions,
+} from "./trigger-skill-recalculation";
