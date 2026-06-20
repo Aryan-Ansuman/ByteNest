@@ -37,6 +37,7 @@ export default function MobileNav() {
                         key={item.label}
                         href={href}
                         aria-label={item.label}
+                        aria-current={isActive ? "page" : undefined}
                         className={cn(
                             "flex size-10 items-center justify-center rounded-xl text-zinc-500 transition duration-200 ease-out hover:bg-white/[0.06] hover:text-zinc-100",
                             isActive && "bg-white/[0.08] text-[#a7c8b3]"

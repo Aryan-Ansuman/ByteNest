@@ -2,15 +2,12 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
     MessageCircle,
     Plus,
-    TrendingUp,
-    Clock,
-    Eye,
-    Star,
     ChevronRight,
     Bookmark,
     ArrowUp,
@@ -19,12 +16,9 @@ import {
     Hash,
     Newspaper,
     Flame,
-    MessageSquare,
-    Zap,
-    Settings2,
-    ExternalLink,
     Send,
     Loader2,
+    Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
@@ -37,6 +31,8 @@ import QuestionListSkeleton from "@/components/QuestionCardSkeleton";
 import CustomizeFeedModal from "@/components/CustomizeFeedModal";
 import { markdownToPlainExcerpt } from "@/lib/sanitize";
 import UserAvatar from "@/components/UserAvatar";
+import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
+import NewQuestionsBanner from "@/components/NewQuestionsBanner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +111,10 @@ export default function HomeClient({
     const [hasMore, setHasMore] = React.useState(initialHasMore);
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
+    // ─── Realtime state ───────────────────────────────────────────────────────
+    const [pendingNewQuestions, setPendingNewQuestions] = React.useState<NewQuestionEvent[]>([]);
+    const existingIdsRef = React.useRef(new Set(initialQuestions.map((q) => q.$id)));
+
     const [feedVotes, setFeedVotes] = React.useState<Record<string, FeedVoteState>>(
         () =>
             Object.fromEntries(
@@ -130,6 +130,8 @@ export default function HomeClient({
         setAllQuestions(initialQuestions);
         setNextCursor(initialNextCursor);
         setHasMore(initialHasMore);
+        existingIdsRef.current = new Set(initialQuestions.map((q) => q.$id));
+        setPendingNewQuestions([]);
     }, [initialQuestions, initialNextCursor, initialHasMore]);
 
     React.useEffect(() => {
@@ -179,6 +181,44 @@ export default function HomeClient({
             })
             .catch(() => undefined);
     }, [allQuestions, session, user]);
+
+    // ─── Realtime callbacks ───────────────────────────────────────────────────
+
+    const handleNewQuestion = React.useCallback((question: NewQuestionEvent) => {
+        if (existingIdsRef.current.has(question.$id)) return;
+        existingIdsRef.current.add(question.$id);
+        setPendingNewQuestions((prev) => {
+            // Cap at 99 to keep badge readable
+            if (prev.length >= 99) return prev;
+            return [...prev, question];
+        });
+    }, []);
+
+    const handleVoteUpdate = React.useCallback((questionId: string, totalVotes: number) => {
+        setFeedVotes((previous) => {
+            const current = previous[questionId];
+            // Don't overwrite if user has a pending optimistic update
+            if (!current || current.pending) return previous;
+            return { ...previous, [questionId]: { ...current, score: totalVotes } };
+        });
+    }, []);
+
+    const visibleQuestionIds = React.useMemo(
+        () => allQuestions.map((q) => q.$id),
+        [allQuestions]
+    );
+
+    useRealtimeFeed({
+        visibleQuestionIds,
+        onNewQuestion: handleNewQuestion,
+        onVoteUpdate: handleVoteUpdate,
+        enabled: true,
+    });
+
+    const handleRefreshFeed = React.useCallback(() => {
+        setPendingNewQuestions([]);
+        router.refresh();
+    }, [router]);
 
     const handleLoadMore = React.useCallback(async () => {
         if (!nextCursor || isLoadingMore) return;
@@ -297,6 +337,20 @@ export default function HomeClient({
         });
     };
 
+    const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+        let nextIndex = index;
+        if (e.key === "ArrowRight") {
+            nextIndex = (index + 1) % feedTabs.length;
+        } else if (e.key === "ArrowLeft") {
+            nextIndex = (index - 1 + feedTabs.length) % feedTabs.length;
+        }
+        if (nextIndex !== index) {
+            e.preventDefault();
+            const tabEl = document.getElementById(`feed-tab-${feedTabs[nextIndex].id}`);
+            tabEl?.focus();
+        }
+    };
+
     const handleAskSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         router.push(`/questions/ask`);
@@ -365,13 +419,22 @@ export default function HomeClient({
                     </div>
 
                     {/* Feed Tabs */}
-                    <div className="mb-5 flex overflow-x-auto items-center border-b border-white/10 no-scrollbar">
-                        {feedTabs.map((tab) => (
+                    <div 
+                        className="mb-5 flex overflow-x-auto items-center border-b border-white/10 no-scrollbar"
+                        role="tablist"
+                        aria-label="Feed sections"
+                    >
+                        {feedTabs.map((tab, idx) => (
                             <button
                                 key={tab.id}
+                                id={`feed-tab-${tab.id}`}
+                                role="tab"
+                                aria-selected={activeFilter === tab.id}
+                                tabIndex={activeFilter === tab.id ? 0 : -1}
                                 onClick={() => handleFilterChange(tab.id)}
+                                onKeyDown={(e) => handleTabKeyDown(e, idx)}
                                 className={cn(
-                                    "relative whitespace-nowrap pb-3 pr-5 text-sm transition duration-200",
+                                    "relative whitespace-nowrap pb-3 pr-5 text-sm transition duration-200 outline-none focus-visible:text-zinc-100",
                                     activeFilter === tab.id
                                         ? "font-semibold text-zinc-100"
                                         : "text-zinc-500 hover:text-zinc-300"
@@ -392,6 +455,12 @@ export default function HomeClient({
                             </button>
                         ))}
                     </div>
+
+                    {/* Realtime new questions banner */}
+                    <NewQuestionsBanner
+                        count={pendingNewQuestions.length}
+                        onRefresh={handleRefreshFeed}
+                    />
 
                     {/* Question Cards */}
                     <AnimatePresence mode="wait">
@@ -505,13 +574,14 @@ function HeroBanner({
                     style={{ background: "linear-gradient(90deg, #0a1410 0%, rgba(10,20,16,0.85) 30%, rgba(10,20,16,0.3) 60%, transparent 100%)" }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a1410] via-transparent to-transparent z-10 md:hidden" />
-                {/* User's uploaded image (should be placed in /public/images/hero-bg.png) */}
-                <img 
+                <Image 
                     src="/images/hero-bg.png" 
                     alt="Developer workspace" 
-                    className="w-full h-full object-cover object-right opacity-100 transition-opacity duration-500" 
+                    fill
+                    priority
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 66vw, 60vw"
+                    className="object-cover object-right opacity-100 transition-opacity duration-500" 
                     onError={(e) => {
-                        // Fallback if the user hasn't added the image yet
                         (e.target as HTMLImageElement).style.display = 'none';
                     }}
                 />
@@ -749,7 +819,6 @@ function QuestionCard({
                             <UserAvatar
                                 name={question.author.name}
                                 size="xs"
-                                src={avatars.getInitials(question.author.name, 20, 20).href}
                                 className="size-5"
                             />
                             <Link
@@ -786,7 +855,6 @@ function voteDelta(previous: VoteStatus | null, next: VoteStatus | null) {
 // ─── Community Highlights ─────────────────────────────────────────────────────
 
 function CommunityHighlights({ contributors }: { contributors: { name: string; $id: string; reputation: number }[] }) {
-    // Sort by descending reputation
     const sorted = [...contributors].sort((a, b) => b.reputation - a.reputation);
     
     const highlights = [
@@ -807,7 +875,6 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
             <div className="space-y-3">
                 {highlights.map((h, i) => (
                     <div key={i} className="flex items-center gap-3">
-                        {/* Avatar */}
                         <UserAvatar name={h.sublabel} size="sm" className="size-8" />
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-zinc-300">{h.label}</p>

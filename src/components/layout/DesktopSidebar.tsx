@@ -57,6 +57,7 @@ export default function DesktopSidebar() {
                         <Link
                             key={item.label}
                             href={href}
+                            aria-current={isActive ? "page" : undefined}
                             className={cn(
                                 "relative flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm transition duration-200",
                                 isActive

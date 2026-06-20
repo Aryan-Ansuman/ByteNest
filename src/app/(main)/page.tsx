@@ -12,10 +12,12 @@ import env from "@/app/env";
 import { Suspense } from "react";
 import QuestionListSkeleton from "@/components/QuestionCardSkeleton";
 
+// This page renders personalized content ("Hey Aryan") — it MUST be fully
+// dynamic. ISR would cause one user's session data to be served from cache
+// to other users on a shared CDN.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
-
 async function getSessionUserTags(): Promise<string[]> {
     try {
         const cookieStore = cookies();
