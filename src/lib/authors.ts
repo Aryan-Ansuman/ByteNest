@@ -55,13 +55,12 @@ export async function getAuthorsById(ids: Array<string | null | undefined>) {
         })
     );
 
-    await Promise.all(
-        uniqueIds
-            .filter((id) => !result.has(id))
-            .map(async (id) => {
-                result.set(id, await getAuthor(id));
-            })
-    );
+    // A missing list result means the account was deleted or is no longer
+    // visible to this API key. Avoid turning those misses into an N+1 users.get
+    // fallback; callers already render the deleted-author placeholder.
+    uniqueIds.forEach((id) => {
+        if (!result.has(id)) result.set(id, deletedAuthor);
+    });
 
     return result;
 }

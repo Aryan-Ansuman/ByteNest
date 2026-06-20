@@ -86,15 +86,15 @@ export function isValidContent(sanitized: string, minLength = 1): boolean {
  * Strip HTML tags for producing plain-text excerpts (used in question cards,
  * search snippets, etc.) — does NOT need to be XSS-safe, just readable.
  */
-export function markdownToPlainExcerpt(source: string, maxLength = 200): string {
+export function markdownToPlainExcerpt(source: string, maxLength = 150): string {
     const plain = source
         .replace(/```[\s\S]*?```/g, " [code] ")
-        .replace(/`[^`]+`/g, (m) => m.slice(1, -1))
+        .replace(/`([^`]+)`/g, "$1") // Strip backticks but keep inline code text
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/[#*_>![\]]/g, "")
         .replace(HTML_TAG_RE, "")
         .replace(/\s+/g, " ")
         .trim();
 
-    return plain.length > maxLength ? plain.slice(0, maxLength) + "…" : plain;
+    return plain.length > maxLength ? plain.slice(0, maxLength).trim() + "…" : plain;
 }

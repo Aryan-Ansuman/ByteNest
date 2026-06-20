@@ -13,6 +13,35 @@ import { listAllDocuments } from "@/lib/appwrite-pagination";
 const ANSWER_RATE_LIMIT = 50;
 const ANSWER_WINDOW_MS = 10 * 60_000;
 
+async function syncQuestionAnswerMetadata(
+    questionId: string,
+    activityAt: string,
+    clearAcceptedAnswer = false
+) {
+    const answers = await databases.listDocuments(db, answerCollection, [
+        Query.equal("questionId", questionId),
+        Query.limit(1),
+    ]);
+
+    const metadata: Record<string, unknown> = {
+        totalAnswers: answers.total,
+        activityAt,
+    };
+    if (clearAcceptedAnswer) metadata.acceptedAnswerId = null;
+
+    try {
+        await databases.updateDocument(db, questionCollection, questionId, metadata);
+    } catch (error: any) {
+        // Keep answer writes compatible while an existing Appwrite project is
+        // being migrated to the denormalized question attributes.
+        const missingNewAttribute =
+            /attribute not found|unknown attribute|invalid document structure/i.test(
+                error?.message ?? ""
+            ) && /totalAnswers|activityAt|acceptedAnswerId/i.test(error?.message ?? "");
+        if (!missingNewAttribute) throw error;
+    }
+}
+
 export async function POST(request: NextRequest) {
     try {
         const requesterId = await getAuthenticatedUserId();
@@ -53,6 +82,8 @@ export async function POST(request: NextRequest) {
             questionId,
             isAccepted: false,
         });
+
+        await syncQuestionAnswerMetadata(questionId, response.$createdAt);
 
         const prefs = await users.getPrefs<UserPrefs>(authorId);
         await users.updatePrefs(authorId, {
@@ -236,6 +267,12 @@ export async function DELETE(request: NextRequest) {
                 databases.deleteDocument(db, commentCollection, c.$id)
             ),
         ]);
+
+        await syncQuestionAnswerMetadata(
+            questionId,
+            new Date().toISOString(),
+            Boolean(answer.isAccepted)
+        );
 
         await revalidateQuestionCaches(questionId);
 

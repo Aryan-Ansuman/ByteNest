@@ -153,6 +153,8 @@ export async function POST(request: NextRequest) {
             content: sanitizedContent,
             authorId,
             tags,
+            totalAnswers: 0,
+            activityAt: new Date().toISOString(),
         };
         if (attachmentId) docData.attachmentId = attachmentId;
 
@@ -199,6 +201,7 @@ export async function PATCH(request: NextRequest) {
             title: sanitizedTitle,
             content: sanitizedContent,
             tags,
+            activityAt: new Date().toISOString(),
         };
 
         if (attachmentId && oldAttachmentId && oldAttachmentId !== attachmentId) {
