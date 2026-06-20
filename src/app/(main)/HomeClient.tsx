@@ -24,6 +24,7 @@ import {
     Settings2,
     ExternalLink,
     Send,
+    Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
@@ -58,6 +59,9 @@ interface Props {
     trendingTags: { tag: string; questions: number }[];
     communityHighlights: { name: string; $id: string; reputation: number }[];
     developerNews: { title: string; time: string; $id: string; slug: string }[];
+    userHasTagPreferences: boolean;
+    nextCursor?: string;
+    hasMore: boolean;
 }
 
 type VoteStatus = "upvoted" | "downvoted";
@@ -80,13 +84,16 @@ const feedTabs = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function HomeClient({ 
-    questions, 
+    questions: initialQuestions, 
     totalQuestions, 
     totalAnswers, 
     initialFilter,
     trendingTags,
     communityHighlights,
     developerNews,
+    userHasTagPreferences,
+    nextCursor: initialNextCursor,
+    hasMore: initialHasMore,
 }: Props) {
     const router = useRouter();
     const pathname = usePathname();
@@ -95,10 +102,16 @@ export default function HomeClient({
 
     const [activeFilter, setActiveFilter] = React.useState(initialFilter === "Newest" ? "For you" : initialFilter);
     const [askInput, setAskInput] = React.useState("");
+
+    const [allQuestions, setAllQuestions] = React.useState<Question[]>(initialQuestions);
+    const [nextCursor, setNextCursor] = React.useState(initialNextCursor);
+    const [hasMore, setHasMore] = React.useState(initialHasMore);
+    const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+
     const [feedVotes, setFeedVotes] = React.useState<Record<string, FeedVoteState>>(
         () =>
             Object.fromEntries(
-                questions.map((question) => [
+                initialQuestions.map((question) => [
                     question.$id,
                     { score: question.totalVotes, status: null, pending: false },
                 ])
@@ -107,9 +120,15 @@ export default function HomeClient({
     const pendingFeedVotes = React.useRef<Set<string>>(new Set());
 
     React.useEffect(() => {
+        setAllQuestions(initialQuestions);
+        setNextCursor(initialNextCursor);
+        setHasMore(initialHasMore);
+    }, [initialQuestions, initialNextCursor, initialHasMore]);
+
+    React.useEffect(() => {
         setFeedVotes((previous) =>
             Object.fromEntries(
-                questions.map((question) => [
+                allQuestions.map((question) => [
                     question.$id,
                     previous[question.$id] ?? {
                         score: question.totalVotes,
@@ -119,11 +138,11 @@ export default function HomeClient({
                 ])
             )
         );
-    }, [questions]);
+    }, [allQuestions]);
 
     React.useEffect(() => {
-        if (!session || !user || questions.length === 0) return;
-        const ids = questions.map((question) => question.$id);
+        if (!session || !user || allQuestions.length === 0) return;
+        const ids = allQuestions.map((question) => question.$id);
         const params = new URLSearchParams({
             type: "question",
             typeIds: ids.join(","),
@@ -152,7 +171,30 @@ export default function HomeClient({
                 });
             })
             .catch(() => undefined);
-    }, [questions, session, user]);
+    }, [allQuestions, session, user]);
+
+    const handleLoadMore = React.useCallback(async () => {
+        if (!nextCursor || isLoadingMore) return;
+        setIsLoadingMore(true);
+        try {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("cursor", nextCursor);
+            const res = await fetch(`/api/feed?${params.toString()}`);
+            if (!res.ok) throw new Error("Failed to load more");
+            const data = await res.json();
+            setAllQuestions((prev) => {
+                const existingIds = new Set(prev.map((q) => q.$id));
+                const newOnes = data.questions.filter((q: Question) => !existingIds.has(q.$id));
+                return [...prev, ...newOnes];
+            });
+            setNextCursor(data.nextCursor);
+            setHasMore(data.hasMore);
+        } catch {
+            toast.error("Could not load more questions");
+        } finally {
+            setIsLoadingMore(false);
+        }
+    }, [nextCursor, isLoadingMore, searchParams]);
 
     const handleFeedVote = React.useCallback(
         async (question: Question, status: VoteStatus) => {
@@ -252,12 +294,12 @@ export default function HomeClient({
     };
 
     const displayedQuestions = React.useMemo(() => {
-        let q = [...questions];
+        let q = [...allQuestions];
         if (activeFilter === "Trending") q.sort((a, b) => b.totalVotes - a.totalVotes);
         if (activeFilter === "Unanswered") q = q.filter((q) => q.totalAnswers === 0);
         if (activeFilter === "Most viewed") q.sort((a, b) => b.totalAnswers - a.totalAnswers);
         return q;
-    }, [questions, activeFilter]);
+    }, [allQuestions, activeFilter]);
 
     return (
         <div className="flex gap-6">
@@ -291,7 +333,11 @@ export default function HomeClient({
                                 </svg>
                             </div>
                             <span className="text-sm font-semibold text-zinc-100">Recommended for you</span>
-                            <span className="text-xs text-zinc-500 hidden sm:inline">Based on your interests and activity</span>
+                            <span className="text-xs text-zinc-500 hidden sm:inline">
+                                {userHasTagPreferences
+                                    ? "Filtered by your followed tags"
+                                    : "Follow tags to personalise this feed"}
+                            </span>
                         </div>
                         <Link
                             href="/questions"
@@ -362,13 +408,33 @@ export default function HomeClient({
 
                     {/* View All */}
                     {displayedQuestions.length > 0 && (
-                        <Link
-                            href="/questions"
-                            className="mt-5 flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] text-sm text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300"
-                        >
-                            View all questions
-                            <ChevronRight className="size-4" />
-                        </Link>
+                        <div className="mt-5 flex flex-col items-center gap-3">
+                            {hasMore && (
+                                <button
+                                    onClick={handleLoadMore}
+                                    disabled={isLoadingMore}
+                                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] text-sm text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isLoadingMore ? (
+                                        <>
+                                            <Loader2 className="size-4 animate-spin" />
+                                            Loading…
+                                        </>
+                                    ) : (
+                                        <>
+                                            Load more questions
+                                            <ChevronRight className="size-4" />
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            <Link
+                                href="/questions"
+                                className="text-xs text-zinc-600 transition hover:text-zinc-400"
+                            >
+                                Browse all questions →
+                            </Link>
+                        </div>
                     )}
                 </div>
             </div>
@@ -412,7 +478,10 @@ function HeroBanner({
             {/* Background Image with Gradient Fade */}
             <div className="absolute inset-y-0 right-0 w-full md:w-2/3 lg:w-[60%]">
                 {/* Gradient mask to blend the image into the dark left side */}
-                <div className="absolute inset-0 bg-gradient-to-r from-[#0a1410] via-[#0a1410]/40 to-transparent z-10" />
+                <div 
+                    className="absolute inset-0 z-10" 
+                    style={{ background: "linear-gradient(90deg, #0a1410 0%, rgba(10,20,16,0.85) 30%, rgba(10,20,16,0.3) 60%, transparent 100%)" }}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a1410] via-transparent to-transparent z-10 md:hidden" />
                 {/* User's uploaded image (should be placed in /public/images/hero-bg.png) */}
                 <img 
@@ -442,13 +511,13 @@ function HeroBanner({
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
                     <Link
                         href="/questions/ask"
-                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-6 text-sm font-semibold text-[#08100b] shadow-[0_0_15px_rgba(167,200,179,0.15)] transition hover:bg-[#b4d6bf] hover:shadow-[0_0_20px_rgba(167,200,179,0.25)]"
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-transparent bg-[#a7c8b3] px-6 text-sm font-semibold text-[#08100b] shadow-[0_0_15px_rgba(167,200,179,0.15)] transition hover:bg-[#b4d6bf] hover:shadow-[0_0_20px_rgba(167,200,179,0.25)]"
                     >
                         Ask a Question
                     </Link>
                     <Link
                         href="/questions"
-                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.1] hover:border-white/20"
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.04] hover:border-white/20"
                     >
                         Explore Questions
                     </Link>
@@ -467,10 +536,10 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             label: "Reputation",
             sub: "Keep contributing!",
             icon: (
-                <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                <div className="flex size-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="8" r="4" stroke="#a7c8b3" strokeWidth="1.5"/>
-                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#a7c8b3" strokeWidth="1.5" strokeLinecap="round"/>
+                        <circle cx="12" cy="8" r="4" stroke="#60a5fa" strokeWidth="1.5"/>
+                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
                     </svg>
                 </div>
             ),
@@ -480,8 +549,8 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             label: "Questions",
             sub: "Keep asking!",
             icon: (
-                <div className="flex size-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
-                    <MessageCircle className="size-5 text-blue-400" />
+                <div className="flex size-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+                    <MessageCircle className="size-5 text-emerald-400" />
                 </div>
             ),
         },
@@ -500,8 +569,8 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             label: "Badges",
             sub: "Unlock achievements!",
             icon: (
-                <div className="flex size-10 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10">
-                    <Trophy className="size-5 text-amber-400" />
+                <div className="flex size-10 items-center justify-center rounded-xl border border-zinc-500/20 bg-zinc-500/10 opacity-70">
+                    <Trophy className="size-5 text-zinc-500" />
                 </div>
             ),
         },
@@ -694,11 +763,13 @@ function voteDelta(previous: VoteStatus | null, next: VoteStatus | null) {
 // ─── Community Highlights ─────────────────────────────────────────────────────
 
 function CommunityHighlights({ contributors }: { contributors: { name: string; $id: string; reputation: number }[] }) {
-
+    // Sort by descending reputation
+    const sorted = [...contributors].sort((a, b) => b.reputation - a.reputation);
+    
     const highlights = [
-        { label: "Top Contributor", sublabel: contributors[0]?.name ?? "victor-dev", value: `${(contributors[0]?.reputation ?? 2400).toLocaleString()} rep`, color: "text-blue-400", dotColor: "bg-blue-400" },
-        { label: "Most Helpful Answer", sublabel: contributors[1]?.name ?? "sarah.dev", value: `${(contributors[1]?.reputation ?? 1500).toLocaleString()} rep`, color: "text-[#a7c8b3]", dotColor: "bg-[#a7c8b3]" },
-        { label: "Rising Star", sublabel: contributors[2]?.name ?? "aryan231", value: `${(contributors[2]?.reputation ?? 300).toLocaleString()} rep`, color: "text-amber-400", dotColor: "bg-amber-400" },
+        { label: "Top Contributor", sublabel: sorted[0]?.name ?? "victor-dev", value: `${(sorted[0]?.reputation ?? 2400).toLocaleString()} rep`, color: "text-blue-400", dotColor: "bg-blue-400" },
+        { label: "Most Helpful", sublabel: sorted[1]?.name ?? "sarah.dev", value: `${(sorted[1]?.reputation ?? 1500).toLocaleString()} rep`, color: "text-[#a7c8b3]", dotColor: "bg-[#a7c8b3]" },
+        { label: "Rising Star", sublabel: sorted[2]?.name ?? "aryan231", value: `${(sorted[2]?.reputation ?? 300).toLocaleString()} rep`, color: "text-amber-400", dotColor: "bg-amber-400" },
     ];
 
     if (contributors.length === 0) return null;
@@ -771,8 +842,8 @@ function TrendingTagsCard({ tags }: { tags: { tag: string; questions: number }[]
                             <Hash className="size-3.5 text-zinc-600 transition group-hover:text-[#a7c8b3]" />
                             <span className="text-zinc-300 transition group-hover:text-[#a7c8b3] max-w-[120px] truncate">{tag}</span>
                         </div>
-                        <span className="text-xs text-zinc-600">
-                            {questions >= 1000 ? `${(questions / 1000).toFixed(1)}k` : questions} questions
+                        <span className="text-xs text-zinc-600 tabular-nums">
+                            {questions >= 1000 ? `${(questions / 1000).toFixed(1)}k` : questions} question{questions === 1 ? "" : "s"}
                         </span>
                     </Link>
                 ))}

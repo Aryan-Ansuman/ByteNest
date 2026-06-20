@@ -85,10 +85,6 @@ export async function POST(request: NextRequest) {
 
         await syncQuestionAnswerMetadata(questionId, response.$createdAt);
 
-        const prefs = await users.getPrefs<UserPrefs>(authorId);
-        await users.updatePrefs(authorId, {
-            reputation: Number(prefs.reputation) + 1,
-        });
         await revalidateQuestionCaches(questionId);
 
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
@@ -222,37 +218,9 @@ export async function DELETE(request: NextRequest) {
             ]),
         ]);
 
-        const prefsSnapshot = await users.getPrefs<UserPrefs>(authorId);
-        const reputationBefore = Number(prefsSnapshot.reputation ?? 0);
-        try {
-            await users.updatePrefs<UserPrefs>(authorId, {
-                reputation: reputationBefore - 1,
-            });
-        } catch (repError: any) {
-            console.error("[answer/DELETE] reputation decrement failed before deletion", {
-                answerId,
-                authorId,
-                reputationBefore,
-                error: repError?.message,
-            });
-            return NextResponse.json(
-                { error: "Could not update reputation; answer was not deleted" },
-                { status: 500 }
-            );
-        }
-
         try {
             await databases.deleteDocument(db, answerCollection, answerId);
         } catch (deleteError: any) {
-            await users
-                .updatePrefs<UserPrefs>(authorId, { reputation: reputationBefore })
-                .catch((rollbackError: any) => {
-                    console.error("[answer/DELETE] reputation rollback failed", {
-                        answerId,
-                        authorId,
-                        error: rollbackError?.message,
-                    });
-                });
             return NextResponse.json(
                 { error: deleteError?.message || "Failed to delete answer" },
                 { status: deleteError?.status || deleteError?.code || 500 }

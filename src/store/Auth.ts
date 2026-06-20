@@ -10,6 +10,7 @@ export interface UserPrefs {
   reputation: number;
   bookmarks?: string[];
   defaultAnswerSort?: string;
+  followedTags?: string[];
 }
 
 interface IAuthStore {
@@ -40,6 +41,7 @@ interface IAuthStore {
   logout(): Promise<void>;
   toggleBookmark(questionId: string): Promise<void>;
   updateAnswerSort(sort: string): Promise<void>;
+  toggleFollowTag(tag: string): Promise<void>;
 }
 
 
@@ -206,6 +208,36 @@ export const useAuthStore = create<IAuthStore>()(
             if (state.user) state.user.prefs = newPrefs;
         });
         
+        try {
+            await account.updatePrefs<UserPrefs>(newPrefs);
+        } catch (err) {
+            set((state) => {
+                if (state.user) state.user.prefs = prefs;
+            });
+            throw err;
+        }
+      },
+
+      async toggleFollowTag(tag: string) {
+        const user = get().user;
+        if (!user) return;
+    
+        const prefs = user.prefs || { reputation: 0 };
+        const followed = Array.isArray(prefs.followedTags) ? [...prefs.followedTags] : [];
+    
+        const idx = followed.indexOf(tag);
+        if (idx > -1) {
+            followed.splice(idx, 1);
+        } else {
+            followed.push(tag);
+        }
+    
+        const newPrefs = { ...prefs, followedTags: followed };
+    
+        set((state) => {
+            if (state.user) state.user.prefs = newPrefs;
+        });
+    
         try {
             await account.updatePrefs<UserPrefs>(newPrefs);
         } catch (err) {

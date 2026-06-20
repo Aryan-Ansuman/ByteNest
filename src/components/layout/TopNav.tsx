@@ -26,9 +26,13 @@ export default function TopNav() {
             <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-3 px-4 md:gap-6 md:px-8 lg:px-12">
                 <div className="flex w-[240px] shrink-0 items-center">
                     <Link href="/" className="flex items-center gap-3">
-                        <span className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm font-semibold text-[#a7c8b3]">
-                            B
-                        </span>
+                        <div className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.02]">
+                            <svg className="size-5 text-[#a7c8b3]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                                <line x1="12" y1="22.08" x2="12" y2="12" />
+                            </svg>
+                        </div>
                         <span className="hidden text-sm font-semibold text-zinc-100 sm:inline">
                             ByteNest
                         </span>

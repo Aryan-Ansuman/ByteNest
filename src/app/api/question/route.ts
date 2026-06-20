@@ -352,55 +352,6 @@ export async function DELETE(request: NextRequest) {
     }
     await revalidateQuestionCaches(questionId, [question.title as string]);
 
-    const upvoteCount = questionVotes.documents.filter(
-        (v) => v.voteStatus === "upvoted"
-    ).length;
-    const downvoteCount = questionVotes.documents.filter(
-        (v) => v.voteStatus === "downvoted"
-    ).length;
-    const netQuestionReputation = upvoteCount - downvoteCount;
-
-    const answerAuthorIds = Array.from(
-        new Set(answers.documents.map((a) => a.authorId as string))
-    );
-
-    const allAuthorIds = Array.from(
-        new Set([
-            ...(netQuestionReputation !== 0 ? [question.authorId as string] : []),
-            ...answerAuthorIds,
-        ])
-    );
-
-    const prefsById = new Map<string, number>();
-    await Promise.allSettled(
-        allAuthorIds.map(async (id) => {
-            try {
-                const prefs = await users.getPrefs<UserPrefs>(id);
-                prefsById.set(id, Number(prefs.reputation ?? 0));
-            } catch {
-                prefsById.set(id, 0);
-            }
-        })
-    );
-
-    const reputationResults = await Promise.allSettled([
-        ...(netQuestionReputation !== 0
-            ? [
-                  users.updatePrefs<UserPrefs>(question.authorId as string, {
-                      reputation:
-                          (prefsById.get(question.authorId as string) ?? 0) -
-                          netQuestionReputation,
-                  }),
-              ]
-            : []),
-        ...answerAuthorIds.map((id) =>
-            users.updatePrefs<UserPrefs>(id, {
-                reputation: (prefsById.get(id) ?? 0) - 1,
-            })
-        ),
-    ]);
-    logSettledFailures("phase-E (reputation)", questionId, reputationResults);
-
     return NextResponse.json(
         { data: { $id: questionId }, message: "Question deleted" },
         { status: 200 }

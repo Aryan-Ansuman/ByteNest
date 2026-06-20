@@ -1,0 +1,28 @@
+{
+    "organizationId": "6a2a94480026cd3d29ca",
+    "projectId": "6a2a94690035eff3c195",
+    "projectName": "QnA",
+    "endpoint": "https://sgp.cloud.appwrite.io/v1",
+    "functions": [
+      {
+        "$id": "calculate-reputation",
+        "name": "Calculate Reputation",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [
+          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.create",
+          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.update",
+          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.delete",
+          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.create",
+          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.delete",
+          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.update"
+        ],
+        "schedule": "",
+        "timeout": 15,
+        "entrypoint": "src/main.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/calculate-reputation"
+      }
+    ]
+}

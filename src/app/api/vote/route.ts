@@ -3,7 +3,7 @@ import { databases } from "@/models/server/config";
 import { NextRequest, NextResponse } from "next/server";
 import { Query } from "node-appwrite";
 import { ApiValidationError, parseJsonBody, requireEnum, requireString } from "@/lib/api-validation";
-import { adjustReputation } from "@/lib/reputation";
+
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
@@ -174,7 +174,6 @@ export async function POST(request: NextRequest) {
 
                 const [newTotal] = await Promise.all([
                     adjustVoteCounter(type, typeId, undoDelta),
-                    adjustReputation(targetDoc.authorId, undoDelta),
                 ]);
                 await revalidateVotedTarget(type, targetDoc);
 
@@ -185,16 +184,19 @@ export async function POST(request: NextRequest) {
             }
 
             const voteDocId = voteDocumentId(type, typeId, votedById);
-            const newVoteDoc = previousVote
-                ? await databases.updateDocument(db, voteCollection, previousVote.$id, {
-                      voteStatus,
-                  })
-                : await createDeterministicVoteDocument(voteDocId, {
-                      type,
-                      typeId,
-                      voteStatus,
-                      votedById,
-                  });
+            
+            // For stateless Appwrite Function triggers, we ALWAYS delete the old vote before creating the new one
+            // This guarantees the function receives a `delete` event with the old status and a `create` event with the new status.
+            if (previousVote) {
+                await databases.deleteDocument(db, voteCollection, previousVote.$id);
+            }
+
+            const newVoteDoc = await createDeterministicVoteDocument(voteDocId, {
+                  type,
+                  typeId,
+                  voteStatus,
+                  votedById,
+              });
 
             let delta = voteStatus === "upvoted" ? 1 : -1;
             if (previousVote) {
@@ -203,7 +205,6 @@ export async function POST(request: NextRequest) {
 
             const [newTotal] = await Promise.all([
                 adjustVoteCounter(type, typeId, delta),
-                adjustReputation(targetDoc.authorId, delta),
             ]);
             await revalidateVotedTarget(type, targetDoc);
 
