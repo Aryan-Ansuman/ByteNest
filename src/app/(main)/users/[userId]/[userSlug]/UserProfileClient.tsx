@@ -35,6 +35,7 @@ import { useAuthStore } from "@/store/Auth";
 import { avatars } from "@/models/client/config";
 import slugify from "@/utils/slugify";
 import convertDateToRelativeTime from "@/utils/relativeTime";
+import UserAvatar from "@/components/UserAvatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -202,10 +203,11 @@ function ProfileHero({
             {/* Avatar */}
             <div className="shrink-0">
                 <div className="relative">
-                    <img
+                    <UserAvatar
+                        name={profile.name}
+                        size="xl"
                         src={avatars.getInitials(profile.name, 96, 96).href}
-                        alt={profile.name}
-                        className="size-24 rounded-2xl border border-white/10 object-cover"
+                        className="size-24 rounded-2xl border border-white/10"
                     />
                     {/* Reputation badge overlay */}
                     <div

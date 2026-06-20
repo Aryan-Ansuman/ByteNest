@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
     MessageCircle,
     Plus,
@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import QuestionListSkeleton from "@/components/QuestionCardSkeleton";
 import CustomizeFeedModal from "@/components/CustomizeFeedModal";
 import { markdownToPlainExcerpt } from "@/lib/sanitize";
+import UserAvatar from "@/components/UserAvatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,7 @@ export default function HomeClient({
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const { session, user, toggleBookmark } = useAuthStore();
+    const shouldReduceMotion = useReducedMotion();
 
     const [activeFilter, setActiveFilter] = React.useState(initialFilter === "Newest" ? "For you" : initialFilter);
     const [askInput, setAskInput] = React.useState("");
@@ -308,6 +310,11 @@ export default function HomeClient({
         return q;
     }, [allQuestions, activeFilter]);
 
+    // Animation props respecting reduced motion
+    const cardAnimProps = shouldReduceMotion
+        ? {}
+        : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -4 } };
+
     return (
         <div className="flex gap-6">
             <CustomizeFeedModal open={customizeFeedOpen} onClose={() => setCustomizeFeedOpen(false)} />
@@ -328,7 +335,7 @@ export default function HomeClient({
 
                 {/* Stats Row */}
                 {session && user && (
-                    <StatsRow user={user} totalQuestions={totalQuestions} totalAnswers={totalAnswers} />
+                    <StatsRow user={user} totalQuestions={totalQuestions} totalAnswers={totalAnswers} shouldReduceMotion={!!shouldReduceMotion} />
                 )}
 
                 {/* Feed Section */}
@@ -372,11 +379,15 @@ export default function HomeClient({
                             >
                                 {tab.label}
                                 {activeFilter === tab.id && (
-                                    <motion.div
-                                        layoutId="feed-tab-underline"
-                                        className="absolute bottom-0 left-0 right-5 h-0.5 rounded-full bg-[#a7c8b3]"
-                                        transition={{ duration: 0.18, ease: "easeOut" }}
-                                    />
+                                    shouldReduceMotion ? (
+                                        <div className="absolute bottom-0 left-0 right-5 h-0.5 rounded-full bg-[#a7c8b3]" />
+                                    ) : (
+                                        <motion.div
+                                            layoutId="feed-tab-underline"
+                                            className="absolute bottom-0 left-0 right-5 h-0.5 rounded-full bg-[#a7c8b3]"
+                                            transition={{ duration: 0.18, ease: "easeOut" }}
+                                        />
+                                    )
                                 )}
                             </button>
                         ))}
@@ -385,7 +396,7 @@ export default function HomeClient({
                     {/* Question Cards */}
                     <AnimatePresence mode="wait">
                         {isFilterPending ? (
-                            <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                            <motion.div key="skeleton" {...(shouldReduceMotion ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } })}>
                                 <QuestionListSkeleton count={5} />
                             </motion.div>
                         ) : displayedQuestions.length === 0 ? (
@@ -393,10 +404,8 @@ export default function HomeClient({
                         ) : (
                             <motion.div
                                 key={activeFilter}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                transition={{ duration: 0.18, ease: "easeOut" }}
+                                {...cardAnimProps}
+                                transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
                                 className="space-y-3"
                             >
                                 {displayedQuestions.map((q) => (
@@ -542,7 +551,7 @@ function HeroBanner({
 
 // ─── Stats Row ────────────────────────────────────────────────────────────────
 
-function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQuestions: number; totalAnswers: number }) {
+function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: { user: any; totalQuestions: number; totalAnswers: number; shouldReduceMotion: boolean }) {
     const stats = [
         {
             value: user?.prefs?.reputation ?? 0,
@@ -594,9 +603,9 @@ function StatsRow({ user, totalQuestions, totalAnswers }: { user: any; totalQues
             {stats.map((stat, i) => (
                 <motion.div
                     key={stat.label}
-                    initial={{ opacity: 0, y: 12 }}
+                    initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, delay: i * 0.06 }}
+                    transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.25, delay: i * 0.06 }}
                     className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:bg-white/[0.04]"
                 >
                     {stat.icon}
@@ -737,10 +746,11 @@ function QuestionCard({
                     <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         {/* Author */}
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
-                            <img
+                            <UserAvatar
+                                name={question.author.name}
+                                size="xs"
                                 src={avatars.getInitials(question.author.name, 20, 20).href}
-                                alt={question.author.name}
-                                className="size-5 rounded-full"
+                                className="size-5"
                             />
                             <Link
                                 href={`/users/${question.author.$id}/${slugify(question.author.name)}`}
@@ -798,9 +808,7 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
                 {highlights.map((h, i) => (
                     <div key={i} className="flex items-center gap-3">
                         {/* Avatar */}
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-xs font-bold text-zinc-200">
-                            {h.sublabel.slice(0, 1).toUpperCase()}
-                        </div>
+                        <UserAvatar name={h.sublabel} size="sm" className="size-8" />
                         <div className="min-w-0 flex-1">
                             <p className="text-xs font-medium text-zinc-300">{h.label}</p>
                             <p className="flex items-center gap-1 text-[11px] text-zinc-500">

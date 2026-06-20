@@ -7,6 +7,7 @@ import { Models } from "appwrite";
 import slugify from "@/utils/slugify";
 import { avatars } from "@/models/client/config";
 import convertDateToRelativeTime from "@/utils/relativeTime";
+import UserAvatar from "@/components/UserAvatar";
 
 const QuestionCard = ({ ques }: { ques: Models.Document }) => {
     const [height, setHeight] = React.useState(0);
@@ -46,13 +47,12 @@ const QuestionCard = ({ ques }: { ques: Models.Document }) => {
                         </Link>
                     ))}
                     <div className="ml-auto flex items-center gap-1">
-                        <picture>
-                            <img
-                                src={avatars.getInitials(ques.author.name, 24, 24).href}
-                                alt={ques.author.name}
-                                className="rounded-lg"
-                            />
-                        </picture>
+                        <UserAvatar
+                            name={ques.author.name}
+                            size="sm"
+                            src={avatars.getInitials(ques.author.name, 24, 24).href}
+                            className="size-6"
+                        />
                         <Link
                             href={`/users/${ques.author.$id}/${slugify(ques.author.name)}`}
                             className="text-orange-500 hover:text-orange-600"

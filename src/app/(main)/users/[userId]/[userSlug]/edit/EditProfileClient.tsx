@@ -28,6 +28,7 @@ import { useAuthStore } from "@/store/Auth";
 import { account, avatars } from "@/models/client/config";
 import slugify from "@/utils/slugify";
 import convertDateToRelativeTime from "@/utils/relativeTime";
+import UserAvatar from "@/components/UserAvatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -256,10 +257,11 @@ export default function EditProfileClient({
                             </h2>
                             <div className="flex items-center gap-5">
                                 <div className="relative shrink-0">
-                                    <img
+                                    <UserAvatar
+                                        name={name || initialName}
+                                        size="xl"
                                         src={avatarUrl}
-                                        alt={name}
-                                        className="size-20 rounded-2xl border border-white/10 object-cover"
+                                        className="size-20 rounded-2xl border border-white/10"
                                     />
                                     <div className="absolute -bottom-1.5 -right-1.5 flex size-7 items-center justify-center rounded-full border border-white/20 bg-[#080808]">
                                         <Camera className="size-3.5 text-zinc-400" />
@@ -340,10 +342,10 @@ export default function EditProfileClient({
                                         Preview
                                     </p>
                                     <div className="flex items-center gap-3">
-                                        <img
+                                        <UserAvatar
+                                            name={name || "?"}
+                                            size="lg"
                                             src={avatars.getInitials(name || "?", 40, 40).href}
-                                            alt={name}
-                                            className="size-10 rounded-xl border border-white/10"
                                         />
                                         <div>
                                             <p className="text-sm font-semibold text-zinc-100">

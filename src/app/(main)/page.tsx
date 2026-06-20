@@ -9,6 +9,8 @@ import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 import { cookies } from "next/headers";
 import { Account, Client } from "node-appwrite";
 import env from "@/app/env";
+import { Suspense } from "react";
+import QuestionListSkeleton from "@/components/QuestionCardSkeleton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,21 +35,19 @@ async function getSessionUserTags(): Promise<string[]> {
     }
 }
 
-const Page = async ({
+async function HomeFeed({
     searchParams,
 }: {
     searchParams: { filter?: string; cursor?: string };
-}) => {
+}) {
     const filter = searchParams.filter || "Newest";
     const cursor = searchParams.cursor;
     const limit = 10;
 
     const userTags = await getSessionUserTags();
 
-    // Build "For you" queries — use followed tags if available, else fall back to newest
     const forYouQueries: any[] = [Query.limit(limit), Query.orderDesc("$createdAt")];
     if (userTags.length > 0) {
-        // Appwrite: filter questions that contain ANY of the followed tags
         userTags.forEach((tag) => forYouQueries.push(Query.contains("tags", [tag])));
     }
     if (cursor) forYouQueries.push(Query.cursorAfter(cursor));
@@ -60,7 +60,6 @@ const Page = async ({
     }
     if (cursor) mainQueries.push(Query.cursorAfter(cursor));
 
-    // Use tag-filtered query for "For you", standard query for other filters
     const activeQueries = filter === "Newest" && userTags.length > 0 ? forYouQueries : mainQueries;
 
     const [questions, totalQuestions, totalAnswers, recentQuestions, recentAnswers] =
@@ -98,7 +97,6 @@ const Page = async ({
         };
     });
 
-    // Trending tags
     const tagFreq: Record<string, number> = {};
     recentQuestions.documents.forEach((q) => {
         (q.tags || []).forEach((t: string) => {
@@ -110,7 +108,6 @@ const Page = async ({
         .slice(0, 5)
         .map(([tag, count]) => ({ tag, questions: count }));
 
-    // Community highlights
     const authorIds = Array.from(new Set(recentAnswers.documents.map((a) => a.authorId)));
     const recentAnswerAuthors = await getAuthorsById(authorIds.slice(0, 10));
     const communityHighlights = Array.from(recentAnswerAuthors.values())
@@ -119,11 +116,14 @@ const Page = async ({
         .slice(0, 3)
         .map((a) => ({ name: a.name, $id: a.$id, reputation: a.reputation }));
 
-    // Developer news
+    // Only show developer news from the last 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const developerNews = recentQuestions.documents
-        .filter((q) =>
-            (q.tags || []).includes("news") || (q.tags || []).includes("announcement")
-        )
+        .filter((q) => {
+            const isNewsTag = (q.tags || []).includes("news") || (q.tags || []).includes("announcement");
+            const isRecent = new Date(q.$createdAt) > sevenDaysAgo;
+            return isNewsTag && isRecent;
+        })
         .slice(0, 3)
         .map((q) => ({
             $id: q.$id,
@@ -150,6 +150,39 @@ const Page = async ({
             nextCursor={nextCursor}
             hasMore={questions.documents.length === limit}
         />
+    );
+}
+
+function HomeFeedSkeleton() {
+    return (
+        <div className="flex gap-6">
+            <div className="min-w-0 flex-1 space-y-4">
+                {/* Hero skeleton */}
+                <div className="h-[240px] animate-pulse rounded-2xl bg-white/[0.025]" />
+                {/* Feed skeleton */}
+                <div className="mt-6">
+                    <QuestionListSkeleton count={5} />
+                </div>
+            </div>
+            {/* Sidebar skeleton */}
+            <aside className="hidden w-72 shrink-0 space-y-4 xl:block">
+                <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />
+                <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />
+                <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />
+            </aside>
+        </div>
+    );
+}
+
+const Page = async ({
+    searchParams,
+}: {
+    searchParams: { filter?: string; cursor?: string };
+}) => {
+    return (
+        <Suspense fallback={<HomeFeedSkeleton />}>
+            <HomeFeed searchParams={searchParams} />
+        </Suspense>
     );
 };
 

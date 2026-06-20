@@ -1,5 +1,7 @@
 "use client";
 
+import UserAvatar from "@/components/UserAvatar";
+
 import { ID, Models } from "appwrite";
 import React from "react";
 import VoteButtons from "./VoteButtons";
@@ -99,13 +101,12 @@ const Answers = ({
                     <div className="w-full overflow-auto">
                         <MarkdownPreview className="rounded-xl p-4" source={answer.content} />
                         <div className="mt-4 flex items-center justify-end gap-1">
-                            <picture>
-                                <img
-                                    src={avatars.getInitials(answer.author.name, 36, 36).href}
-                                    alt={answer.author.name}
-                                    className="rounded-lg"
-                                />
-                            </picture>
+                            <UserAvatar
+                                name={answer.author.name}
+                                size="md"
+                                src={avatars.getInitials(answer.author.name, 36, 36).href}
+                                className="size-9"
+                            />
                             <div className="block leading-tight">
                                 <Link
                                     href={`/users/${answer.author.$id}/${slugify(answer.author.name)}`}

@@ -19,6 +19,7 @@ import { avatars } from "@/models/client/config";
 import { useAuthStore } from "@/store/Auth";
 import slugify from "@/utils/slugify";
 import { cn } from "@/lib/utils";
+import UserAvatar from "@/components/UserAvatar";
 
 interface ProfileMenuProps {
     /** Optional override; otherwise pulled from useAuthStore */
@@ -100,10 +101,10 @@ export default function ProfileMenu({ name, reputation }: ProfileMenuProps) {
                         : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
             >
-                <img
+                <UserAvatar
+                    name={displayName}
+                    size="sm"
                     src={avatars.getInitials(displayName, 28, 28).href}
-                    alt={displayName}
-                    className="size-7 rounded-lg"
                 />
                 <ChevronDown
                     className={cn(
@@ -129,10 +130,10 @@ export default function ProfileMenu({ name, reputation }: ProfileMenuProps) {
                             onClick={() => setOpen(false)}
                             className="flex items-center gap-3 border-b border-white/[0.06] p-4 transition hover:bg-white/[0.03]"
                         >
-                            <img
+                            <UserAvatar
+                                name={displayName}
+                                size="lg"
                                 src={avatars.getInitials(displayName, 44, 44).href}
-                                alt={displayName}
-                                className="size-11 rounded-xl border border-white/10"
                             />
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-semibold text-zinc-100">
