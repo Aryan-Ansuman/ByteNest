@@ -33,6 +33,9 @@ import { useAuthStore } from "@/store/Auth";
 import { avatars } from "@/models/client/config";
 import { apiFetch } from "@/lib/api-fetch";
 import { toast } from "sonner";
+import QuestionListSkeleton from "@/components/QuestionCardSkeleton";
+import CustomizeFeedModal from "@/components/CustomizeFeedModal";
+import { markdownToPlainExcerpt } from "@/lib/sanitize";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,6 +105,8 @@ export default function HomeClient({
 
     const [activeFilter, setActiveFilter] = React.useState(initialFilter === "Newest" ? "For you" : initialFilter);
     const [askInput, setAskInput] = React.useState("");
+    const [customizeFeedOpen, setCustomizeFeedOpen] = React.useState(false);
+    const [isFilterPending, startFilterTransition] = React.useTransition();
 
     const [allQuestions, setAllQuestions] = React.useState<Question[]>(initialQuestions);
     const [nextCursor, setNextCursor] = React.useState(initialNextCursor);
@@ -272,7 +277,7 @@ export default function HomeClient({
             const isBookmarked = user.prefs?.bookmarks?.includes(questionId) ?? false;
             try {
                 await toggleBookmark(questionId);
-                toast.success(isBookmarked ? "Bookmark removed" : "Question bookmarked");
+                toast.success(isBookmarked ? "Bookmark removed" : "Saved to bookmarks");
             } catch {
                 toast.error("Could not update bookmark");
             }
@@ -285,7 +290,9 @@ export default function HomeClient({
         const p = new URLSearchParams(searchParams.toString());
         const mapped = filter === "For you" || filter === "Recent" ? "Newest" : filter;
         p.set("filter", mapped);
-        router.push(`${pathname}?${p.toString()}`);
+        startFilterTransition(() => {
+            router.push(`${pathname}?${p.toString()}`);
+        });
     };
 
     const handleAskSubmit = (e: React.FormEvent) => {
@@ -303,6 +310,8 @@ export default function HomeClient({
 
     return (
         <div className="flex gap-6">
+            <CustomizeFeedModal open={customizeFeedOpen} onClose={() => setCustomizeFeedOpen(false)} />
+            
             {/* ── Main Column ── */}
             <div className="min-w-0 flex-1">
 
@@ -339,13 +348,13 @@ export default function HomeClient({
                                     : "Follow tags to personalise this feed"}
                             </span>
                         </div>
-                        <Link
-                            href="/questions"
+                        <button
+                            onClick={() => setCustomizeFeedOpen(true)}
                             className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                         >
                             <Settings2 className="size-3.5" />
                             Customize feed
-                        </Link>
+                        </button>
                     </div>
 
                     {/* Feed Tabs */}
@@ -375,8 +384,12 @@ export default function HomeClient({
 
                     {/* Question Cards */}
                     <AnimatePresence mode="wait">
-                        {displayedQuestions.length === 0 ? (
-                            <EmptyState filter={activeFilter} />
+                        {isFilterPending ? (
+                            <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                <QuestionListSkeleton count={5} />
+                            </motion.div>
+                        ) : displayedQuestions.length === 0 ? (
+                            <EmptyState filter={activeFilter} onCustomize={() => setCustomizeFeedOpen(true)} />
                         ) : (
                             <motion.div
                                 key={activeFilter}
@@ -407,7 +420,7 @@ export default function HomeClient({
                     </AnimatePresence>
 
                     {/* View All */}
-                    {displayedQuestions.length > 0 && (
+                    {!isFilterPending && displayedQuestions.length > 0 && (
                         <div className="mt-5 flex flex-col items-center gap-3">
                             {hasMore && (
                                 <button
@@ -615,12 +628,7 @@ function QuestionCard({
 }) {
     const [bookmarkPending, setBookmarkPending] = React.useState(false);
 
-    const excerpt = question.content
-        .replace(/```[\s\S]*?```/g, "[code]")
-        .replace(/`[^`]+`/g, (m) => m.slice(1, -1))
-        .replace(/[#*_>\[\]!]/g, "")
-        .replace(/\n+/g, " ")
-        .trim();
+    const excerpt = markdownToPlainExcerpt(question.content);
 
     return (
         <motion.article
@@ -639,16 +647,16 @@ function QuestionCard({
                         aria-pressed={voteState.status === "upvoted"}
                         aria-label={`Upvote ${question.title}`}
                         className={cn(
-                            "flex size-7 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+                            "flex size-9 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
                             voteState.status === "upvoted"
-                                ? "text-[#a7c8b3]"
-                                : "text-zinc-600 hover:text-[#a7c8b3]"
+                                ? "bg-[#a7c8b3]/10 text-[#a7c8b3]"
+                                : "text-zinc-500 hover:text-[#a7c8b3]"
                         )}
                     >
-                        <ArrowUp className="size-4" />
+                        <ArrowUp className="size-5" />
                     </button>
                     <span className={cn(
-                        "text-sm font-bold",
+                        "text-sm font-bold min-w-[2ch] text-center",
                         voteState.score > 0 ? "text-[#a7c8b3]" : voteState.score < 0 ? "text-red-400" : "text-zinc-400"
                     )}>
                         {voteState.score}
@@ -661,13 +669,13 @@ function QuestionCard({
                         aria-pressed={voteState.status === "downvoted"}
                         aria-label={`Downvote ${question.title}`}
                         className={cn(
-                            "flex size-7 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+                            "flex size-9 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
                             voteState.status === "downvoted"
-                                ? "text-red-400"
-                                : "text-zinc-600 hover:text-red-400"
+                                ? "bg-red-400/10 text-red-400"
+                                : "text-zinc-500 hover:text-red-400"
                         )}
                     >
-                        <ArrowDown className="size-4" />
+                        <ArrowDown className="size-5" />
                     </button>
                 </div>
 
@@ -692,16 +700,21 @@ function QuestionCard({
                             aria-pressed={bookmarked}
                             aria-label={bookmarked ? "Remove bookmark" : "Bookmark question"}
                             className={cn(
-                                "shrink-0 transition disabled:cursor-not-allowed disabled:opacity-50",
-                                bookmarked ? "text-[#a7c8b3]" : "text-zinc-600 hover:text-zinc-300"
+                                "flex size-8 shrink-0 items-center justify-center rounded-lg transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50",
+                                bookmarked ? "text-[#a7c8b3]" : "text-zinc-500 hover:text-zinc-300"
                             )}
                         >
-                            <Bookmark className="size-4" fill={bookmarked ? "currentColor" : "none"} />
+                            <motion.div
+                                animate={bookmarked ? { scale: [0.8, 1.2, 1] } : { scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                <Bookmark className="size-4" fill={bookmarked ? "currentColor" : "none"} />
+                            </motion.div>
                         </button>
                     </div>
 
                     {excerpt && (
-                        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500">
+                        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 line-clamp-2">
                             {excerpt}
                         </p>
                     )}
@@ -902,7 +915,7 @@ function DeveloperNews({ news }: { news: { title: string; time: string; slug: st
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
-function EmptyState({ filter }: { filter: string }) {
+function EmptyState({ filter, onCustomize }: { filter: string; onCustomize?: () => void }) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -920,13 +933,23 @@ function EmptyState({ filter }: { filter: string }) {
                     ? "Great work, community! Every question has at least one answer."
                     : "Be the first to ask a question and start the conversation."}
             </p>
-            <Link
-                href="/questions/ask"
-                className="mt-5 flex h-9 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 text-sm font-medium text-[#08100b] transition hover:bg-[#b4d6bf]"
-            >
-                <Plus className="size-4" />
-                Ask a question
-            </Link>
+            {onCustomize && filter === "For you" ? (
+                <button
+                    onClick={onCustomize}
+                    className="mt-5 flex h-9 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 text-sm font-medium text-[#08100b] transition hover:bg-[#b4d6bf]"
+                >
+                    <Settings2 className="size-4" />
+                    Customize feed
+                </button>
+            ) : (
+                <Link
+                    href="/questions/ask"
+                    className="mt-5 flex h-9 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 text-sm font-medium text-[#08100b] transition hover:bg-[#b4d6bf]"
+                >
+                    <Plus className="size-4" />
+                    Ask a question
+                </Link>
+            )}
         </motion.div>
     );
 }

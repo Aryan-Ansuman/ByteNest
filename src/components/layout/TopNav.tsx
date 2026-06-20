@@ -2,24 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/Auth";
 import ProfileMenu from "@/components/ProfileMenu";
 import CreateMenu from "@/components/CreateMenu";
-import { useRouter } from "next/navigation";
+import CommandPalette from "@/components/CommandPalette";
 
 export default function TopNav() {
     const { session } = useAuthStore();
-    const [searchValue, setSearchValue] = React.useState("");
-    const router = useRouter();
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (searchValue.trim()) {
-            router.push(`/questions?search=${encodeURIComponent(searchValue.trim())}`);
-        }
-    };
 
     return (
         <header className="sticky top-0 z-50 h-16 border-b border-white/10 bg-[#080808]/85 backdrop-blur-xl">
@@ -40,16 +29,7 @@ export default function TopNav() {
                 </div>
 
                 <div className="flex flex-1 justify-center px-4">
-                    <form onSubmit={handleSearch} className="relative w-full max-w-2xl">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
-                        <Input
-                            aria-label="Search questions"
-                            placeholder="Search questions, tags, or authors…"
-                            value={searchValue}
-                            onChange={(e) => setSearchValue(e.target.value)}
-                            className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition duration-200 ease-out hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
-                        />
-                    </form>
+                    <CommandPalette />
                 </div>
 
                 <div className="flex w-[240px] shrink-0 items-center justify-end">
