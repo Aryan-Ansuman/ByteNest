@@ -51,3 +51,11 @@ export function forbiddenResponse(message: string): Response {
         headers: { "Content-Type": "application/json" },
     });
 }
+
+export async function getOptionalAuthenticatedUserId(): Promise<string | null> {
+    try {
+        return await getAuthenticatedUserId();
+    } catch {
+        return null;
+    }
+}
