@@ -33,6 +33,7 @@ import { markdownToPlainExcerpt } from "@/lib/sanitize";
 import UserAvatar from "@/components/UserAvatar";
 import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
 import NewQuestionsBanner from "@/components/NewQuestionsBanner";
+import SkillProfileWidget from "@/components/SkillProfileWidget";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -532,8 +533,8 @@ export default function HomeClient({
 
             {/* ── Right Sidebar ── */}
             <aside className="hidden w-72 shrink-0 xl:block">
-                {/* Community Highlights */}
-                <CommunityHighlights contributors={communityHighlights} />
+                {/* Skill Profile */}
+                <SkillProfileWidget />
 
                 {/* Trending Tags */}
                 <TrendingTagsCard tags={trendingTags} />
