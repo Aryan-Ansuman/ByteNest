@@ -2,9 +2,8 @@
  * Skills Engine Public API
  *
  * Re-exports everything needed by Phase 3 (event-driven triggers),
- * Phase 4 (API layer), and Phase 5 (UI) from a single import path:
- *
- *   import { recalculateUserTagScore, runTemporalDecayJob, triggerSkillRecalculation } from "@/lib/skills";
+ * Phase 4 (API layer), Phase 5 (UI), and Phase 6 (registry builder)
+ * from a single import path.
  */
 
 // Phase 2 — Step 2.1: Pure scoring functions
@@ -68,3 +67,20 @@ export type {
     SkillTriggerPriority,
     TriggerSkillRecalculationOptions,
 } from "./trigger-skill-recalculation";
+
+// Phase 6 — Step 6.1: Tag expert registry builder
+export {
+    buildRegistryForTag,
+    buildFullRegistry,
+} from "./registry-builder";
+
+export type { RegistryBuildSummary } from "./registry-builder";
+
+// Phase 6 — Step 6.2: Scheduled rebuild job
+export {
+    registryRebuildJobHandler,
+    runRegistryRebuildJob,
+} from "./registry-rebuild-job";
+
+// Phase 6 — Step 6.3: Tier-change registry hook
+export { triggerRegistryRebuildOnTierChange } from "./registry-tier-change-hook";

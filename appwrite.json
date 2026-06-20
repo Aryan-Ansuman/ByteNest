@@ -23,6 +23,19 @@
         "commands": "npm install",
         "ignore": ["node_modules", ".npm"],
         "path": "functions/calculate-reputation"
+      },
+      {
+        "$id": "rebuild-tag-expert-registry",
+        "name": "Rebuild Tag Expert Registry",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 * * * *",
+        "timeout": 300,
+        "entrypoint": "src/main.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/rebuild-tag-expert-registry"
       }
     ]
 }

@@ -1,0 +1,10 @@
+{
+  "name": "rebuild-tag-expert-registry",
+  "version": "1.0.0",
+  "description": "Rebuilds the tag expert registry on an hourly schedule",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^13.0.0"
+  }
+}
