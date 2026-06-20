@@ -1,5 +1,5 @@
 // src/components/SkillProfileWidget.tsx
-// Phase 5 — Sidebar Widget UI
+// Phase 5 — Sidebar Widget UI (+ Phase 8 — Step 8.1 fallback, Step 8.2 skeleton)
 
 "use client";
 
@@ -122,12 +122,14 @@ function SkillBar({ skill }: { skill: SkillSummaryItem }) {
     );
 }
 
-// ─── Loading skeleton ─────────────────────────────────────────────────────────
+// ─── Loading skeleton (Step 8.2) ──────────────────────────────────────────────
+// Mirrors the QuestionCardSkeleton pattern: animate-pulse bars sized to match
+// the real widget's rows so layout doesn't jump once data arrives.
 
-function SkillProfileSkeleton() {
+function SkillProfileSkeleton({ rows = 4 }: { rows?: number }) {
     return (
         <div className="space-y-3" role="status" aria-label="Loading skill profile">
-            {[0, 1, 2].map((i) => (
+            {Array.from({ length: rows }, (_, i) => (
                 <div key={i} className="space-y-1.5">
                     <div className="flex items-center justify-between">
                         <div className="h-3 w-20 animate-pulse rounded bg-white/[0.07]" />
@@ -137,6 +139,26 @@ function SkillProfileSkeleton() {
                 </div>
             ))}
             <span className="sr-only">Loading skill profile…</span>
+        </div>
+    );
+}
+
+// ─── Error fallback (Step 8.1) ────────────────────────────────────────────────
+// Rendered by the ErrorBoundary wrapping this widget at its call site
+// (see HomeClient.tsx). Matches the widget's own card chrome so a render
+// failure never breaks the sidebar's visual rhythm.
+
+export function SkillProfileWidgetFallback() {
+    return (
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+            <div className="mb-4 flex items-center gap-2">
+                <Sparkles className="size-4 text-[#a7c8b3]" />
+                <h3 className="text-sm font-semibold text-zinc-100">Skill Profile</h3>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-500">
+                Your skill profile couldn&apos;t be displayed right now. The rest of
+                ByteNest is unaffected — try refreshing the page.
+            </p>
         </div>
     );
 }

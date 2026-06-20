@@ -33,7 +33,8 @@ import { markdownToPlainExcerpt } from "@/lib/sanitize";
 import UserAvatar from "@/components/UserAvatar";
 import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
 import NewQuestionsBanner from "@/components/NewQuestionsBanner";
-import SkillProfileWidget from "@/components/SkillProfileWidget";
+import SkillProfileWidget, { SkillProfileWidgetFallback } from "@/components/SkillProfileWidget";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -534,7 +535,9 @@ export default function HomeClient({
             {/* ── Right Sidebar ── */}
             <aside className="hidden w-72 shrink-0 xl:block">
                 {/* Skill Profile */}
-                <SkillProfileWidget />
+                <ErrorBoundary fallback={<SkillProfileWidgetFallback />}>
+                    <SkillProfileWidget />
+                </ErrorBoundary>
 
                 {/* Trending Tags */}
                 <TrendingTagsCard tags={trendingTags} />

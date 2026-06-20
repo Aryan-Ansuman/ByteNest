@@ -1,12 +1,16 @@
+// src/lib/skills/per-tag-calculator.ts
+// Phase 2 — Step 2.3 (+ Phase 8 — Step 8.3: centralized score-update logging)
 /**
- * Phase 2 — Step 2.3
  * Per-user-per-tag calculator.
  *
  * Fetches all relevant Appwrite documents for a given userId + tag,
  * calls the four scoring functions, calls the aggregator, and writes
  * (or updates) the result in user_skill_scores.
  *
- * This is the workhorse — every other recalculation path calls this.
+ * This is the workhorse — every other recalculation path calls this, so
+ * logging the score change here (rather than at each caller) guarantees
+ * every score update is observable regardless of what triggered it
+ * (vote/answer/question events, the decay job, backfill, or manual CLI runs).
  */
 
 import { ID, Query } from "node-appwrite";
@@ -312,6 +316,16 @@ export async function recalculateUserTagScore(
     );
 
     const tierChanged = crossedTierBoundary(previousScore, compositeScore);
+
+    // ── Phase 8 — Step 8.3: Observability ──────────────────────────────────────
+    // Every score update, regardless of caller (event trigger, decay job,
+    // backfill, or manual CLI run), logs the same shape so production issues
+    // ("my score isn't updating") can be traced from server logs alone.
+    console.log(
+        `[skills] score-update userId=${userId} tag=${tag} trigger=${triggerType} ` +
+        `oldScore=${previousScore.toFixed(1)} newScore=${compositeScore.toFixed(1)} ` +
+        `tier=${tier}${tierChanged ? " (tier changed)" : ""}`
+    );
 
     // ── 10. Persist ───────────────────────────────────────────────────────────
     const payload = {
