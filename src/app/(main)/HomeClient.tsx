@@ -33,8 +33,8 @@ import { markdownToPlainExcerpt } from "@/lib/sanitize";
 import UserAvatar from "@/components/UserAvatar";
 import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
 import NewQuestionsBanner from "@/components/NewQuestionsBanner";
-import SkillProfileWidget, { SkillProfileWidgetFallback } from "@/components/SkillProfileWidget";
-import ErrorBoundary from "@/components/ErrorBoundary";
+// ── Phase 6.1 — import the Answer Gap Detector widget ─────────────────────────
+import AnswerGapDetector from "@/components/AnswerGapDetector";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,7 +190,6 @@ export default function HomeClient({
         if (existingIdsRef.current.has(question.$id)) return;
         existingIdsRef.current.add(question.$id);
         setPendingNewQuestions((prev) => {
-            // Cap at 99 to keep badge readable
             if (prev.length >= 99) return prev;
             return [...prev, question];
         });
@@ -199,7 +198,6 @@ export default function HomeClient({
     const handleVoteUpdate = React.useCallback((questionId: string, totalVotes: number) => {
         setFeedVotes((previous) => {
             const current = previous[questionId];
-            // Don't overwrite if user has a pending optimistic update
             if (!current || current.pending) return previous;
             return { ...previous, [questionId]: { ...current, score: totalVotes } };
         });
@@ -366,7 +364,6 @@ export default function HomeClient({
         return q;
     }, [allQuestions, activeFilter]);
 
-    // Animation props respecting reduced motion
     const cardAnimProps = shouldReduceMotion
         ? {}
         : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -4 } };
@@ -534,13 +531,15 @@ export default function HomeClient({
 
             {/* ── Right Sidebar ── */}
             <aside className="hidden w-72 shrink-0 xl:block">
-                {/* Skill Profile */}
-                <ErrorBoundary fallback={<SkillProfileWidgetFallback />}>
-                    <SkillProfileWidget />
-                </ErrorBoundary>
+                {/* Community Highlights */}
+                <CommunityHighlights contributors={communityHighlights} />
 
-                {/* Trending Tags */}
-                <TrendingTagsCard tags={trendingTags} />
+                {/* ── Phase 6.2 — Answer Gap Detector replaces TrendingTagsCard ──
+                    Reads auth state internally via useAuthStore (Phase 6.3).
+                    No conditional rendering needed at this level — the widget
+                    handles unauthenticated, loading, empty, and populated states
+                    by itself, exactly as our other sidebar client components do. */}
+                <AnswerGapDetector />
 
                 {/* Developer News */}
                 <DeveloperNews news={developerNews} />
@@ -572,7 +571,6 @@ function HeroBanner({
         <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#0a1410] min-h-[240px]">
             {/* Background Image with Gradient Fade */}
             <div className="absolute inset-y-0 right-0 w-full md:w-2/3 lg:w-[60%]">
-                {/* Gradient mask to blend the image into the dark left side */}
                 <div 
                     className="absolute inset-0 z-10" 
                     style={{ background: "linear-gradient(90deg, #0a1410 0%, rgba(10,20,16,0.85) 30%, rgba(10,20,16,0.3) 60%, transparent 100%)" }}
@@ -591,7 +589,7 @@ function HeroBanner({
                 />
             </div>
 
-            {/* Content (Text + Form) */}
+            {/* Content */}
             <div className="relative z-20 flex flex-col justify-center p-6 md:p-8 max-w-xl lg:max-w-2xl min-h-[240px]">
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
                     {session && user ? (
@@ -903,55 +901,6 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
     );
 }
 
-// ─── Trending Tags ────────────────────────────────────────────────────────────
-
-function TrendingTagsCard({ tags }: { tags: { tag: string; questions: number }[] }) {
-    const fallbackTags = [
-        { tag: "nextjs", questions: 2100 },
-        { tag: "tailwindcss", questions: 1800 },
-        { tag: "spring-boot", questions: 1500 },
-        { tag: "docker", questions: 1200 },
-        { tag: "typescript", questions: 1000 },
-    ];
-
-    const displayTags = tags.length > 0 ? tags : fallbackTags;
-
-    return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-            <div className="mb-4 flex items-center gap-2">
-                <Flame className="size-4 text-orange-400" />
-                <h3 className="text-sm font-semibold text-zinc-100">Trending Tags</h3>
-            </div>
-
-            <div className="space-y-2.5">
-                {displayTags.map(({ tag, questions }) => (
-                    <Link
-                        key={tag}
-                        href={`/questions?tag=${tag}`}
-                        className="group flex items-center justify-between text-sm"
-                    >
-                        <div className="flex items-center gap-2">
-                            <Hash className="size-3.5 text-zinc-600 transition group-hover:text-[#a7c8b3]" />
-                            <span className="text-zinc-300 transition group-hover:text-[#a7c8b3] max-w-[120px] truncate">{tag}</span>
-                        </div>
-                        <span className="text-xs text-zinc-600 tabular-nums">
-                            {questions >= 1000 ? `${(questions / 1000).toFixed(1)}k` : questions} question{questions === 1 ? "" : "s"}
-                        </span>
-                    </Link>
-                ))}
-            </div>
-
-            <Link
-                href="/questions"
-                className="mt-4 flex items-center gap-1 text-xs font-medium text-[#a7c8b3] transition hover:text-[#b4d6bf]"
-            >
-                Explore all trending tags
-                <ChevronRight className="size-3.5" />
-            </Link>
-        </div>
-    );
-}
-
 // ─── Developer News ───────────────────────────────────────────────────────────
 
 function DeveloperNews({ news }: { news: { title: string; time: string; slug: string; $id: string; }[] }) {
@@ -971,7 +920,7 @@ function DeveloperNews({ news }: { news: { title: string; time: string; slug: st
             </div>
 
             <div className="space-y-3">
-                {displayNews.map((item, i) => (
+                {displayNews.map((item) => (
                     <Link key={item.$id} href={`/questions/${item.$id}/${item.slug}`} className="flex items-start justify-between gap-3 group">
                         <p className="text-xs leading-relaxed text-zinc-400 transition group-hover:text-zinc-200 line-clamp-2">
                             {item.title}

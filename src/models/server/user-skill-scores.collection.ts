@@ -73,6 +73,7 @@ export default async function createUserSkillScoresCollection() {
         databases.createIndex(db, userSkillScoresCollection, "userId_tag_unique", IndexType.Unique, ["userId", "tag"]),
         databases.createIndex(db, userSkillScoresCollection, "tag_score_sort", IndexType.Key, ["tag", "compositeScore"]),
         databases.createIndex(db, userSkillScoresCollection, "lastCalculatedAt_index", IndexType.Key, ["lastCalculatedAt"]),
+        databases.createIndex(db, userSkillScoresCollection, "userId_score_sort", IndexType.Key, ["userId", "compositeScore"], ["ASC", "DESC"]),
     ]);
     console.log("User Skill Scores indexes created");
 }
