@@ -34,7 +34,9 @@ import UserAvatar from "@/components/UserAvatar";
 import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
 import NewQuestionsBanner from "@/components/NewQuestionsBanner";
 // ── Phase 6.1 — import the Answer Gap Detector widget ─────────────────────────
-import AnswerGapDetector from "@/components/AnswerGapDetector";
+import AnswerGapDetector, { AnswerGapDetectorFallback } from "@/components/AnswerGapDetector";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import SkillProfileWidget, { SkillProfileWidgetFallback } from "@/components/SkillProfileWidget";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -531,15 +533,21 @@ export default function HomeClient({
 
             {/* ── Right Sidebar ── */}
             <aside className="hidden w-72 shrink-0 xl:block">
-                {/* Community Highlights */}
-                <CommunityHighlights contributors={communityHighlights} />
+                {/* Skill Profile */}
+                <ErrorBoundary fallback={<SkillProfileWidgetFallback />}>
+                    <SkillProfileWidget />
+                </ErrorBoundary>
 
                 {/* ── Phase 6.2 — Answer Gap Detector replaces TrendingTagsCard ──
                     Reads auth state internally via useAuthStore (Phase 6.3).
                     No conditional rendering needed at this level — the widget
                     handles unauthenticated, loading, empty, and populated states
-                    by itself, exactly as our other sidebar client components do. */}
-                <AnswerGapDetector />
+                    by itself, exactly as our other sidebar client components do.
+                    Phase 8 — Step 8.3: wrapped in ErrorBoundary so a render failure
+                    here never takes down the rest of the homepage. */}
+                <ErrorBoundary fallback={<AnswerGapDetectorFallback />}>
+                    <AnswerGapDetector />
+                </ErrorBoundary>
 
                 {/* Developer News */}
                 <DeveloperNews news={developerNews} />

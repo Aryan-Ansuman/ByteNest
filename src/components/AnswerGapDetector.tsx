@@ -110,6 +110,9 @@ function GapRow({ gap }: { gap: GapQuestion }) {
     };
 
     return (
+        // Step 8.2 — ?ref=gap-detector lets question-detail-page analytics
+        // attribute this visit to the Answer Gap Detector widget. No new
+        // tracking infrastructure required — just the query param.
         <Link
             href={`/questions/${gap.$id}/${slugify(gap.title)}?ref=gap-detector`}
             className={cn(
@@ -204,6 +207,26 @@ function UnauthenticatedState() {
                     <ChevronRight className="size-3" />
                 </Link>
             </div>
+        </div>
+    );
+}
+
+// ─── Phase 8 — Step 8.3: Error fallback ───────────────────────────────────────
+// Rendered by the ErrorBoundary wrapping this widget at its call site
+// (see HomeClient.tsx). Matches the widget's own card chrome so a render
+// failure never breaks the sidebar's visual rhythm.
+
+export function AnswerGapDetectorFallback() {
+    return (
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+            <div className="mb-3 flex items-center gap-2">
+                <Zap className="size-4 text-amber-400" />
+                <h3 className="text-sm font-semibold text-zinc-100">Answer Gap Detector</h3>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-500">
+                We couldn&apos;t load your personalized question gaps right now. The rest of
+                ByteNest is unaffected — try refreshing the page.
+            </p>
         </div>
     );
 }

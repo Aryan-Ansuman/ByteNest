@@ -12,6 +12,20 @@
  *
  * Caching: 10-minute per-user cache using the rateLimits collection.
  * Rate limit: 20 requests per user per minute.
+ *
+ * Phase 7 — Edge Cases and Hardening
+ *   Step 7.1 — no_skill_data response when the user has zero skill score docs
+ *   Step 7.2 — no_gaps response when skill data exists but no candidate
+ *              questions survive the tag query (covers low-volume tags too)
+ *   Step 7.3 — Query.notEqual("authorId", userId) excludes the user's own questions
+ *   Step 7.4 — No real-time invalidation between cache fill and display (by design)
+ *   Step 7.5 — Rate limited to GAP_RATE_LIMIT requests per GAP_RATE_WINDOW_MS
+ *
+ * Phase 8 — Observability
+ *   Step 8.1 — logCacheOutcome() logs every HIT/MISS and warns on low hit rate
+ *   Step 8.2 — click-through tracking lives in the frontend (AnswerGapDetector's
+ *              GapRow appends ?ref=gap-detector to each question link) — no
+ *              server-side change needed here
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,6 +36,7 @@ import { getAuthenticatedUserId, unauthorizedResponse } from "@/lib/auth";
 import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getAuthorsById, deletedAuthor } from "@/lib/authors";
 import { readGapCache, writeGapCache } from "@/lib/answer-gaps/cache";
+import { logCacheOutcome } from "@/lib/answer-gaps/observability";
 import {
     GAP_TOP_TAGS_LIMIT,
     GAP_PER_TAG_FETCH_LIMIT,
@@ -81,7 +96,7 @@ export async function GET(request: NextRequest) {
         return unauthorizedResponse("Authentication required");
     }
 
-    // ── 2. Rate limit ──────────────────────────────────────────────────────────
+    // ── 2. Rate limit — Step 7.5: 20 requests/user/minute ─────────────────────
     const rl = await rateLimit({
         key: `answer-gaps:${userId}`,
         limit: GAP_RATE_LIMIT,
@@ -98,15 +113,23 @@ export async function GET(request: NextRequest) {
 
     try {
         // ── 3. Cache check ─────────────────────────────────────────────────────────
+        // Step 7.4 — Deliberately no real-time invalidation here. A question
+        // may receive an answer in the gap between cache fill and display;
+        // the returned link still resolves correctly, it just may show a
+        // question that has since been answered. Acceptable for v1.
         const cache = await readGapCache(userId);
         if (cache.hit) {
             rlHeaders["X-Gap-Cache"] = "HIT";
+            // Step 8.1 — cache hit/miss logging
+            logCacheOutcome(userId, "HIT");
             return NextResponse.json(
                 { data: cache.payload.data, meta: cache.payload.meta },
                 { status: 200, headers: { ...rlHeaders, "Cache-Control": "no-store" } }
             );
         }
         rlHeaders["X-Gap-Cache"] = "MISS";
+        // Step 8.1 — cache hit/miss logging
+        logCacheOutcome(userId, "MISS");
 
         // ── 4. Fetch user's top skill tags ─────────────────────────────────────────
         const skillScores = await databases.listDocuments(
@@ -120,6 +143,9 @@ export async function GET(request: NextRequest) {
             ]
         );
 
+        // Step 7.1 — User has no user_skill_scores documents at all.
+        // Return a distinct reason so the frontend shows "build your skill
+        // profile first" instead of treating this the same as "no gaps right now".
         if (skillScores.documents.length === 0) {
             const emptyResult = { data: [], meta: { reason: "no_skill_data" as const, count: 0 } };
             await writeGapCache(userId, emptyResult).catch(() => undefined);
@@ -140,6 +166,8 @@ export async function GET(request: NextRequest) {
         const now = Date.now();
 
         // ── 6. Fetch unanswered questions per tag (parallel) ───────────────────────
+        // Step 7.3 — Query.notEqual("authorId", userId) excludes the user's own
+        // questions so they're never prompted to answer themselves.
         const tagQueryPromises = topTags.map(({ tag }) =>
             databases.listDocuments(db, questionCollection, [
                 Query.contains("tags", [tag]),
@@ -184,6 +212,9 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        // Step 7.2 — Skill scores exist, but no candidates survived the tag
+        // query. This naturally covers the "all tags are too new / too low
+        // volume" case — there's simply nothing in the time window to surface.
         if (candidates.length === 0) {
             const emptyResult = { data: [], meta: { reason: "no_gaps" as const, count: 0 } };
             await writeGapCache(userId, emptyResult).catch(() => undefined);
