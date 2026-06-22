@@ -7,6 +7,7 @@ import createVoteCollection from "./vote.collection";
 import createUserSkillScoresCollection from "./user-skill-scores.collection";
 import createSkillCalculationEventsCollection from "./skill-calculation-events.collection";
 import createTagExpertRegistryCollection from "./tag-expert-registry.collection";
+import createReputationEventsCollection from "./reputation-events.collection";
 import { databases } from "./config";
 
 export default async function getOrCreateDB(){
@@ -28,6 +29,8 @@ export default async function getOrCreateDB(){
         createUserSkillScoresCollection(),
         createSkillCalculationEventsCollection(),
         createTagExpertRegistryCollection(),
+        // Reputation Trajectory — Phase 1
+        createReputationEventsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

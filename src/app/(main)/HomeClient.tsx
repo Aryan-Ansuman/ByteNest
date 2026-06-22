@@ -14,7 +14,6 @@ import {
     ArrowDown,
     Trophy,
     Hash,
-    Newspaper,
     Flame,
     Send,
     Loader2,
@@ -33,10 +32,11 @@ import { markdownToPlainExcerpt } from "@/lib/sanitize";
 import UserAvatar from "@/components/UserAvatar";
 import { useRealtimeFeed, type NewQuestionEvent } from "@/hooks/useRealtimeFeed";
 import NewQuestionsBanner from "@/components/NewQuestionsBanner";
-// ── Phase 6.1 — import the Answer Gap Detector widget ─────────────────────────
-import AnswerGapDetector, { AnswerGapDetectorFallback } from "@/components/AnswerGapDetector";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import AnswerGapDetector from "@/components/AnswerGapDetector";
+// Step 8.1 — import ReputationTrajectory
+import ReputationTrajectory from "@/components/ReputationTrajectory";
 import SkillProfileWidget, { SkillProfileWidgetFallback } from "@/components/SkillProfileWidget";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,14 +55,13 @@ interface Question {
     };
 }
 
+// Step 8.2 — `developerNews` prop removed from Props interface
 interface Props {
     questions: Question[];
     totalQuestions: number;
     totalAnswers: number;
     initialFilter: string;
-    trendingTags: { tag: string; questions: number }[];
     communityHighlights: { name: string; $id: string; reputation: number }[];
-    developerNews: { title: string; time: string; $id: string; slug: string }[];
     userHasTagPreferences: boolean;
     nextCursor?: string;
     hasMore: boolean;
@@ -87,14 +86,13 @@ const feedTabs = [
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function HomeClient({ 
-    questions: initialQuestions, 
-    totalQuestions, 
-    totalAnswers, 
+// Step 8.2 — `developerNews` removed from destructured props
+export default function HomeClient({
+    questions: initialQuestions,
+    totalQuestions,
+    totalAnswers,
     initialFilter,
-    trendingTags,
     communityHighlights,
-    developerNews,
     userHasTagPreferences,
     nextCursor: initialNextCursor,
     hasMore: initialHasMore,
@@ -263,15 +261,10 @@ export default function HomeClient({
             pendingFeedVotes.current.add(question.$id);
 
             const nextStatus = current.status === status ? null : status;
-            const optimisticScore =
-                current.score + voteDelta(current.status, nextStatus);
+            const optimisticScore = current.score + voteDelta(current.status, nextStatus);
             setFeedVotes((previous) => ({
                 ...previous,
-                [question.$id]: {
-                    score: optimisticScore,
-                    status: nextStatus,
-                    pending: true,
-                },
+                [question.$id]: { score: optimisticScore, status: nextStatus, pending: true },
             }));
 
             try {
@@ -373,11 +366,9 @@ export default function HomeClient({
     return (
         <div className="flex gap-6">
             <CustomizeFeedModal open={customizeFeedOpen} onClose={() => setCustomizeFeedOpen(false)} />
-            
+
             {/* ── Main Column ── */}
             <div className="min-w-0 flex-1">
-
-                {/* Hero Banner */}
                 <HeroBanner
                     session={!!session}
                     user={user}
@@ -388,14 +379,16 @@ export default function HomeClient({
                     totalAnswers={totalAnswers}
                 />
 
-                {/* Stats Row */}
                 {session && user && (
-                    <StatsRow user={user} totalQuestions={totalQuestions} totalAnswers={totalAnswers} shouldReduceMotion={!!shouldReduceMotion} />
+                    <StatsRow
+                        user={user}
+                        totalQuestions={totalQuestions}
+                        totalAnswers={totalAnswers}
+                        shouldReduceMotion={!!shouldReduceMotion}
+                    />
                 )}
 
-                {/* Feed Section */}
                 <div className="mt-6">
-                    {/* Feed Header */}
                     <div className="mb-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <div className="flex size-5 items-center justify-center">
@@ -419,8 +412,7 @@ export default function HomeClient({
                         </button>
                     </div>
 
-                    {/* Feed Tabs */}
-                    <div 
+                    <div
                         className="mb-5 flex overflow-x-auto items-center border-b border-white/10 no-scrollbar"
                         role="tablist"
                         aria-label="Feed sections"
@@ -457,16 +449,17 @@ export default function HomeClient({
                         ))}
                     </div>
 
-                    {/* Realtime new questions banner */}
                     <NewQuestionsBanner
                         count={pendingNewQuestions.length}
                         onRefresh={handleRefreshFeed}
                     />
 
-                    {/* Question Cards */}
                     <AnimatePresence mode="wait">
                         {isFilterPending ? (
-                            <motion.div key="skeleton" {...(shouldReduceMotion ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } })}>
+                            <motion.div
+                                key="skeleton"
+                                {...(shouldReduceMotion ? {} : { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } })}
+                            >
                                 <QuestionListSkeleton count={5} />
                             </motion.div>
                         ) : displayedQuestions.length === 0 ? (
@@ -498,7 +491,6 @@ export default function HomeClient({
                         )}
                     </AnimatePresence>
 
-                    {/* View All */}
                     {!isFilterPending && displayedQuestions.length > 0 && (
                         <div className="mt-5 flex flex-col items-center gap-3">
                             {hasMore && (
@@ -531,26 +523,20 @@ export default function HomeClient({
                 </div>
             </div>
 
-            {/* ── Right Sidebar ── */}
+            {/* ── Right Sidebar ──
+                Step 8.5 — verified order from top to bottom:
+                1. CommunityHighlights  (Skill Profile Widget placeholder)
+                2. AnswerGapDetector
+                3. TrendingTagsCard
+                4. ReputationTrajectory   ← Step 8.4, replaces DeveloperNews
+            ── */}
             <aside className="hidden w-72 shrink-0 xl:block">
-                {/* Skill Profile */}
                 <ErrorBoundary fallback={<SkillProfileWidgetFallback />}>
                     <SkillProfileWidget />
                 </ErrorBoundary>
-
-                {/* ── Phase 6.2 — Answer Gap Detector replaces TrendingTagsCard ──
-                    Reads auth state internally via useAuthStore (Phase 6.3).
-                    No conditional rendering needed at this level — the widget
-                    handles unauthenticated, loading, empty, and populated states
-                    by itself, exactly as our other sidebar client components do.
-                    Phase 8 — Step 8.3: wrapped in ErrorBoundary so a render failure
-                    here never takes down the rest of the homepage. */}
-                <ErrorBoundary fallback={<AnswerGapDetectorFallback />}>
-                    <AnswerGapDetector />
-                </ErrorBoundary>
-
-                {/* Developer News */}
-                <DeveloperNews news={developerNews} />
+                <AnswerGapDetector />
+                {/* Step 8.4 — ReputationTrajectory at the bottom of the sidebar */}
+                <ReputationTrajectory />
             </aside>
         </div>
     );
@@ -577,27 +563,23 @@ function HeroBanner({
 }) {
     return (
         <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#0a1410] min-h-[240px]">
-            {/* Background Image with Gradient Fade */}
             <div className="absolute inset-y-0 right-0 w-full md:w-2/3 lg:w-[60%]">
-                <div 
-                    className="absolute inset-0 z-10" 
+                <div
+                    className="absolute inset-0 z-10"
                     style={{ background: "linear-gradient(90deg, #0a1410 0%, rgba(10,20,16,0.85) 30%, rgba(10,20,16,0.3) 60%, transparent 100%)" }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a1410] via-transparent to-transparent z-10 md:hidden" />
-                <Image 
-                    src="/images/hero-bg.png" 
-                    alt="Developer workspace" 
+                <Image
+                    src="/images/hero-bg.png"
+                    alt="Developer workspace"
                     fill
                     priority
                     sizes="(max-width: 768px) 100vw, (max-width: 1024px) 66vw, 60vw"
-                    className="object-cover object-right opacity-100 transition-opacity duration-500" 
-                    onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                    className="object-cover object-right opacity-100 transition-opacity duration-500"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
             </div>
 
-            {/* Content */}
             <div className="relative z-20 flex flex-col justify-center p-6 md:p-8 max-w-xl lg:max-w-2xl min-h-[240px]">
                 <h1 className="text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
                     {session && user ? (
@@ -609,7 +591,6 @@ function HeroBanner({
                 <p className="mt-2 text-sm text-zinc-300 max-w-sm sm:max-w-md">
                     Ask a question, share knowledge, and help developers around the world.
                 </p>
-
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
                     <Link
                         href="/questions/ask"
@@ -631,7 +612,12 @@ function HeroBanner({
 
 // ─── Stats Row ────────────────────────────────────────────────────────────────
 
-function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: { user: any; totalQuestions: number; totalAnswers: number; shouldReduceMotion: boolean }) {
+function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: {
+    user: any;
+    totalQuestions: number;
+    totalAnswers: number;
+    shouldReduceMotion: boolean;
+}) {
     const stats = [
         {
             value: user?.prefs?.reputation ?? 0,
@@ -640,8 +626,8 @@ function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: { 
             icon: (
                 <div className="flex size-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="8" r="4" stroke="#60a5fa" strokeWidth="1.5"/>
-                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+                        <circle cx="12" cy="8" r="4" stroke="#60a5fa" strokeWidth="1.5" />
+                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                 </div>
             ),
@@ -716,7 +702,6 @@ function QuestionCard({
     onBookmark: () => Promise<void>;
 }) {
     const [bookmarkPending, setBookmarkPending] = React.useState(false);
-
     const excerpt = markdownToPlainExcerpt(question.content);
 
     return (
@@ -726,7 +711,6 @@ function QuestionCard({
             className="group rounded-xl border border-white/10 bg-white/[0.025] transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
         >
             <div className="flex gap-4 p-5">
-                {/* Vote Controls */}
                 <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
                     <button
                         type="button"
@@ -768,7 +752,6 @@ function QuestionCard({
                     </button>
                 </div>
 
-                {/* Content */}
                 <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                         <Link href={`/questions/${question.$id}/${slugify(question.title)}`}>
@@ -808,7 +791,6 @@ function QuestionCard({
                         </p>
                     )}
 
-                    {/* Tags */}
                     <div className="mt-3 flex flex-wrap gap-1.5">
                         {question.tags.slice(0, 4).map((tag) => (
                             <Link
@@ -822,15 +804,9 @@ function QuestionCard({
                         ))}
                     </div>
 
-                    {/* Footer */}
                     <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        {/* Author */}
                         <div className="flex items-center gap-2 text-xs text-zinc-500">
-                            <UserAvatar
-                                name={question.author.name}
-                                size="xs"
-                                className="size-5"
-                            />
+                            <UserAvatar name={question.author.name} size="xs" className="size-5" />
                             <Link
                                 href={`/users/${question.author.$id}/${slugify(question.author.name)}`}
                                 className="font-medium text-zinc-400 transition hover:text-zinc-200"
@@ -840,8 +816,6 @@ function QuestionCard({
                             <span>·</span>
                             <span>asked {convertDateToRelativeTime(new Date(question.$createdAt))}</span>
                         </div>
-
-                        {/* Answers count */}
                         <div className="flex items-center gap-1 text-xs text-zinc-500">
                             <MessageCircle className="size-3.5" />
                             <span className={cn(question.totalAnswers > 0 ? "text-[#a7c8b3]" : "")}>
@@ -857,8 +831,7 @@ function QuestionCard({
 }
 
 function voteDelta(previous: VoteStatus | null, next: VoteStatus | null) {
-    const value = (status: VoteStatus | null) =>
-        status === "upvoted" ? 1 : status === "downvoted" ? -1 : 0;
+    const value = (s: VoteStatus | null) => (s === "upvoted" ? 1 : s === "downvoted" ? -1 : 0);
     return value(next) - value(previous);
 }
 
@@ -866,11 +839,11 @@ function voteDelta(previous: VoteStatus | null, next: VoteStatus | null) {
 
 function CommunityHighlights({ contributors }: { contributors: { name: string; $id: string; reputation: number }[] }) {
     const sorted = [...contributors].sort((a, b) => b.reputation - a.reputation);
-    
+
     const highlights = [
         { label: "Top Contributor", sublabel: sorted[0]?.name ?? "victor-dev", value: `${(sorted[0]?.reputation ?? 2400).toLocaleString()} rep`, color: "text-blue-400", dotColor: "bg-blue-400" },
-        { label: "Most Helpful", sublabel: sorted[1]?.name ?? "sarah.dev", value: `${(sorted[1]?.reputation ?? 1500).toLocaleString()} rep`, color: "text-[#a7c8b3]", dotColor: "bg-[#a7c8b3]" },
-        { label: "Rising Star", sublabel: sorted[2]?.name ?? "aryan231", value: `${(sorted[2]?.reputation ?? 300).toLocaleString()} rep`, color: "text-amber-400", dotColor: "bg-amber-400" },
+        { label: "Most Helpful",    sublabel: sorted[1]?.name ?? "sarah.dev",  value: `${(sorted[1]?.reputation ?? 1500).toLocaleString()} rep`, color: "text-[#a7c8b3]", dotColor: "bg-[#a7c8b3]" },
+        { label: "Rising Star",     sublabel: sorted[2]?.name ?? "aryan231",   value: `${(sorted[2]?.reputation ?? 300).toLocaleString()} rep`,  color: "text-amber-400", dotColor: "bg-amber-400" },
     ];
 
     if (contributors.length === 0) return null;
@@ -881,7 +854,6 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
                 <Trophy className="size-4 text-amber-400" />
                 <h3 className="text-sm font-semibold text-zinc-100">Community Highlights</h3>
             </div>
-
             <div className="space-y-3">
                 {highlights.map((h, i) => (
                     <div key={i} className="flex items-center gap-3">
@@ -897,11 +869,7 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
                     </div>
                 ))}
             </div>
-
-            <Link
-                href="/users"
-                className="mt-4 flex items-center gap-1 text-xs font-medium text-[#a7c8b3] transition hover:text-[#b4d6bf]"
-            >
+            <Link href="/users" className="mt-4 flex items-center gap-1 text-xs font-medium text-[#a7c8b3] transition hover:text-[#b4d6bf]">
                 View leaderboard
                 <ChevronRight className="size-3.5" />
             </Link>
@@ -909,45 +877,6 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
     );
 }
 
-// ─── Developer News ───────────────────────────────────────────────────────────
-
-function DeveloperNews({ news }: { news: { title: string; time: string; slug: string; $id: string; }[] }) {
-    const fallbackNews = [
-        { title: "Next.js 15 Release Candidate is out", time: "2d ago", slug: "nextjs-15", $id: "1" },
-        { title: "TypeScript 5.4: What's new?", time: "3d ago", slug: "ts-5-4", $id: "2" },
-        { title: "Rust 1.78 improves performance", time: "4d ago", slug: "rust-1-78", $id: "3" },
-    ];
-
-    const displayNews = news.length > 0 ? news : fallbackNews;
-
-    return (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-            <div className="mb-4 flex items-center gap-2">
-                <Newspaper className="size-4 text-zinc-400" />
-                <h3 className="text-sm font-semibold text-zinc-100">Developer News</h3>
-            </div>
-
-            <div className="space-y-3">
-                {displayNews.map((item) => (
-                    <Link key={item.$id} href={`/questions/${item.$id}/${item.slug}`} className="flex items-start justify-between gap-3 group">
-                        <p className="text-xs leading-relaxed text-zinc-400 transition group-hover:text-zinc-200 line-clamp-2">
-                            {item.title}
-                        </p>
-                        <span className="shrink-0 text-[10px] text-zinc-600 mt-0.5">{item.time}</span>
-                    </Link>
-                ))}
-            </div>
-
-            <Link
-                href="/questions?tag=news"
-                className="mt-4 flex items-center gap-1 text-xs font-medium text-[#a7c8b3] transition hover:text-[#b4d6bf]"
-            >
-                View all news
-                <ChevronRight className="size-3.5" />
-            </Link>
-        </div>
-    );
-}
 
 // ─── Empty State ──────────────────────────────────────────────────────────────
 

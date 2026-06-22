@@ -99,17 +99,6 @@ async function HomeFeed({
         };
     });
 
-    const tagFreq: Record<string, number> = {};
-    recentQuestions.documents.forEach((q) => {
-        (q.tags || []).forEach((t: string) => {
-            tagFreq[t] = (tagFreq[t] || 0) + 1;
-        });
-    });
-    const trendingTags = Object.entries(tagFreq)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([tag, count]) => ({ tag, questions: count }));
-
     const authorIds = Array.from(new Set(recentAnswers.documents.map((a) => a.authorId)));
     const recentAnswerAuthors = await getAuthorsById(authorIds.slice(0, 10));
     const communityHighlights = Array.from(recentAnswerAuthors.values())
@@ -118,21 +107,7 @@ async function HomeFeed({
         .slice(0, 3)
         .map((a) => ({ name: a.name, $id: a.$id, reputation: a.reputation }));
 
-    // Only show developer news from the last 7 days
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const developerNews = recentQuestions.documents
-        .filter((q) => {
-            const isNewsTag = (q.tags || []).includes("news") || (q.tags || []).includes("announcement");
-            const isRecent = new Date(q.$createdAt) > sevenDaysAgo;
-            return isNewsTag && isRecent;
-        })
-        .slice(0, 3)
-        .map((q) => ({
-            $id: q.$id,
-            title: q.title as string,
-            time: convertDateToRelativeTime(new Date(q.$createdAt)),
-            slug: slugify(q.title as string),
-        }));
+
 
     const nextCursor =
         questions.documents.length === limit
@@ -145,9 +120,7 @@ async function HomeFeed({
             totalQuestions={totalQuestions.total}
             totalAnswers={totalAnswers.total}
             initialFilter={filter}
-            trendingTags={trendingTags}
             communityHighlights={communityHighlights}
-            developerNews={developerNews}
             userHasTagPreferences={userTags.length > 0}
             nextCursor={nextCursor}
             hasMore={questions.documents.length === limit}
