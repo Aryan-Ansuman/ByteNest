@@ -36,6 +36,84 @@
         "commands": "npm install",
         "ignore": ["node_modules", ".npm"],
         "path": "functions/rebuild-tag-expert-registry"
+      },
+      {
+        "$id": "embedding-job",
+        "name": "Embedding Background Job",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "",
+        "timeout": 300,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/embedding-job"
+      },
+      {
+        "$id": "model-upgrade",
+        "name": "Embedding Model Upgrade",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "",
+        "timeout": 900,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/model-upgrade"
+      },
+      {
+        "$id": "stale-reembedding",
+        "name": "Stale Re-embedding Worker",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "*/10 * * * *",
+        "timeout": 300,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/stale-reembedding"
+      },
+      {
+        "$id": "embedding-monitor",
+        "name": "Embedding Monitor",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 8 * * *",
+        "timeout": 60,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/embedding-monitor"
+      },
+      {
+        "$id": "weekly-recalibration",
+        "name": "Weekly Recalibration",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 3 * * 1",
+        "timeout": 300,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/weekly-recalibration"
+      },
+      {
+        "$id": "weekly-evaluation",
+        "name": "Weekly Evaluation",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 4 * * 1",
+        "timeout": 300,
+        "entrypoint": "src/index.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/weekly-evaluation"
       }
     ]
 }

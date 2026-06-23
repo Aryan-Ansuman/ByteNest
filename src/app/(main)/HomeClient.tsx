@@ -530,7 +530,7 @@ export default function HomeClient({
                 3. TrendingTagsCard
                 4. ReputationTrajectory   ← Step 8.4, replaces DeveloperNews
             ── */}
-            <aside className="hidden w-72 shrink-0 xl:block">
+            <aside className="hidden w-72 shrink-0 lg:block">
                 <ErrorBoundary fallback={<SkillProfileWidgetFallback />}>
                     <SkillProfileWidget />
                 </ErrorBoundary>

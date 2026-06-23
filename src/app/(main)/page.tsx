@@ -140,7 +140,7 @@ function HomeFeedSkeleton() {
                 </div>
             </div>
             {/* Sidebar skeleton */}
-            <aside className="hidden w-72 shrink-0 space-y-4 xl:block">
+            <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
                 <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />
                 <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />
                 <div className="h-48 animate-pulse rounded-2xl bg-white/[0.025]" />

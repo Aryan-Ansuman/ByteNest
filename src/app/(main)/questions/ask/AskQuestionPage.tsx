@@ -23,6 +23,7 @@ import {
     FileText,
     Sparkles,
     Info,
+    Loader2,
 } from "lucide-react";
 import { ID, Permission, Role } from "appwrite";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,9 @@ import { databases, storage } from "@/models/client/config";
 import { db, questionAttachmentBucket, questionCollection } from "@/models/name";
 import slugify from "@/utils/slugify";
 import { apiFetch } from "@/lib/api-fetch";
+import { useDebouncedEmbedding } from "@/hooks/useDebouncedEmbedding";
+import { DuplicateSuggestion } from "@/components/DuplicateSuggestion";
+import { recordFeedbackClient } from "@/lib/similarity/api/client";
 import dynamic from "next/dynamic";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "@uiw/react-markdown-preview/markdown.css";
@@ -74,6 +78,7 @@ export default function AskQuestionPage() {
     const [tagInput, setTagInput] = React.useState("");
     const [attachment, setAttachment] = React.useState<File | null>(null);
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+    const sessionId = React.useRef(crypto.randomUUID());
 
     // ui state
     const [activeStep, setActiveStep] = React.useState<Step>("title");
@@ -83,6 +88,38 @@ export default function AskQuestionPage() {
     const [tagError, setTagError] = React.useState("");
     const [titleSuggestions] = React.useState<string[]>([]);
     const [filteredSuggestions, setFilteredSuggestions] = React.useState<string[]>([]);
+
+    // Duplicate suggestion hook
+    const { suggestions, isSearching, setSuggestions } = useDebouncedEmbedding({
+        title,
+        body: content,
+        tags,
+        onCandidatesReady: (results) => {
+            if (results.length > 0) {
+                recordFeedbackClient({
+                    sessionId: sessionId.current,
+                    action: 'suggestions_shown',
+                    count: results.length,
+                });
+            }
+        },
+    });
+
+    const handleAction = ({ type, candidateId, rank, scores, explanationTokens }: any) => {
+        recordFeedbackClient({
+            sessionId: sessionId.current,
+            action: type,
+            suggestedCandidateId: candidateId,
+            rank,
+            sourceQuestionTitle: title,
+            scores,
+            explanationTokens,
+        });
+
+        if (type === 'explicitly_rejected') {
+            setSuggestions((prev) => prev.filter(s => s.candidateId !== candidateId));
+        }
+    };
 
     // Redirect if not logged in
     React.useEffect(() => {
@@ -194,6 +231,14 @@ export default function AskQuestionPage() {
         if (titleErr || bodyErr || tagsErr) {
             setError(titleErr || bodyErr || tagsErr);
             return;
+        }
+
+        if (suggestions.length > 0) {
+            recordFeedbackClient({
+                sessionId: sessionId.current,
+                action: 'ignored_posted_anyway',
+                sourceQuestionTitle: title,
+            });
         }
 
         setIsSubmitting(true);
@@ -622,6 +667,34 @@ export default function AskQuestionPage() {
                                 )}
                             </AnimatePresence>
 
+                            {/* Duplicate suggestion panel */}
+                            {(isSearching || suggestions.length > 0) && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6 shadow-xl"
+                                >
+                                    <h3 className="mb-4 text-lg font-medium text-emerald-400 flex items-center gap-2">
+                                        {isSearching ? (
+                                            <>
+                                                <Loader2 className="size-5 animate-spin" /> Checking for similar questions…
+                                            </>
+                                        ) : 'Your question may already be answered'}
+                                    </h3>
+
+                                    <div className="space-y-4">
+                                        {suggestions.map((s, i) => (
+                                            <DuplicateSuggestion
+                                                key={s.candidateId}
+                                                suggestion={s}
+                                                rank={i + 1}
+                                                onAction={handleAction}
+                                            />
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+
                             {/* ── Action Row ── */}
                             <div className="flex items-center justify-between pt-2">
                                 <button
@@ -651,10 +724,10 @@ export default function AskQuestionPage() {
                                         className="h-10 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-6 text-sm font-semibold text-[#08100b] shadow-none transition hover:bg-[#b4d6bf] disabled:opacity-60"
                                     >
                                         {isSubmitting ? (
-                                            <>
-                                                <span className="animate-spin">⟳</span>
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="size-4 animate-spin" />
                                                 Posting…
-                                            </>
+                                            </div>
                                         ) : (
                                             "Post Question"
                                         )}

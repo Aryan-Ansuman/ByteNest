@@ -1,4 +1,4 @@
-import { db } from "../name";
+import { db, systemConfigCollection, scoringWeightsCollection } from "../name";
 import createAnswerCollection from "./answer.collection";
 import createCommentCollection from "./comment.collection";
 import createQuestionCollection from "./question.collection";
@@ -8,12 +8,36 @@ import createUserSkillScoresCollection from "./user-skill-scores.collection";
 import createSkillCalculationEventsCollection from "./skill-calculation-events.collection";
 import createTagExpertRegistryCollection from "./tag-expert-registry.collection";
 import createReputationEventsCollection from "./reputation-events.collection";
+import createGraphNodesCollection from "./graph-nodes.collection";
+import createGraphEdgesCollection from "./graph-edges.collection";
+import createTagCooccurrenceCollection from "./tag-cooccurrence.collection";
+import createQuestionEmbeddingsCollection from "./question-embeddings.collection";
+import createEventQueueCollection from "./event-queue.collection";
+import createSimilarityCandidatesCollection from "./similarity-candidates.collection";
+import createDuplicateFeedbackCollection from "./duplicate-feedback.collection";
+import createEvaluationSnapshotsCollection from "./evaluation-snapshots.collection";
+import createTechnologyTermsCollection from "./technology-terms.collection";
 import { databases } from "./config";
 
 export default async function getOrCreateDB(){
   try {
     await databases.get(db)
     console.log("Database connection")
+    // 7. Scoring Weights
+    try {
+      await databases.getCollection(db, scoringWeightsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${scoringWeightsCollection}`);
+      await databases.createCollection(db, scoringWeightsCollection, scoringWeightsCollection);
+    }
+
+    // 8. System Config
+    try {
+      await databases.getCollection(db, systemConfigCollection);
+    } catch (error) {
+      console.log(`Creating collection ${systemConfigCollection}`);
+      await databases.createCollection(db, systemConfigCollection, systemConfigCollection);
+    }
   } catch (error) {
     try {
       await databases.create(db, db)
@@ -31,6 +55,16 @@ export default async function getOrCreateDB(){
         createTagExpertRegistryCollection(),
         // Reputation Trajectory — Phase 1
         createReputationEventsCollection(),
+        // Contextual Question Similarity Engine
+        createGraphNodesCollection(),
+        createGraphEdgesCollection(),
+        createTagCooccurrenceCollection(),
+        createQuestionEmbeddingsCollection(),
+        createEventQueueCollection(),
+        createSimilarityCandidatesCollection(),
+        createDuplicateFeedbackCollection(),
+        createEvaluationSnapshotsCollection(),
+        createTechnologyTermsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

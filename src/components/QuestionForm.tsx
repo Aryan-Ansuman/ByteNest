@@ -14,6 +14,9 @@ import React from "react";
 import { databases, storage } from "@/models/client/config";
 import { db, questionAttachmentBucket, questionCollection } from "@/models/name";
 import { Confetti } from "@/components/magicui/confetti";
+import { useDebouncedEmbedding } from "@/hooks/useDebouncedEmbedding";
+import { DuplicateSuggestion } from "@/components/DuplicateSuggestion";
+import { recordFeedbackClient } from "@/lib/similarity/api/client";
 
 const LabelInputContainer = ({
     children,
@@ -44,6 +47,7 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
     const { user } = useAuthStore();
     const [tag, setTag] = React.useState("");
     const router = useRouter();
+    const sessionId = React.useRef(crypto.randomUUID());
 
     const [formData, setFormData] = React.useState({
         title: String(question?.title || ""),
@@ -55,6 +59,33 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
 
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState("");
+
+    const { suggestions, isSearching } = useDebouncedEmbedding({
+        title: formData.title,
+        body: formData.content,
+        tags: Array.from(formData.tags),
+        onCandidatesReady: (results) => {
+            if (results.length > 0) {
+                recordFeedbackClient({
+                    sessionId: sessionId.current,
+                    action: 'suggestions_shown',
+                    count: results.length,
+                });
+            }
+        },
+    });
+
+    const handleAction = ({ type, candidateId, rank, scores, explanationTokens }: any) => {
+        recordFeedbackClient({
+            sessionId: sessionId.current,
+            action: type,
+            suggestedCandidateId: candidateId,
+            rank,
+            sourceQuestionTitle: formData.title,
+            scores,
+            explanationTokens,
+        });
+    };
 
     const loadConfetti = (timeInMS = 3000) => {
         const end = Date.now() + timeInMS; // 3 seconds
@@ -143,6 +174,14 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
         if (!formData.title || !formData.content || !formData.authorId) {
             setError(() => "Please fill out all fields");
             return;
+        }
+
+        if (suggestions.length > 0) {
+            recordFeedbackClient({
+                sessionId: sessionId.current,
+                action: 'ignored_posted_anyway',
+                sourceQuestionTitle: formData.title,
+            });
         }
 
         setLoading(() => true);
@@ -288,6 +327,27 @@ const QuestionForm = ({ question }: { question?: Models.Document }) => {
                     ))}
                 </div>
             </LabelInputContainer>
+
+            {/* Duplicate suggestion panel */}
+            {(isSearching || suggestions.length > 0) && (
+                <LabelInputContainer className="border-emerald-500/50 bg-emerald-950/20">
+                    <h3 className="mb-4 text-lg font-medium text-emerald-400">
+                        {isSearching ? 'Checking for similar questions…' : 'Your question may already be answered'}
+                    </h3>
+
+                    <div className="space-y-4">
+                        {suggestions.map((s, i) => (
+                            <DuplicateSuggestion
+                                key={s.candidateId}
+                                suggestion={s}
+                                rank={i + 1}
+                                onAction={handleAction}
+                            />
+                        ))}
+                    </div>
+                </LabelInputContainer>
+            )}
+
             <button
                 className="inline-flex h-12 animate-shimmer items-center justify-center rounded-md border border-slate-800 bg-[linear-gradient(110deg,#000103,45%,#1e2631,55%,#000103)] bg-[length:200%_100%] px-6 font-medium text-slate-400 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50"
                 type="submit"

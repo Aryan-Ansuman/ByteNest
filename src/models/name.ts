@@ -10,6 +10,23 @@ export const rateLimitCollection = "rateLimits"
 export const reputationEventsCollection = "reputation_events"
 export const questionAttachmentBucket = "6a2c69730007121e8fdb"
 
+// Phase 1 — Knowledge Graph
+export const graphNodesCollection = "graph_nodes"
+export const graphEdgesCollection = "graph_edges"
+export const tagCooccurrenceCollection = "tag_cooccurrence"
+
+// Phase 2 — Similarity Engine
+export const questionEmbeddingsCollection = "question_embeddings"
+export const eventQueueCollection = "event_queue"
+export const technologyTermsCollection = "technology_terms"
+export const similarityCandidatesCollection = "similarity_candidates"
+export const duplicateFeedbackCollection = "duplicate_feedback";
+export const scoringWeightsCollection = "scoring_weights";
+export const similarityCacheCollection = "similarity_cache";
+export const annIndexMetaCollection = "ann_index_meta";
+export const systemConfigCollection = "system_config";
+export const evaluationSnapshotsCollection = "evaluation_snapshots"
+
 // ─── Reputation event types ────────────────────────────────────────────────
 // Defined here so they can be imported by both the Next.js API layer
 // (writeReputationEvent utility) and any future server utilities without
