@@ -81,6 +81,7 @@ const config: Config = {
                 shimmer: "shimmer 2s linear infinite",
                 "border-beam": "border-beam calc(var(--duration)*1s) infinite linear",
                 backgroundPositionSpin: "background-position-spin 3000ms infinite alternate",
+                "slide-in-right": "slide-in-right 0.3s ease-out",
             },
             keyframes: {
                 "background-position-spin": {
@@ -141,6 +142,10 @@ const config: Config = {
                     to: {
                         "background-position": "0% 0%",
                     },
+                },
+                "slide-in-right": {
+                    "0%": { transform: "translateX(100%)", opacity: "0" },
+                    "100%": { transform: "translateX(0)", opacity: "1" },
                 },
             },
         },

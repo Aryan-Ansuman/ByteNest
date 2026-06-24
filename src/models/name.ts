@@ -59,3 +59,11 @@ export const REPUTATION_SOURCE_TYPES = [
 ] as const;
 
 export type ReputationSourceType = (typeof REPUTATION_SOURCE_TYPES)[number];
+
+// Phase 3 — Discussion Rooms
+export const discussionRoomsCollection = "discussion_rooms";
+export const roomMessagesCollection = "room_messages";
+export const roomMembersCollection = "room_members";
+export const codeSessionsCollection = "code_sessions";
+export const collabMessagesCollection = "collab_messages";
+export const typingIndicatorsCollection = "typing_indicators";

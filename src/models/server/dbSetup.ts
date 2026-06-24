@@ -17,6 +17,12 @@ import createSimilarityCandidatesCollection from "./similarity-candidates.collec
 import createDuplicateFeedbackCollection from "./duplicate-feedback.collection";
 import createEvaluationSnapshotsCollection from "./evaluation-snapshots.collection";
 import createTechnologyTermsCollection from "./technology-terms.collection";
+import createDiscussionRoomsCollection from "./discussion-rooms.collection";
+import createRoomMessagesCollection from "./room-messages.collection";
+import createRoomMembersCollection from "./room-members.collection";
+import createCodeSessionsCollection from "./code-sessions.collection";
+import createCollabMessagesCollection from "./collab-messages.collection";
+import createTypingIndicatorsCollection from "./typing-indicators.collection";
 import { databases } from "./config";
 
 export default async function getOrCreateDB(){
@@ -65,6 +71,13 @@ export default async function getOrCreateDB(){
         createDuplicateFeedbackCollection(),
         createEvaluationSnapshotsCollection(),
         createTechnologyTermsCollection(),
+        // Phase 3 — Discussion Rooms
+        createDiscussionRoomsCollection(),
+        createRoomMessagesCollection(),
+        createRoomMembersCollection(),
+        createCodeSessionsCollection(),
+        createCollabMessagesCollection(),
+        createTypingIndicatorsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

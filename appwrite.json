@@ -114,6 +114,19 @@
         "commands": "npm install",
         "ignore": ["node_modules", ".npm"],
         "path": "functions/weekly-evaluation"
+      },
+      {
+        "$id": "room-cleanup",
+        "name": "Room Cleanup",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 * * * *",
+        "timeout": 30,
+        "entrypoint": "src/main.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/room-cleanup"
       }
     ]
 }

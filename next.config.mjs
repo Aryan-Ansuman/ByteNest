@@ -9,6 +9,7 @@ const nextConfig = {
             },
         ],
     },
+    transpilePackages: ["yjs", "y-protocols", "lib0", "y-monaco"],
 };
 
 export default nextConfig;
