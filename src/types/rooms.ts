@@ -50,6 +50,7 @@ export interface RoomMember {
   status: MemberStatus;
   joinedAt: string;
   lastSeenAt: string;
+  isAI?: boolean;
 }
 
 export interface CodeSession {

@@ -110,7 +110,7 @@ export function MemberContextMenu({
                     setOpen((v) => !v);
                     setConfirmKick(false);
                 }}
-                className="flex items-center justify-center rounded-lg p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+                className="flex items-center justify-center rounded-lg p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface text-tx-muted hover:text-tx-secondary"
                 aria-label={`Options for ${member.displayName}`}
             >
                 <MoreVertical size={14} />
@@ -124,7 +124,7 @@ export function MemberContextMenu({
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: -4 }}
                         transition={{ duration: 0.12, ease: "easeOut" }}
-                        className="absolute right-0 top-8 z-50 w-44 overflow-hidden rounded-xl border border-zinc-800 bg-[#0e0e0e] py-1 shadow-2xl"
+                        className="absolute right-0 top-8 z-50 w-44 overflow-hidden rounded-xl border border-white/5 bg-[#0e0e0e] py-1 shadow-2xl"
                     >
                         {/* ── Mute / Unmute ────────────────────────────────────── */}
                         <MenuItem
@@ -139,7 +139,7 @@ export function MemberContextMenu({
                                 ) : member.status === "muted" ? (
                                     <Volume2
                                         size={13}
-                                        className="text-emerald-400"
+                                        className="text-status-success"
                                     />
                                 ) : (
                                     <VolumeX size={13} />
@@ -170,7 +170,7 @@ export function MemberContextMenu({
                             label="Transfer host"
                         />
 
-                        <div className="my-1 border-t border-zinc-800" />
+                        <div className="my-1 border-t border-b" />
 
                         {/* ── Kick ─────────────────────────────────────────────── */}
                         <MenuItem
@@ -226,9 +226,9 @@ function MenuItem({
                 "flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors disabled:opacity-40",
                 danger
                     ? confirm
-                        ? "text-rose-400 bg-rose-500/10"
-                        : "text-zinc-400 hover:bg-zinc-800/50 hover:text-rose-400"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
+                        ? "text-status-danger bg-status-danger/10"
+                        : "text-tx-secondary hover:bg-surface-hover hover:text-status-danger"
+                    : "text-tx-secondary hover:bg-surface-hover hover:text-tx",
             ].join(" ")}
         >
             {icon}

@@ -40,6 +40,7 @@ interface ChatSlice {
     replaceTempMessage: (tempId: string, real: RoomMessage) => void;
     setLoadingMore: (v: boolean) => void;
     setTypingUsers: (names: string[]) => void;
+    setTypingStatus: (roomId: string, isTyping: boolean) => void;
 }
 
 // ─── Presence slice ───────────────────────────────────────────
@@ -121,6 +122,9 @@ export const useRoomStore = create<RoomStore>()(
             })),
         setLoadingMore: (isLoadingMore) => set({ isLoadingMore }),
         setTypingUsers: (typingUserNames) => set({ typingUserNames }),
+        setTypingStatus: (roomId, isTyping) => {
+            // TODO: Implement actual real-time typing status broadcast here
+        },
 
         // ── Presence slice ────────────────────────────────────
         setMembers: (members) => set({ members }),

@@ -119,7 +119,7 @@ function AnswerMoreMenu({
             </button>
 
             {open && (
-                <div className="absolute right-0 top-8 z-50 min-w-[160px] overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0c]/98 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+                <div className="absolute right-0 top-8 z-50 min-w-[160px] overflow-hidden rounded-xl border border-white/5 bg-[#0c0c0c]/98 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl">
                     {items.map((item) => (
                         <button
                             key={item.label}

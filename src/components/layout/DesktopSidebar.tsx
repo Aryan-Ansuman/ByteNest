@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bookmark, HomeIcon, Tags, UserRound, Hash, Plus, Check } from "lucide-react";
+import { Bookmark, HomeIcon, Tags, UserRound, Hash, Plus, Check, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
 import { useAuthStore } from "@/store/Auth";
@@ -13,6 +13,7 @@ const sidebarItems = [
     { label: "Home", icon: HomeIcon, href: "/" },
     { label: "Questions", icon: Tags, href: "/questions" },
     { label: "Profile", icon: UserRound, href: "/users" },
+    { label: "Live Rooms", icon: Radio, href: "/rooms" },
     { label: "Bookmarks", icon: Bookmark, href: "/bookmarks" },
 ];
 
@@ -39,7 +40,7 @@ export default function DesktopSidebar() {
     };
 
     return (
-        <aside className="fixed left-0 top-16 hidden h-[calc(100vh-4rem)] w-60 border-r border-white/10 bg-[#080808] px-4 py-6 lg:block">
+        <aside className="fixed left-0 top-16 hidden h-[calc(100vh-4rem)] w-60 border-r border-white/5 bg-[#080808] px-4 py-6 lg:block">
             <nav className="space-y-1">
                 {sidebarItems.map((item) => {
                     const Icon = item.icon;

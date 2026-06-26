@@ -345,7 +345,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                         onChange={(e) => setTitle(e.target.value)}
                                         placeholder="e.g. How do I debounce a search input in React with hooks?"
                                         maxLength={100}
-                                        className="h-12 rounded-xl border-white/10 bg-white/[0.04] text-base text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                        className="h-12 rounded-xl border-white/5 bg-white/[0.04] text-base text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                     />
                                     <div className="mt-2.5 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
@@ -382,7 +382,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                             >
                                 {/* Tab switcher */}
                                 <div className="mt-4">
-                                    <div className="mb-3 inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                                    <div className="mb-3 inline-flex rounded-xl border border-white/5 bg-white/[0.03] p-1">
                                         {(["edit", "preview"] as ActiveTab[]).map((tab) => (
                                             <button
                                                 key={tab}
@@ -430,7 +430,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                     ) : (
                                         <div
                                             data-color-mode="dark"
-                                            className="min-h-[200px] rounded-xl border border-white/10 bg-white/[0.02] p-4"
+                                            className="min-h-[200px] rounded-xl border border-white/5 bg-white/[0.02] p-4"
                                         >
                                             {content ? (
                                                 <MarkdownPreview
@@ -472,7 +472,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                             >
                                 <div className="mt-4">
                                     <div className="relative">
-                                        <div className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 focus-within:border-[#a7c8b3]/60 focus-within:ring-2 focus-within:ring-[#a7c8b3]/15">
+                                        <div className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-3 py-2.5 focus-within:border-[#a7c8b3]/60 focus-within:ring-2 focus-within:ring-[#a7c8b3]/15">
                                             {tags.map((tag) => (
                                                 <span
                                                     key={tag}
@@ -505,7 +505,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                                     initial={{ opacity: 0, y: 4 }}
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: 4 }}
-                                                    className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-2xl"
+                                                    className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-white/5 bg-[#111] shadow-2xl"
                                                 >
                                                     {filteredSuggestions.map((s) => (
                                                         <button
@@ -534,7 +534,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                                     <button
                                                         key={tag}
                                                         onClick={() => addTag(tag)}
-                                                        className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:bg-[#a7c8b3]/10 hover:text-[#a7c8b3]"
+                                                        className="rounded-full border border-white/5 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:bg-[#a7c8b3]/10 hover:text-[#a7c8b3]"
                                                     >
                                                         {tag}
                                                     </button>
@@ -578,7 +578,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                             >
                                                 <X className="size-3.5" />
                                             </button>
-                                            <div className="border-t border-white/10 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-500">
+                                            <div className="border-t border-white/5 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-500">
                                                 {newAttachment?.name} · {((newAttachment?.size || 0) / 1024).toFixed(0)} KB
                                             </div>
                                         </div>
@@ -591,7 +591,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                                 "relative overflow-hidden rounded-xl border transition",
                                                 removeExistingImage
                                                     ? "border-red-500/30 opacity-40 grayscale"
-                                                    : "border-white/10"
+                                                    : "border-white/5"
                                             )}
                                         >
                                             <div className="absolute left-2 top-2 z-10 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-medium text-zinc-400 backdrop-blur-sm">
@@ -602,7 +602,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                                 alt="Current attachment"
                                                 className="max-h-56 w-full bg-black/40 object-contain"
                                             />
-                                            <div className="flex items-center gap-2 border-t border-white/10 bg-black/30 px-3 py-2">
+                                            <div className="flex items-center gap-2 border-t border-white/5 bg-black/30 px-3 py-2">
                                                 {removeExistingImage ? (
                                                     <button
                                                         onClick={handleRestoreExistingImage}
@@ -627,7 +627,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                     {/* Upload button */}
                                     {!newImagePreview && (
                                         <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-3 transition hover:border-[#a7c8b3]/30 hover:bg-white/[0.04]">
-                                            <div className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                                            <div className="flex size-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04]">
                                                 <ImageIcon className="size-4 text-zinc-500" />
                                             </div>
                                             <div>
@@ -650,7 +650,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                             </SectionCard>
 
                             {/* ── Diff / checklist ── */}
-                            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5">
+                            <div className="rounded-xl border border-white/5 bg-white/[0.025] p-5">
                                 <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
                                     Validation checklist
                                 </p>
@@ -679,7 +679,7 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                             <div className="flex items-center justify-between gap-4 pt-2">
                                 <Link
                                     href={`/questions/${question.$id}/${slugify(question.title)}`}
-                                    className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                                    className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                                 >
                                     <ArrowLeft className="size-4" />
                                     Discard changes
@@ -717,9 +717,9 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
 
 function SectionCard({ icon, title, description, badge, badgeColor, children }: { icon: React.ReactNode, title: string, description: string, badge?: string, badgeColor?: "red" | "amber", children: React.ReactNode }) {
     return (
-        <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-5 md:p-6">
+        <section className="rounded-2xl border border-white/5 bg-white/[0.025] p-5 md:p-6">
             <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-zinc-400">
                     {icon}
                 </div>
                 <div>

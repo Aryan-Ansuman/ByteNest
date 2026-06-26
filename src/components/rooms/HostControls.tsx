@@ -40,14 +40,14 @@ export default function HostControls({ roomId }: { roomId: string }) {
     );
 
     return (
-        <div className="shrink-0 space-y-4 border-t border-zinc-800 pt-4 mt-2">
+        <div className="shrink-0 space-y-4 border-t border-b pt-4 mt-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500/80">
                 Host Controls
             </p>
 
             {/* Slow mode */}
             <div className="space-y-2">
-                <p className="text-[11px] font-medium text-zinc-500">Slow mode</p>
+                <p className="text-[11px] font-medium text-tx-muted">Slow mode</p>
                 <div className="flex gap-1">
                     {SLOW_OPTIONS.map((opt) => (
                         <button
@@ -59,8 +59,8 @@ export default function HostControls({ roomId }: { roomId: string }) {
                             className={[
                                 "text-[11px] px-2.5 py-1 rounded border transition-colors flex-1 font-medium",
                                 room.slowMode === opt.value
-                                    ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                                    : "bg-zinc-800/30 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                                    ? "bg-brand/10 border border-[#a7c8b3]/20 text-brand/20 border-indigo-500/40 text-brand"
+                                    : "bg-white/[0.06]/30 border-zinc-700 text-tx-secondary hover:bg-surface-hover hover:text-tx",
                             ].join(" ")}
                         >
                             {opt.label}
@@ -72,7 +72,7 @@ export default function HostControls({ roomId }: { roomId: string }) {
             {/* Per-member actions */}
             {nonHostMembers.length > 0 && (
                 <div className="space-y-2">
-                    <p className="text-[11px] font-medium text-zinc-500">Members</p>
+                    <p className="text-[11px] font-medium text-tx-muted">Members</p>
                     <ul className="space-y-1">
                         {nonHostMembers.map((m) => (
                             <MemberActions
@@ -104,14 +104,14 @@ function MemberActions({
 
     return (
         <li className="flex items-center gap-1.5 text-xs">
-            <span className="flex-1 truncate text-zinc-400 text-[11px]">{member.displayName}</span>
+            <span className="flex-1 truncate text-tx-secondary text-[11px]">{member.displayName}</span>
             <button
                 disabled={busy}
                 onClick={() => onAction(isMuted ? "unmute" : "mute")}
                 className={[
                     "px-2 py-0.5 rounded border text-[10px] transition-colors font-medium",
                     isMuted
-                        ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                        ? "border-[#22c55e]/30 text-status-success hover:bg-status-success/10"
                         : "border-amber-500/30 text-amber-400 hover:bg-amber-500/10",
                 ].join(" ")}
             >
@@ -120,14 +120,14 @@ function MemberActions({
             <button
                 disabled={busy}
                 onClick={() => onAction("kick")}
-                className="px-2 py-0.5 rounded border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-[10px] transition-colors font-medium"
+                className="px-2 py-0.5 rounded border border-[#ef4444]/30 text-status-danger hover:bg-status-danger/10 text-[10px] transition-colors font-medium"
             >
                 Kick
             </button>
             <button
                 disabled={busy}
                 onClick={() => onAction("transfer")}
-                className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:bg-zinc-800 text-[10px] transition-colors font-medium"
+                className="px-2 py-0.5 rounded border border-zinc-700 text-tx-secondary hover:bg-surface-hover text-[10px] transition-colors font-medium"
             >
                 Make host
             </button>

@@ -135,7 +135,7 @@ export default function VotesClient({
                     </div>
 
                     {/* Status filter tabs — server-driven */}
-                    <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                    <div className="inline-flex rounded-xl border border-white/5 bg-white/[0.03] p-1">
                         {(
                             [
                                 { id: "all", label: "All", icon: <Vote className="size-3.5" /> },
@@ -190,7 +190,7 @@ export default function VotesClient({
                     icon={<ThumbsDown className="size-4" />}
                     color="text-red-400"
                 />
-                <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex flex-col gap-2 rounded-xl border border-white/5 bg-white/[0.03] p-3">
                     <div className={cn("flex items-center gap-1.5 text-xs text-zinc-500", netVotes >= 0 ? "text-[#a7c8b3]" : "text-red-400")}>
                         {netVotes >= 0 ? <ArrowUp className="size-4 text-orange-500" /> : <ArrowDown className="size-4 text-red-400" />}
                         Net Sentiment
@@ -207,7 +207,7 @@ export default function VotesClient({
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Filter by question title or tag…"
-                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                        className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                     />
                     {search && (
                         <button
@@ -219,7 +219,7 @@ export default function VotesClient({
                     )}
                 </div>
 
-                <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                <div className="flex gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
                     {(["all", "question", "answer"] as const).map((t) => (
                         <button
                             key={t}
@@ -239,7 +239,7 @@ export default function VotesClient({
 
             {/* ── Active filters summary ── */}
             {(search || typeFilter !== "all") && (
-                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-2.5">
                     <Filter className="size-3.5 shrink-0 text-zinc-500" />
                     <span className="text-sm text-zinc-400">
                         Showing{" "}
@@ -291,7 +291,7 @@ function VoteCard({ vote, index }: { vote: VoteItem; index: number }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: index * 0.035 }}
-            className="group rounded-xl border border-white/10 bg-white/[0.025] p-5 transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
+            className="group rounded-xl border border-white/5 bg-white/[0.025] p-5 transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
         >
             <div className="flex items-start gap-4">
                 {/* Vote direction badge */}
@@ -343,7 +343,7 @@ function VoteCard({ vote, index }: { vote: VoteItem; index: number }) {
                                 <Link
                                     key={tag}
                                     href={`/questions?tag=${tag}`}
-                                    className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
+                                    className="flex items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
                                 >
                                     <Hash className="size-2.5" />
                                     {tag}
@@ -353,7 +353,7 @@ function VoteCard({ vote, index }: { vote: VoteItem; index: number }) {
 
                         <Link
                             href={`/questions/${vote.questionId}/${slugify(vote.questionTitle)}`}
-                            className="flex h-7 w-fit items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                            className="flex h-7 w-fit items-center gap-1.5 rounded-lg border border-white/5 bg-white/[0.04] px-2.5 text-xs text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                         >
                             View {vote.type}
                             <ExternalLink className="size-3" />
@@ -377,7 +377,7 @@ function MiniStat({
     color?: string;
 }) {
     return (
-        <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex flex-col gap-2 rounded-xl border border-white/5 bg-white/[0.03] p-3">
             <div className={cn("flex items-center gap-1.5 text-xs text-zinc-500", color)}>
                 {icon}
                 {label}
@@ -400,9 +400,9 @@ function EmptyState({
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] py-20 text-center"
+            className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-20 text-center"
         >
-            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04]">
                 <Vote className="size-6 text-zinc-500" />
             </div>
             <h3 className="text-lg font-semibold text-zinc-200">
@@ -454,7 +454,7 @@ function Pagination({
             <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+                className="flex size-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
             >
                 <ChevronLeft className="size-4" />
             </button>
@@ -472,7 +472,7 @@ function Pagination({
                             "flex size-9 items-center justify-center rounded-xl border text-sm font-medium transition",
                             p === currentPage
                                 ? "border-[#a7c8b3]/30 bg-[#a7c8b3]/15 text-[#a7c8b3]"
-                                : "border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+                                : "border-white/5 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
                         )}
                     >
                         {p}
@@ -483,7 +483,7 @@ function Pagination({
             <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+                className="flex size-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
             >
                 <ChevronRight className="size-4" />
             </button>

@@ -10,8 +10,11 @@
     "migrate:questions": "node --env-file=.env scripts/migrate-question-listing.mjs"
   },
   "dependencies": {
+    "@icons-pack/react-simple-icons": "^13.13.0",
     "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-dropdown-menu": "^2.1.18",
     "@radix-ui/react-label": "^2.1.9",
+    "@radix-ui/react-popover": "^1.1.17",
     "@radix-ui/react-slot": "^1.2.5",
     "@tabler/icons-react": "^3.44.0",
     "@types/canvas-confetti": "^1.9.0",

@@ -1,202 +1,255 @@
 "use client";
-import { useRoomStore } from "@/store/roomStore";
-import HostControls from "./HostControls";
-import { MemberContextMenu } from "./MemberContextMenu";
 
-const COLOR_MAP: Record<string, string> = {
+import { useState } from "react";
+import { useRoomStore } from "@/store/roomStore";
+import type { RoomMember } from "@/types/rooms";
+import { Search, ChevronDown, ChevronRight, UserPlus, Crown, MicOff, Mic, Wifi, UserX, User, MoreHorizontal } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
+
+const AVATAR_COLORS: Record<string, string> = {
     indigo: "bg-indigo-500",
     violet: "bg-violet-500",
-    emerald: "bg-emerald-500",
+    emerald: "bg-status-success",
     amber: "bg-amber-500",
-    rose: "bg-rose-500",
+    rose: "bg-status-danger",
     cyan: "bg-cyan-500",
 };
 
-const STATUS_DOT: Record<string, string> = {
-    online: "bg-emerald-400",
-    away: "bg-amber-400",
-    offline: "bg-zinc-600",
-    muted: "bg-rose-500",
-};
+interface Props {
+    roomId: string;
+}
 
-const STATUS_LABEL: Record<string, string> = {
-    online: "Online",
-    away: "Away",
-    offline: "Offline",
-    muted: "Muted",
-};
-
-export default function MemberSidebar({ roomId }: { roomId: string }) {
-    const members = useRoomStore((s) => s.members);
+export default function MemberSidebar({ roomId }: Props) {
     const room = useRoomStore((s) => s.room);
-
-    const online = members.filter((m) => m.status === "online");
-    const muted = members.filter((m) => m.status === "muted");
-    const away = members.filter((m) => m.status === "away");
-    const offline = members.filter((m) => m.status === "offline");
-
+    const members = useRoomStore((s) => s.members);
     const currentMember = useRoomStore((s) => s.currentMember);
+    const codeSession = useRoomStore((s) => s.codeSession);
+
+    const [searchQuery, setSearchQuery] = useState("");
+    
+    // Collapsible sections state
+    const [openSections, setOpenSections] = useState({
+        online: true,
+        muted: true,
+        away: true,
+        offline: false, // Collapsed by default
+    });
+
+    function toggleSection(key: keyof typeof openSections) {
+        setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+    }
+
+    const filtered = members.filter((m) =>
+        m.displayName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const isHost = (member: RoomMember) => member.userId === room?.hostId;
+
+    const online = filtered.filter((m) => m.status === "online");
+    const muted = filtered.filter((m) => m.status === "muted");
+    const away = filtered.filter((m) => m.status === "away");
+    const offline = filtered.filter((m) => m.status === "offline");
+
+    const onlineCount = online.length + muted.length + away.length;
+    const totalCount = members.length;
 
     return (
-        <div className="p-3 space-y-5 flex flex-col h-full">
-            <div className="flex-1 space-y-5 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
-                <Section
-                    label="Online"
-                    count={online.length}
-                    members={online}
-                    hostId={room?.hostId}
-                    roomId={roomId}
-                    currentUserId={currentMember?.userId}
-                />
-                {muted.length > 0 && (
-                    <Section
-                        label="Muted"
-                        count={muted.length}
-                        members={muted}
-                        hostId={room?.hostId}
-                        roomId={roomId}
+        <div className="flex flex-col h-full bg-[#111113]">
+            {/* Search header */}
+            <div className="shrink-0 px-6 py-6 border-b border-white/5">
+                <div className="flex items-center justify-between mb-2 px-1">
+                    <h2 className="text-[15px] font-[600] text-zinc-200">
+                        Members <span className="text-zinc-500 ml-1 font-medium text-[12px]">{onlineCount} / {totalCount}</span>
+                    </h2>
+                    <button className="text-tx-muted hover:text-tx-secondary transition-colors">
+                        <UserPlus className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+                
+                <div className="relative group">
+                    <Search className="w-3.5 h-3.5 text-tx-muted absolute left-2.5 top-1/2 -translate-y-1/2 group-focus-within:text-[#a7c8b3] transition-colors" />
+                    <input
+                        type="text"
+                        placeholder="Search members..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-[#18181b] border border-white/5 rounded-[14px] py-2 pl-8 pr-3 text-[13px] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-[#a7c8b3] focus:ring-1 focus:ring-[#a7c8b3] caret-[#a7c8b3] transition-all shadow-sm"
+                    />
+                </div>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.06) transparent" }}>
+                {online.length > 0 && (
+                    <MemberSection 
+                        title="Online" 
+                        members={online} 
+                        isHost={isHost} 
                         currentUserId={currentMember?.userId}
+                        isOpen={openSections.online}
+                        onToggle={() => toggleSection("online")}
+                    />
+                )}
+                {muted.length > 0 && (
+                    <MemberSection 
+                        title="Muted" 
+                        members={muted} 
+                        isHost={isHost} 
+                        currentUserId={currentMember?.userId}
+                        isOpen={openSections.muted}
+                        onToggle={() => toggleSection("muted")}
+                        accent="rose"
                     />
                 )}
                 {away.length > 0 && (
-                    <Section
-                        label="Away"
-                        count={away.length}
-                        members={away}
-                        hostId={room?.hostId}
-                        roomId={roomId}
+                    <MemberSection 
+                        title="Away" 
+                        members={away} 
+                        isHost={isHost} 
                         currentUserId={currentMember?.userId}
+                        isOpen={openSections.away}
+                        onToggle={() => toggleSection("away")}
+                        accent="amber"
                     />
                 )}
                 {offline.length > 0 && (
-                    <Section
-                        label="Offline"
-                        count={offline.length}
-                        members={offline}
-                        hostId={room?.hostId}
-                        roomId={roomId}
+                    <MemberSection 
+                        title="Offline" 
+                        members={offline} 
+                        isHost={isHost} 
                         currentUserId={currentMember?.userId}
+                        isOpen={openSections.offline}
+                        onToggle={() => toggleSection("offline")}
                         dimmed
                     />
                 )}
-
-                {members.length === 0 && (
-                    <p className="text-xs text-zinc-600 text-center py-4">
-                        No members online
-                    </p>
-                )}
             </div>
-            
-            <HostControls roomId={roomId} />
         </div>
     );
 }
 
-function Section({
-    label,
-    count,
+function MemberSection({
+    title,
     members,
-    hostId,
-    roomId,
-    currentUserId,
-    dimmed = false,
-}: {
-    label: string;
-    count: number;
-    members: ReturnType<typeof useRoomStore.getState>["members"];
-    hostId?: string;
-    roomId: string;
-    currentUserId?: string;
-    dimmed?: boolean;
-}) {
-    if (count === 0) return null;
-    return (
-        <section>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 mb-2">
-                {label} — {count}
-            </p>
-            <ul className="space-y-0.5">
-                {members.map((m) => (
-                    <MemberRow
-                        key={m.$id}
-                        member={m}
-                        isHost={m.userId === hostId}
-                        roomId={roomId}
-                        currentUserId={currentUserId}
-                        dimmed={dimmed}
-                    />
-                ))}
-            </ul>
-        </section>
-    );
-}
-
-function MemberRow({
-    member,
     isHost,
-    roomId,
     currentUserId,
+    isOpen,
+    onToggle,
+    accent,
     dimmed,
 }: {
-    member: ReturnType<typeof useRoomStore.getState>["members"][0];
-    isHost: boolean;
-    roomId: string;
+    title: string;
+    members: RoomMember[];
+    isHost: (m: RoomMember) => boolean;
     currentUserId?: string;
-    dimmed: boolean;
+    isOpen: boolean;
+    onToggle: () => void;
+    accent?: "rose" | "amber";
+    dimmed?: boolean;
 }) {
-    const room = useRoomStore((s) => s.room);
-    const currentUserIsHost = room?.hostId === currentUserId;
-
     return (
-        <li
-            className={[
-                "group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-zinc-800/50 transition-colors",
-                dimmed ? "opacity-50 grayscale-[0.3]" : "",
-            ].join(" ")}
-        >
-            {/* Avatar */}
-            <div className="relative shrink-0">
-                <div
-                    className={[
-                        "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white",
-                        COLOR_MAP[member.avatarColor] ?? "bg-indigo-500",
-                    ].join(" ")}
-                >
-                    {member.displayName[0]?.toUpperCase() ?? "?"}
+        <div>
+            <button 
+                onClick={onToggle}
+                className="w-full flex items-center gap-2 px-1 py-1.5 mb-1.5 rounded text-left hover:bg-zinc-800/40 transition-all duration-150 hover:-translate-y-0.5 active:scale-[0.98] group"
+            >
+                {isOpen ? (
+                    <ChevronDown className="w-3 h-3 text-tx-disabled group-hover:text-tx-secondary" />
+                ) : (
+                    <ChevronRight className="w-3 h-3 text-tx-disabled group-hover:text-tx-secondary" />
+                )}
+                <h3 className={cn(
+                    "text-[13px] font-semibold",
+                    accent === "rose" ? "text-status-danger/80" : 
+                    accent === "amber" ? "text-amber-400/80" : 
+                    "text-tx-secondary"
+                )}>
+                    {title} — {members.length}
+                </h3>
+            </button>
+            
+            {isOpen && (
+                <div className="space-y-1.5 px-1">
+                    {members.map((member) => {
+                        const isMe = member.userId === currentUserId;
+                        const isMuted = member.status === "muted";
+                        const isOnline = !dimmed && member.status === "online";
+                        
+                        return (
+                            <div
+                                key={member.userId}
+                                className={cn(
+                                    "relative flex items-center gap-3 p-3 rounded-[14px] bg-[#18181b] border border-white/5 group transition-all duration-150 shadow-sm",
+                                    dimmed ? "opacity-50 grayscale hover:grayscale-0 hover:opacity-100" : "",
+                                    "hover:bg-white/[0.03] hover:-translate-y-0.5 active:scale-[1.01] cursor-pointer"
+                                )}
+                            >
+                                <div className="relative">
+                                    <div
+                                        className={cn(
+                                            "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0",
+                                            AVATAR_COLORS[member.avatarColor] ?? "bg-zinc-600"
+                                        )}
+                                    >
+                                        {member.displayName[0]?.toUpperCase()}
+                                    </div>
+                                    {isOnline && (
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#a7c8b3] border-2 border-[#111113] rounded-full shadow-[0_0_8px_rgba(167,200,179,0.3)]" />
+                                    )}
+                                    {!dimmed && member.status === "away" && (
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 border-2 border-[#111113] rounded-full" />
+                                    )}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[13px] font-[600] text-zinc-100 truncate">
+                                            {member.displayName}
+                                        </span>
+                                        {isHost(member) && (
+                                            <span className="shrink-0 flex items-center justify-center w-4 h-4 rounded-full bg-amber-500/10" title="Host">
+                                                <Crown className="w-2.5 h-2.5 text-amber-500" />
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="shrink-0 flex flex-col items-end gap-1">
+                                    {isMe && (
+                                        <span className="px-1.5 py-[1px] rounded-[6px] bg-[#a7c8b3]/10 border border-[#a7c8b3]/20 text-[10px] font-[600] text-[#a7c8b3] tracking-wide shrink-0">
+                                            YOU
+                                        </span>
+                                    )}
+                                    {member.isAI && (
+                                        <span className="px-1.5 py-[1px] rounded-[6px] bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-[600] text-indigo-400 tracking-wide shrink-0">
+                                            BOT
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Hover actions */}
+                                {!isMe && (
+                                    <div className="hidden group-hover:flex items-center gap-0.5 shrink-0 bg-surface pl-1">
+                                        <button className="p-1.5 rounded-lg text-tx-muted hover:bg-surface-hover hover:text-status-danger transition-colors" title="Kick">
+                                            <UserX className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button className="p-1.5 rounded-lg text-tx-muted hover:bg-surface-hover hover:text-amber-400 transition-colors" title={isMuted ? "Unmute" : "Mute"}>
+                                            {isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+                                        </button>
+                                        <button className="p-1.5 rounded-lg text-tx-muted hover:bg-surface-hover hover:text-tx-secondary transition-colors" title="View Profile">
+                                            <User className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button className="p-1.5 rounded-lg text-tx-muted hover:bg-surface-hover hover:text-tx-secondary transition-colors" title="More">
+                                            <MoreHorizontal className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
-                <span
-                    className={[
-                        "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0a0a0a]",
-                        STATUS_DOT[member.status] ?? "bg-zinc-600",
-                    ].join(" ")}
-                    title={STATUS_LABEL[member.status]}
-                />
-            </div>
-
-            {/* Name */}
-            <span className="text-xs text-zinc-300 truncate flex-1 font-medium">
-                {member.displayName}
-            </span>
-
-            {/* Badges / Actions */}
-            <div className="flex items-center gap-1 shrink-0">
-                {isHost && (
-                    <span className="text-[10px] text-amber-400 font-semibold tracking-wide">
-                        HOST
-                    </span>
-                )}
-                {member.status === "muted" && (
-                    <span className="text-[10px] text-rose-400 font-medium">
-                        MUTED
-                    </span>
-                )}
-                <MemberContextMenu
-                    member={member}
-                    roomId={roomId}
-                    isHost={currentUserIsHost}
-                    currentUserId={currentUserId ?? ""}
-                />
-            </div>
-        </li>
+            )}
+        </div>
     );
 }

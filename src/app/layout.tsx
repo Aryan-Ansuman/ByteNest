@@ -22,7 +22,18 @@ export default function RootLayout({
       <body className={cn(inter.className, "dark:bg-black dark:text-white")}>
         <AuthBootstrap />
         {children}
-        <Toaster theme="dark" position="bottom-right" richColors closeButton />
+        <Toaster 
+          theme="dark" 
+          position="bottom-right" 
+          closeButton 
+          toastOptions={{
+            classNames: {
+              toast: "border-white/5 bg-[#0a0a0a] text-zinc-300",
+              success: "border-[#a7c8b3]/20 bg-[#a7c8b3]/10 text-[#a7c8b3]",
+              error: "border-rose-900/30 bg-rose-950/30 text-rose-300",
+            }
+          }}
+        />
       </body>
     </html>
   );

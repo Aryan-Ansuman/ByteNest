@@ -16,7 +16,7 @@ import type { CodeSession } from "@/types/rooms";
 
 export const CURSOR_COLORS: Record<string, string> = {
     indigo: "#6366f1",
-    violet: "#8b5cf6",
+    violet: "#a7c8b3",
     emerald: "#10b981",
     amber: "#f59e0b",
     rose: "#f43f5e",

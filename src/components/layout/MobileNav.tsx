@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bookmark, HomeIcon, Tags, UserRound } from "lucide-react";
+import { Bookmark, HomeIcon, Tags, UserRound, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
 import { useAuthStore } from "@/store/Auth";
@@ -12,6 +12,7 @@ const sidebarItems = [
     { label: "Home", icon: HomeIcon, href: "/" },
     { label: "Questions", icon: Tags, href: "/questions" },
     { label: "Profile", icon: UserRound, href: "/users" },
+    { label: "Live Rooms", icon: Radio, href: "/rooms" },
     { label: "Bookmarks", icon: Bookmark, href: "/bookmarks" },
 ];
 
@@ -20,7 +21,7 @@ export default function MobileNav() {
     const { user } = useAuthStore();
 
     return (
-        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-2xl border border-white/10 bg-[#101010]/90 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
+        <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-2xl border border-white/5 bg-[#101010]/90 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
             {sidebarItems.map((item) => {
                 const Icon = item.icon;
                 let href = item.href;

@@ -40,7 +40,7 @@ export default function QuestionError({ error, reset }: ErrorProps) {
                 </button>
                 <Link
                     href="/questions"
-                    className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-6 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                    className="flex h-11 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-6 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                 >
                     <ArrowLeft className="size-4" />
                     Back to questions

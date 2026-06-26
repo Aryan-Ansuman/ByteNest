@@ -17,7 +17,7 @@ export default function TypingIndicator() {
     }
 
     return (
-        <div className="flex items-center gap-2 text-xs text-zinc-500 h-5 px-1">
+        <div className="flex items-center gap-2 text-xs text-tx-muted h-5 px-1">
             <TypingDots />
             <span>{text}</span>
         </div>

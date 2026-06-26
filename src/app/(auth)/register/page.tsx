@@ -82,7 +82,7 @@ export default function Register() {
                 <div className="relative flex flex-1 flex-col p-12 lg:px-16 xl:px-24">
                     {/* Logo */}
                     <Link href="/" className="flex w-fit items-center gap-3 transition-opacity hover:opacity-80">
-                        <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                        <div className="flex size-10 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04]">
                             <IconCode size={20} className="text-[#a7c8b3]" />
                         </div>
                         <span className="text-xl font-bold tracking-tight text-white">
@@ -146,7 +146,7 @@ export default function Register() {
                         {/* Mobile Logo */}
                         <div className="mb-12 flex items-center justify-center lg:hidden">
                             <Link href="/" className="flex items-center gap-3">
-                                <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                                <div className="flex size-10 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04]">
                                     <IconCode size={20} className="text-[#a7c8b3]" />
                                 </div>
                                 <span className="text-xl font-bold tracking-tight text-white">
@@ -168,7 +168,7 @@ export default function Register() {
                     <div className="mt-8 flex flex-col gap-3">
                         <button
                             type="button"
-                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
                             disabled={isLoading}
                         >
                             <IconBrandGithub size={18} />
@@ -176,7 +176,7 @@ export default function Register() {
                         </button>
                         <button
                             type="button"
-                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-4 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
                             disabled={isLoading}
                         >
                             <IconBrandGoogle size={18} className="text-red-400" />
@@ -215,7 +215,7 @@ export default function Register() {
                                         placeholder="John"
                                         value={firstname}
                                         onChange={(e) => setFirstname(e.target.value)}
-                                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                        className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                         disabled={isLoading}
                                     />
                                 </div>
@@ -229,7 +229,7 @@ export default function Register() {
                                         placeholder="Doe"
                                         value={lastname}
                                         onChange={(e) => setLastname(e.target.value)}
-                                        className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                        className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                         disabled={isLoading}
                                     />
                                 </div>
@@ -245,7 +245,7 @@ export default function Register() {
                                     placeholder="you@example.com"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                    className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-4 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                     disabled={isLoading}
                                 />
                             </div>
@@ -260,7 +260,7 @@ export default function Register() {
                                     placeholder="Create a password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                    className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                     disabled={isLoading}
                                 />
                                 <button

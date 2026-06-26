@@ -218,7 +218,7 @@ function UnauthenticatedState() {
 
 export function AnswerGapDetectorFallback() {
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             <div className="mb-3 flex items-center gap-2">
                 <Zap className="size-4 text-amber-400" />
                 <h3 className="text-sm font-semibold text-zinc-100">Answer Gap Detector</h3>
@@ -271,7 +271,7 @@ export default function AnswerGapDetector() {
     }, [session]);
 
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             {/* Header */}
             <div className="mb-3 flex items-center gap-2">
                 <Zap className="size-4 text-amber-400" />

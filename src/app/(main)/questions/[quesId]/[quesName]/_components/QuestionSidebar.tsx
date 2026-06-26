@@ -129,7 +129,7 @@ export default function QuestionSidebar() {
                     Related Concepts
                 </div>
                 <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-5 text-center">
-                    <div className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-500">
+                    <div className="flex size-9 items-center justify-center rounded-full border border-white/5 bg-white/[0.04] text-zinc-500">
                         <BookOpen className="size-4" />
                     </div>
                     <p className="text-[13px] font-medium text-zinc-300">Docs linking coming soon</p>
@@ -188,7 +188,7 @@ export default function QuestionSidebar() {
                             return (
                                 <span
                                     key={`${name}-${i}`}
-                                    className="-ml-2 first:ml-0 flex size-7 items-center justify-center rounded-full border border-black bg-[#CFE8D5] text-[9px] font-bold text-[#07100B]"
+                                    className="-ml-2 first:ml-0 flex size-7 items-center justify-center rounded-full border border-white/5lack bg-[#CFE8D5] text-[9px] font-bold text-[#07100B]"
                                     style={{ zIndex: 10 - i }}
                                     title={name}
                                 >
@@ -197,7 +197,7 @@ export default function QuestionSidebar() {
                             );
                         })}
                         {extraParticipantsCount > 0 && (
-                            <span className="-ml-2 flex size-7 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-[10px] text-[#CFE8D5]">
+                            <span className="-ml-2 flex size-7 items-center justify-center rounded-full border border-white/5 bg-white/[0.05] text-[10px] text-[#CFE8D5]">
                                 +{extraParticipantsCount}
                             </span>
                         )}

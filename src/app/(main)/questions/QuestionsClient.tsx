@@ -230,7 +230,7 @@ export default function QuestionsClient({
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
+                <div className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-white/[0.035] p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <form onSubmit={handleSearch} className="relative flex-1 max-w-lg">
                             <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-zinc-500" />
@@ -239,11 +239,11 @@ export default function QuestionsClient({
                                 onChange={(event) => setSearchValue(event.target.value)}
                                 aria-label="Search questions"
                                 placeholder="Search questions by title or description..."
-                                className="h-12 rounded-xl border-white/10 bg-black/20 pl-12 pr-4 text-sm text-zinc-100 shadow-none transition placeholder:text-zinc-600 hover:border-white/15 focus-visible:border-[#a7c8b3]/50 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                className="h-12 rounded-xl border-white/5 bg-black/20 pl-12 pr-4 text-sm text-zinc-100 shadow-none transition placeholder:text-zinc-600 hover:border-white/15 focus-visible:border-[#a7c8b3]/50 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                             />
                         </form>
 
-                        <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-white/10 bg-black/15 p-1.5">
+                        <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-white/5 bg-black/15 p-1.5">
                             {filters.map((filter) => (
                                 <FilterTab
                                     key={filter.label}
@@ -271,7 +271,7 @@ export default function QuestionsClient({
                                 placeholder={currentTags.length >= 5 ? "Maximum 5 tags" : "Filter by tag..."}
                                 disabled={currentTags.length >= 5}
                                 list="question-tag-suggestions"
-                                className="h-10 w-full rounded-xl border-white/10 bg-black/15 pl-9 text-sm sm:w-56"
+                                className="h-10 w-full rounded-xl border-white/5 bg-black/15 pl-9 text-sm sm:w-56"
                             />
                             <datalist id="question-tag-suggestions">
                                 {suggestedTags.map((tag) => <option key={tag} value={tag} />)}
@@ -279,7 +279,7 @@ export default function QuestionsClient({
                             <button
                                 type="submit"
                                 disabled={!tagValue.trim() || currentTags.length >= 5}
-                                className="h-10 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-sm text-zinc-300 transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="h-10 rounded-xl border border-white/5 bg-white/[0.05] px-3 text-sm text-zinc-300 transition hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
                                 aria-label="Add tag filter"
                             >
                                 Add
@@ -319,7 +319,7 @@ export default function QuestionsClient({
                 )}
                 <div
                     className={cn(
-                        "overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] backdrop-blur-xl transition-opacity",
+                        "overflow-hidden rounded-2xl border border-white/5 bg-white/[0.025] backdrop-blur-xl transition-opacity",
                         isPending && "opacity-50"
                     )}
                     aria-busy={isPending}
@@ -436,13 +436,13 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                             onClick={(e) => {
                                 // DO NOT e.stopPropagation() here to allow screen reader access
                             }}
-                            className="relative z-10 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-zinc-400 transition hover:border-[#a7c8b3]/30 hover:text-[#b9dcc3]"
+                            className="relative z-10 rounded-md border border-white/5 bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-zinc-400 transition hover:border-[#a7c8b3]/30 hover:text-[#b9dcc3]"
                         >
                             {tag}
                         </Link>
                     ))}
                     {hiddenTagCount > 0 && (
-                        <span className="rounded-md border border-white/10 px-2 py-0.5 text-[11px] text-zinc-500" title={`${hiddenTagCount} more tags`}>
+                        <span className="rounded-md border border-white/5 px-2 py-0.5 text-[11px] text-zinc-500" title={`${hiddenTagCount} more tags`}>
                             +{hiddenTagCount}
                         </span>
                     )}
@@ -526,7 +526,7 @@ function Pagination({
                 type="button"
                 onClick={goPrevious}
                 disabled={!previousCursor}
-                className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-35"
+                className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-35"
                 aria-label={`Go to page ${Math.max(1, currentPage - 1)}`}
             >
                 <ChevronLeft className="size-4" /> Previous
@@ -536,7 +536,7 @@ function Pagination({
                 type="button"
                 onClick={goNext}
                 disabled={!nextCursor}
-                className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-35"
+                className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-35"
                 aria-label={`Go to page ${currentPage + 1}`}
             >
                 Next <ChevronRight className="size-4" />
@@ -580,7 +580,7 @@ function EmptyState({
 
     return (
         <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <div className="mb-5 flex size-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+            <div className="mb-5 flex size-16 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04]">
                 <Search className="size-7 text-zinc-500" />
             </div>
             <h3 className="text-xl font-semibold text-zinc-100">No questions found</h3>
@@ -595,7 +595,7 @@ function EmptyState({
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
                 {isFiltered && (
-                    <Button asChild variant="outline" className="h-11 rounded-xl border-white/10 bg-white/[0.04] px-5 text-zinc-200 hover:bg-white/[0.08]">
+                    <Button asChild variant="outline" className="h-11 rounded-xl border-white/5 bg-white/[0.04] px-5 text-zinc-200 hover:bg-white/[0.08]">
                         <Link href={clearFiltersHref}><X className="size-4" />Clear filters</Link>
                     </Button>
                 )}

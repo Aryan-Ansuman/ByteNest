@@ -1,25 +1,44 @@
 "use client";
 
 import { useState } from "react";
-import type { RoomMessage, ParsedReactions } from "@/types/rooms";
+import { format } from "date-fns";
+import type { RoomMessage } from "@/types/rooms";
+import { Reply, MoreHorizontal, Trash2, SmilePlus, Radio } from "lucide-react";
+import { useRoomStore } from "@/store/roomStore";
+import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
-const COLOR_MAP: Record<string, string> = {
-    indigo: "bg-indigo-500",
-    violet: "bg-violet-500",
-    emerald: "bg-emerald-500",
-    amber: "bg-amber-500",
-    rose: "bg-rose-500",
-    cyan: "bg-cyan-500",
+const COLOR_MAP: Record<string, { bg: string; text: string }> = {
+    indigo:  { bg: "bg-indigo-500",  text: "text-white" },
+    violet:  { bg: "bg-violet-500",  text: "text-white" },
+    emerald: { bg: "bg-emerald-500", text: "text-white" },
+    amber:   { bg: "bg-amber-500",   text: "text-black" },
+    rose:    { bg: "bg-rose-500",    text: "text-white" },
+    cyan:    { bg: "bg-cyan-500",    text: "text-black" },
 };
 
-const EMOJI_OPTIONS = ["👍", "❤️", "🔥", "😂", "😮", "👏"];
+const QUICK_EMOJI = ["👍", "❤️", "😂", "🔥", "✅", "👀", "🎉", "💯"];
 
 interface Props {
     message: RoomMessage;
     currentUserId: string;
     onReact: (messageId: string, emoji: string) => void;
     onReply: (message: RoomMessage) => void;
-    parentMessage?: RoomMessage | null;
+    parentMessage: RoomMessage | null;
+    /** Compact mode: same author within 5 min — hides avatar + name */
+    compact?: boolean;
 }
 
 export default function MessageBubble({
@@ -28,163 +47,211 @@ export default function MessageBubble({
     onReact,
     onReply,
     parentMessage,
+    compact = false,
 }: Props) {
-    const [showReactions, setShowReactions] = useState(false);
+    const [hovering, setHovering] = useState(false);
+    const isMe = message.authorId === currentUserId;
     const isTemp = message.$id.startsWith("temp-");
     const isSystem = message.type === "system";
 
-    const reactions: ParsedReactions = (() => {
+    const reactions = (() => {
+        try { return JSON.parse(message.reactions ?? "{}") as Record<string, string[]>; }
+        catch { return {}; }
+    })();
+    const reactionEntries = Object.entries(reactions).filter(([, users]) => users.length > 0);
+
+    async function handleDelete() {
+        useRoomStore.getState().deleteMessage(message.$id);
         try {
-            return JSON.parse(message.reactions ?? "{}");
+            await apiFetch(`/api/rooms/${message.roomId}/messages/${message.$id}`, {
+                method: "DELETE",
+            });
         } catch {
-            return {};
+            toast.error("Failed to delete message");
         }
+    }
+
+    const timestamp = (() => {
+        try { return format(new Date(message.$createdAt), "h:mm a"); }
+        catch { return ""; }
     })();
 
     if (isSystem) {
         return (
-            <div className="flex justify-center py-2">
-                <span className="text-[11px] font-medium tracking-wide uppercase text-zinc-500 bg-zinc-800/30 rounded-full px-3 py-1">
+            <div className="flex justify-center py-3">
+                <span className="flex items-center gap-1.5 text-[11px] font-[500] tracking-wide text-zinc-500 bg-white/5 rounded-full px-3 py-1">
                     {message.body}
                 </span>
             </div>
         );
     }
 
+    // ─── Normal message ───────────────────────────────────────────────────────
+    const color = COLOR_MAP[message.authorColor] ?? { bg: "bg-zinc-700", text: "text-tx" };
+    const initials = message.authorName
+        .split(" ")
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? "")
+        .join("");
+
     return (
         <div
-            className={[
-                "group flex gap-3 px-4 py-1.5 hover:bg-zinc-800/30 transition-colors",
+            className={cn(
+                "group px-3 py-0.5 hover:bg-zinc-800/15 transition-colors relative",
                 isTemp ? "opacity-60" : "",
-            ].join(" ")}
-            onMouseLeave={() => setShowReactions(false)}
+                compact ? "pt-0.5" : "pt-2"
+            )}
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
         >
-            {/* Avatar */}
-            <div className="shrink-0 mt-0.5">
-                <div
-                    className={[
-                        "w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white",
-                        COLOR_MAP[message.authorColor] ?? "bg-indigo-500",
-                    ].join(" ")}
-                >
-                    {message.authorName[0]?.toUpperCase() ?? "?"}
-                </div>
-            </div>
+            {/* Timestamp on hover for compact messages */}
+            {compact && hovering && (
+                <span className="absolute left-2 top-1 text-[10px] text-zinc-600 w-9 text-right tabular-nums select-none">
+                    {timestamp}
+                </span>
+            )}
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-                {/* Author + timestamp */}
-                <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-sm font-medium text-zinc-200">
-                        {message.authorName}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 font-medium">
-                        {formatTime(message.$createdAt)}
-                    </span>
-                    {message.editedAt && (
-                        <span className="text-[10px] text-zinc-600 font-medium">
-                            (edited)
-                        </span>
-                    )}
-                </div>
-
-                {/* Reply preview */}
-                {parentMessage && (
-                    <div className="border-l-2 border-zinc-700 pl-2 mb-1.5 mt-1 text-xs text-zinc-400 truncate max-w-sm rounded-r-sm bg-zinc-800/20 py-1 pr-2">
-                        <span className="font-medium text-zinc-300">
-                            {parentMessage.authorName}:{" "}
-                        </span>
-                        {parentMessage.body}
+            {/* Reply context */}
+            {parentMessage && (
+                <div className="ml-9 mb-0.5 flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity">
+                    <div className="w-5 border-t-2 border-l-2 border-[#a7c8b3]/40 h-3 rounded-tl-sm ml-1 shrink-0" />
+                    <div className="text-[12px] truncate max-w-[280px] leading-4 flex items-center gap-1">
+                        <span className="text-[#a7c8b3] font-semibold">{parentMessage.authorName}</span>
+                        <span className="truncate text-zinc-400">{parentMessage.body}</span>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Body */}
-                {message.type === "code" ? (
-                    <pre className="text-xs bg-[#0a0a0a] border border-zinc-800 rounded-md p-3 overflow-x-auto text-emerald-300 font-mono mt-1">
-                        <code>{message.body}</code>
-                    </pre>
+            <div className="flex items-start gap-3">
+                {/* Avatar — only shown on first message in group */}
+                {!compact ? (
+                    <div className={cn(
+                        "shrink-0 w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold mt-0.5",
+                        color.bg, color.text
+                    )}>
+                        {initials || "?"}
+                    </div>
                 ) : (
-                    <div
-                        className="text-sm text-zinc-300 leading-relaxed break-words prose prose-invert prose-p:my-0 prose-pre:my-1 prose-pre:bg-[#0a0a0a] prose-pre:border prose-pre:border-zinc-800 prose-code:text-emerald-300"
-                        dangerouslySetInnerHTML={{ __html: message.body }}
-                    />
+                    <div className="w-6 shrink-0" /> // spacer
                 )}
 
-                {/* Reactions */}
-                {Object.keys(reactions).length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                        {Object.entries(reactions).map(([emoji, uids]) => {
-                            if (!uids || uids.length === 0) return null;
-                            const hasReacted = uids.includes(currentUserId);
-                            return (
-                                <button
-                                    key={emoji}
-                                    onClick={() => onReact(message.$id, emoji)}
-                                    className={[
-                                        "flex items-center gap-1.5 text-xs rounded-full px-2 py-0.5 border transition-all duration-200",
-                                        hasReacted
-                                            ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                                            : "bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200",
-                                    ].join(" ")}
-                                >
-                                    <span>{emoji}</span>
-                                    <span className="font-medium text-[10px]">{uids.length}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                    {/* Author + time — only shown on first in group */}
+                    {!compact && (
+                        <div className="flex items-center mb-1 min-w-0">
+                            <span className="text-[13px] font-[600] text-zinc-100 truncate shrink">
+                                {message.authorName}
+                            </span>
+                            <div className="flex-1" />
+                            {message.editedAt && (
+                                <span className="text-[10px] text-zinc-500 font-[400] shrink-0 mr-1.5">
+                                    (edited)
+                                </span>
+                            )}
+                            <span className="text-[10px] text-zinc-500 font-[400] shrink-0">
+                                {timestamp}
+                            </span>
+                        </div>
+                    )}
 
-            {/* Action bar (hover) */}
-            <div
-                className={[
-                    "shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity",
-                    isTemp ? "pointer-events-none" : "",
-                ].join(" ")}
-            >
-                <div className="relative">
-                    <button
-                        onClick={() => setShowReactions((v) => !v)}
-                        className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
-                        title="React"
-                    >
-                        😊
-                    </button>
-                    {showReactions && (
-                        <div className="absolute right-0 bottom-full mb-1 flex gap-1 bg-[#0a0a0a] border border-zinc-800 rounded-lg p-1 shadow-xl z-10 animate-in zoom-in-95 duration-100">
-                            {EMOJI_OPTIONS.map((e) => (
-                                <button
-                                    key={e}
-                                    onClick={() => {
-                                        onReact(message.$id, e);
-                                        setShowReactions(false);
-                                    }}
-                                    className="text-base hover:scale-125 transition-transform p-1"
-                                >
-                                    {e}
-                                </button>
-                            ))}
+                    {/* Body */}
+                    <p className={cn(
+                        "text-[14px] leading-relaxed break-words whitespace-pre-wrap",
+                        message.deletedAt ? "text-zinc-600 italic" : "text-zinc-300"
+                    )}>
+                        {message.deletedAt ? "Message deleted" : message.body}
+                    </p>
+
+                    {/* Reactions */}
+                    {reactionEntries.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                            {reactionEntries.map(([emoji, uids]) => {
+                                const hasReacted = uids.includes(currentUserId);
+                                return (
+                                    <button
+                                        key={emoji}
+                                        onClick={() => onReact(message.$id, emoji)}
+                                        className={cn(
+                                            "flex items-center gap-1 text-[12px] px-2 py-0.5 rounded-[12px] border transition-all duration-150 hover:bg-white/[0.03] active:scale-[1.01]",
+                                            hasReacted
+                                                ? "bg-[#a7c8b3]/10 border-[#a7c8b3]/20 text-[#a7c8b3]"
+                                                : "bg-[#18181b] border-white/5 text-zinc-400 hover:text-zinc-200"
+                                        )}
+                                    >
+                                        <span>{emoji}</span>
+                                        <span className="font-[500] text-[10px]">{uids.length}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
-                <button
-                    onClick={() => onReply(message)}
-                    className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-xs font-medium transition-colors"
-                    title="Reply"
-                >
-                    Reply
-                </button>
+                {/* Hover actions */}
+                <div className={cn(
+                    "flex items-center gap-0.5 shrink-0 transition-opacity bg-[#18181b] border border-white/5 rounded-lg px-0.5 py-0.5 shadow-sm",
+                    hovering && !message.deletedAt ? "opacity-100" : "opacity-0 pointer-events-none"
+                )}>
+                    {/* Quick react */}
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button className="p-1 rounded-md hover:bg-white/[0.03] text-zinc-500 hover:text-zinc-300 transition-all duration-150 hover:-translate-y-0.5 active:scale-95">
+                                <SmilePlus className="w-3.5 h-3.5" />
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                            side="top"
+                            align="end"
+                            className="w-auto p-1.5 bg-[#18181b] border-white/5 shadow-xl rounded-xl"
+                        >
+                            <div className="flex gap-1">
+                                {QUICK_EMOJI.map((e) => (
+                                    <button
+                                        key={e}
+                                        onClick={() => onReact(message.$id, e)}
+                                        className="text-base hover:scale-125 transition-transform px-1 py-0.5 rounded-md hover:bg-white/[0.03]"
+                                    >
+                                        {e}
+                                    </button>
+                                ))}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    {/* Reply */}
+                    <button
+                        onClick={() => onReply(message)}
+                        className="p-1 rounded-md hover:bg-white/[0.03] text-zinc-500 hover:text-zinc-300 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                        aria-label="Reply"
+                    >
+                        <Reply className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* More */}
+                    {isMe && !isTemp && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button className="p-1 rounded-md hover:bg-white/[0.03] text-zinc-500 hover:text-zinc-300 transition-all duration-150 hover:-translate-y-0.5 active:scale-95">
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                className="bg-[#18181b] border border-white/5 text-xs min-w-[120px] rounded-[12px] p-1"
+                            >
+                                <DropdownMenuItem
+                                    onClick={handleDelete}
+                                    className="text-rose-500 focus:text-rose-400 focus:bg-rose-500/10 gap-2 cursor-pointer rounded-md"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Delete message
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                </div>
             </div>
         </div>
     );
-}
-
-function formatTime(iso: string) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
 }

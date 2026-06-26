@@ -133,7 +133,7 @@ export default function UserProfileClient({ profile }: { profile: ProfileData })
             <StatsRow profile={profile} />
 
             {/* ── Tab Bar ── */}
-            <div className="mt-8 flex items-center gap-0 border-b border-white/10">
+            <div className="mt-8 flex items-center gap-0 border-b border-white/5">
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
@@ -199,7 +199,7 @@ function ProfileHero({
     reputationLevel: { label: string; color: string; bg: string };
 }) {
     return (
-        <div className="flex flex-col gap-5 rounded-2xl border border-white/10 bg-white/[0.025] p-6 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-5 rounded-2xl border border-white/5 bg-white/[0.025] p-6 sm:flex-row sm:items-start">
             {/* Avatar */}
             <div className="shrink-0">
                 <div className="relative">
@@ -207,12 +207,12 @@ function ProfileHero({
                         name={profile.name}
                         size="xl"
                         src={avatars.getInitials(profile.name, 96, 96).href}
-                        className="size-24 rounded-2xl border border-white/10"
+                        className="size-24 rounded-2xl border border-white/5"
                     />
                     {/* Reputation badge overlay */}
                     <div
                         className={cn(
-                            "absolute -bottom-2 -right-2 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold",
+                            "absolute -bottom-2 -right-2 rounded-full border border-white/5 px-2 py-0.5 text-[10px] font-semibold",
                             reputationLevel.bg,
                             reputationLevel.color
                         )}
@@ -235,7 +235,7 @@ function ProfileHero({
                     {isOwnProfile && (
                         <Link
                             href={`/users/${profile.userId}/${profile.userSlug}/edit`}
-                            className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                            className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                         >
                             <Pencil className="size-4" />
                             Edit profile
@@ -389,7 +389,7 @@ function OverviewTab({
     return (
         <div className="grid gap-6 md:grid-cols-2">
             {/* Recent Questions */}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-200">
                         <FileQuestion className="size-4 text-blue-400" />
@@ -405,7 +405,7 @@ function OverviewTab({
                             <Link
                                 key={q.$id}
                                 href={`/questions/${q.$id}/${slugify(q.title)}`}
-                                className="group flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition hover:border-white/10 hover:bg-white/[0.05]"
+                                className="group flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition hover:border-white/5 hover:bg-white/[0.05]"
                             >
                                 <div className="mt-0.5 flex shrink-0 flex-col items-center gap-0.5 text-xs text-zinc-600">
                                     <ArrowUp className="size-3" />
@@ -432,7 +432,7 @@ function OverviewTab({
             </div>
 
             {/* Recent Answers */}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-200">
                         <MessageSquare className="size-4 text-[#a7c8b3]" />
@@ -448,7 +448,7 @@ function OverviewTab({
                             <Link
                                 key={a.$id}
                                 href={`/questions/${a.questionId}/${slugify(a.questionTitle)}`}
-                                className="group flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition hover:border-white/10 hover:bg-white/[0.05]"
+                                className="group flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 transition hover:border-white/5 hover:bg-white/[0.05]"
                             >
                                 <div className="mt-0.5 flex shrink-0 flex-col items-center gap-0.5 text-xs text-zinc-600">
                                     <ArrowUp className="size-3" />
@@ -470,7 +470,7 @@ function OverviewTab({
 
             {/* Tag expertise */}
             {tagFrequency.length > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 md:col-span-2">
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 md:col-span-2">
                     <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-zinc-200">
                         <TrendingUp className="size-4 text-amber-400" />
                         Tag Expertise
@@ -483,7 +483,7 @@ function OverviewTab({
                                 <Link
                                     key={tag}
                                     href={`/questions?tag=${tag}`}
-                                    className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 transition hover:border-[#a7c8b3]/30"
+                                    className="group relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 transition hover:border-[#a7c8b3]/30"
                                 >
                                     {/* background bar */}
                                     <div
@@ -530,7 +530,7 @@ function QuestionsTab({ questions, total }: { questions: Question[]; total: numb
                         <Link
                             key={q.$id}
                             href={`/questions/${q.$id}/${slugify(q.title)}`}
-                            className="group flex items-start gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-white/15 hover:bg-white/[0.04]"
+                            className="group flex items-start gap-4 rounded-xl border border-white/5 bg-white/[0.025] p-4 transition hover:border-white/15 hover:bg-white/[0.04]"
                         >
                             {/* Stats */}
                             <div className="grid shrink-0 grid-cols-2 gap-2 sm:w-32 sm:grid-cols-1">
@@ -546,7 +546,7 @@ function QuestionsTab({ questions, total }: { questions: Question[]; total: numb
                                     {q.tags.slice(0, 4).map((tag) => (
                                         <span
                                             key={tag}
-                                            className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-zinc-500"
+                                            className="rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[11px] text-zinc-500"
                                         >
                                             {tag}
                                         </span>
@@ -580,11 +580,11 @@ function AnswersTab({ answers, total }: { answers: Answer[]; total: number }) {
                         <Link
                             key={a.$id}
                             href={`/questions/${a.questionId}/${slugify(a.questionTitle)}`}
-                            className="group block rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:border-white/15 hover:bg-white/[0.04]"
+                            className="group block rounded-xl border border-white/5 bg-white/[0.025] p-4 transition hover:border-white/15 hover:bg-white/[0.04]"
                         >
                             {/* Question link */}
                             <div className="flex items-start gap-3">
-                                <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 text-center">
+                                <div className="flex shrink-0 flex-col items-center gap-0.5 rounded-xl border border-white/5 bg-white/[0.04] px-2.5 py-2 text-center">
                                     <ArrowUp className="size-3.5 text-zinc-500" />
                                     <span className="text-sm font-bold text-zinc-100">{a.totalVotes}</span>
                                     <span className="text-[10px] text-zinc-600">votes</span>
@@ -632,7 +632,7 @@ function VotesTab({ votes, total }: { votes: Vote[]; total: number }) {
                 <p className="text-sm text-zinc-500">
                     {total} votes cast · {upvotes} up · {downvotes} down
                 </p>
-                <div className="flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                <div className="flex gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
                     {(["all", "upvoted", "downvoted"] as const).map((f) => (
                         <button
                             key={f}
@@ -662,7 +662,7 @@ function VotesTab({ votes, total }: { votes: Vote[]; total: number }) {
                         <Link
                             key={v.$id}
                             href={`/questions/${v.questionId}/${slugify(v.questionTitle)}`}
-                            className="group flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3 transition hover:border-white/15 hover:bg-white/[0.04]"
+                            className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.025] px-4 py-3 transition hover:border-white/15 hover:bg-white/[0.04]"
                         >
                             <div
                                 className={cn(
@@ -708,7 +708,7 @@ function StatMini({
                 "rounded-xl border px-2.5 py-2",
                 emphasized
                     ? "border-[#a7c8b3]/20 bg-[#a7c8b3]/10"
-                    : "border-white/10 bg-black/20"
+                    : "border-white/5 bg-black/20"
             )}
         >
             <p className="text-base font-bold text-zinc-100">{value}</p>
@@ -719,8 +719,8 @@ function StatMini({
 
 function EmptySlate({ message }: { message: string }) {
     return (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] py-12 text-center">
-            <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] py-12 text-center">
+            <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04]">
                 <MessageCircle className="size-5 text-zinc-600" />
             </div>
             <p className="text-sm text-zinc-500">{message}</p>

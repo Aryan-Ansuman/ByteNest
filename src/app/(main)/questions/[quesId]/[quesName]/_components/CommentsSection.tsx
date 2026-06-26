@@ -101,7 +101,7 @@ function InlineComposer({
                     maxLength={500}
                     rows={1}
                     disabled={disabled || isPosting}
-                    className="max-h-40 min-h-[28px] w-full resize-none border-b border-white/10 bg-transparent py-1 text-[13px] leading-relaxed text-zinc-200 outline-none transition placeholder:text-zinc-500 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="max-h-40 min-h-[28px] w-full resize-none border-b border-white/5 bg-transparent py-1 text-[13px] leading-relaxed text-zinc-200 outline-none transition placeholder:text-zinc-500 focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-60"
                 />
 
                 <div className="mt-1.5 flex items-center justify-between gap-3">

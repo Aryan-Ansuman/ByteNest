@@ -1,68 +1,230 @@
 "use client";
 
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRoomInitializer } from "@/hooks/useRoomInitializer";
 import { useRoomRealtime } from "@/hooks/useRoomRealtime";
 import { useRoomStore } from "@/store/roomStore";
-import MemberSidebar from "@/components/rooms/MemberSidebar";
+import LeftNav from "@/components/rooms/LeftNav";
 import ChatPanel from "@/components/rooms/ChatPanel";
 import CodePanel from "@/components/rooms/CodePanel";
-import RoomHeader from "@/components/rooms/RoomHeader";
+import MemberSidebar from "@/components/rooms/MemberSidebar";
+import TopBar from "@/components/rooms/TopBar";
 import RoomError from "@/components/rooms/RoomError";
 import RoomSkeleton from "@/components/rooms/RoomSkeleton";
+import CommandPalette from "@/components/rooms/CommandPalette";
+import RoomInfoPanel from "@/components/rooms/RoomInfoPanel";
+import { cn } from "@/lib/utils";
 
 interface Props {
     roomId: string;
     inviteToken?: string;
 }
 
+/** Persistent panel visibility — survives tab switches */
+type PanelId = "chat" | "code" | "members" | "info";
+
 export default function RoomClient({ roomId, inviteToken }: Props) {
     useRoomInitializer(roomId, inviteToken);
     useRoomRealtime(roomId);
 
-    const room = useRoomStore((s) => s.room);
-    const isInitialized = useRoomStore((s) => s.isInitialized);
+    const room           = useRoomStore((s) => s.room);
+    const isInitialized  = useRoomStore((s) => s.isInitialized);
     const isInitializing = useRoomStore((s) => s.isInitializing);
-    const initError = useRoomStore((s) => s.initError);
-    const codeSession = useRoomStore((s) => s.codeSession);
+    const initError      = useRoomStore((s) => s.initError);
+    const codeSession    = useRoomStore((s) => s.codeSession);
 
-    const hasCodeSession = Boolean(room?.activeCodeSessionId);
+    // ── Panel state ───────────────────────────────────────────────────────
+    const [hiddenPanels, setHiddenPanels]     = useState<Set<PanelId>>(new Set());
+    const [chatWidth, setChatWidth]           = useState(280);
+    const [membersWidth, setMembersWidth]     = useState(240);
+    const [filesWidth, setFilesWidth]         = useState(200);
+    const [commandOpen, setCommandOpen]       = useState(false);
+    const [showInfo, setShowInfo]             = useState(false);
+    const [focusMode, setFocusMode]           = useState(false);
 
-    if (initError) return <RoomError message={initError} />;
+    // Drag-resize refs
+    const draggingRef     = useRef<"chat" | "members" | "files" | null>(null);
+    const dragStartX      = useRef(0);
+    const dragStartWidth  = useRef(0);
+
+    const hasCodeSession = Boolean(codeSession);
+
+    // ── Keyboard shortcuts ────────────────────────────────────────────────
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            // Cmd/Ctrl + K → command palette
+            if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+                e.preventDefault();
+                setCommandOpen((v) => !v);
+            }
+            // Cmd + \ → focus mode
+            if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+                e.preventDefault();
+                setFocusMode((v) => !v);
+            }
+            // Escape closes palette
+            if (e.key === "Escape") {
+                setCommandOpen(false);
+                setShowInfo(false);
+            }
+        }
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
+
+    // ── Drag-resize logic ─────────────────────────────────────────────────
+    const startDrag = useCallback(
+        (panel: "chat" | "members" | "files", e: React.MouseEvent) => {
+            e.preventDefault();
+            draggingRef.current = panel;
+            dragStartX.current = e.clientX;
+            dragStartWidth.current = panel === "chat" ? chatWidth : panel === "members" ? membersWidth : filesWidth;
+
+            function onMove(ev: MouseEvent) {
+                if (!draggingRef.current) return;
+                const delta = ev.clientX - dragStartX.current;
+                if (draggingRef.current === "chat") {
+                    setChatWidth(Math.max(260, Math.min(500, dragStartWidth.current + delta)));
+                } else if (draggingRef.current === "files") {
+                    setFilesWidth(Math.max(160, Math.min(300, dragStartWidth.current + delta)));
+                } else {
+                    setMembersWidth(Math.max(200, Math.min(300, dragStartWidth.current - delta)));
+                }
+            }
+            function onUp() {
+                draggingRef.current = null;
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+            }
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+        },
+        [chatWidth, membersWidth]
+    );
+
+    function togglePanel(id: PanelId) {
+        setHiddenPanels((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+
+    // ── Render guards ─────────────────────────────────────────────────────
+    if (initError)                        return <RoomError message={initError} />;
     if (isInitializing || !isInitialized) return <RoomSkeleton />;
-    if (!room) return null;
+    if (!room)                            return null;
+
+    const chatVisible    = !hiddenPanels.has("chat")    && !focusMode;
+    const membersVisible = !hiddenPanels.has("members") && !focusMode;
+    const codeVisible    = !hiddenPanels.has("code")    && !focusMode;
 
     return (
-        <div className="flex flex-col h-screen bg-[#080808] text-zinc-100 overflow-hidden">
-            {/* Header */}
-            <RoomHeader room={room} />
+        <div className="flex flex-col h-screen bg-[#09090b] text-zinc-100 overflow-hidden select-none">
 
-            {/* Body — three columns */}
+            {/* ── Top bar ──────────────────────────────────────────────── */}
+            <TopBar
+                room={room}
+                roomId={roomId}
+                hiddenPanels={hiddenPanels}
+                onTogglePanel={togglePanel}
+                onOpenCommand={() => setCommandOpen(true)}
+                onToggleInfo={() => setShowInfo((v) => !v)}
+                focusMode={focusMode}
+                onToggleFocus={() => setFocusMode((v) => !v)}
+            />
+
+            {/* ── Body ─────────────────────────────────────────────────── */}
             <div className="flex flex-1 overflow-hidden">
-                {/* Left — member sidebar (fixed 220px) */}
-                <aside className="w-[220px] shrink-0 border-r border-zinc-800 overflow-y-auto bg-[#0a0a0a]">
-                    <MemberSidebar roomId={roomId} />
-                </aside>
 
-                {/* Center — chat panel (shrinks when code panel opens) */}
-                <div
-                    className={[
-                        "flex flex-col overflow-hidden transition-all duration-300 ease-in-out",
-                        hasCodeSession ? "w-[420px] shrink-0" : "flex-1",
-                    ].join(" ")}
-                >
-                    <ChatPanel roomId={roomId} />
-                </div>
 
-                {/* Right — code panel */}
-                <div
-                    className={[
-                        "overflow-hidden border-l border-zinc-800 transition-all duration-300 ease-in-out",
-                        hasCodeSession ? "flex-1" : "w-[300px] shrink-0 xl:w-[400px]",
-                    ].join(" ")}
-                >
-                    <CodePanel roomId={roomId} session={codeSession} />
-                </div>
+
+                {/* Chat panel — resizable */}
+                {chatVisible && (
+                    <>
+                        <div
+                            className={cn(
+                                "shrink-0 flex flex-col overflow-hidden bg-[#111113]",
+                                codeVisible ? "border-r border-white/5" : "flex-1"
+                            )}
+                            style={codeVisible ? { width: chatWidth } : {}}
+                        >
+                            <ChatPanel roomId={roomId} />
+                        </div>
+                        {/* Drag handle / Gutter */}
+                        {codeVisible && (
+                            <div
+                                className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                                onMouseDown={(e) => startDrag("chat", e)}
+                            >
+                                <div className="absolute inset-y-0 -left-1 -right-1" />
+                                <div className="h-8 w-1 rounded-full bg-zinc-800/60 group-hover:bg-brand/50 transition-colors" />
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* Files Sidebar (Adjacent to CodePanel) */}
+                {!focusMode && hasCodeSession && (
+                    <>
+                        <div style={{ width: filesWidth }} className="shrink-0 flex flex-col overflow-hidden bg-[#111113] border-r border-white/5">
+                            <LeftNav roomId={roomId} />
+                        </div>
+                        {/* Drag handle / Gutter */}
+                        <div
+                            className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                            onMouseDown={(e) => startDrag("files", e)}
+                        >
+                            <div className="absolute inset-y-0 -left-1 -right-1" />
+                            <div className="h-8 w-1 rounded-full bg-zinc-800/60 group-hover:bg-brand/50 transition-colors" />
+                        </div>
+                    </>
+                )}
+
+                {/* Code / info panel — fills remaining */}
+                {codeVisible && (
+                    <div className="flex-1 overflow-hidden min-w-0 relative">
+                        {showInfo ? (
+                            <RoomInfoPanel room={room} onClose={() => setShowInfo(false)} />
+                        ) : (
+                            <CodePanel roomId={roomId} session={codeSession} />
+                        )}
+                    </div>
+                )}
+
+                {/* Members drag handle + sidebar */}
+                {membersVisible && (
+                    <>
+                        {/* Drag handle / Gutter */}
+                        <div
+                            className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                            onMouseDown={(e) => startDrag("members", e)}
+                        >
+                            <div className="absolute inset-y-0 -left-1 -right-1" />
+                            <div className="h-8 w-1 rounded-full bg-zinc-800/60 group-hover:bg-brand/50 transition-colors" />
+                        </div>
+                        <aside
+                            className="shrink-0 overflow-hidden bg-[#111113] border-l border-white/5 flex flex-col"
+                            style={{ width: membersWidth }}
+                            aria-label="Room members"
+                        >
+                            <MemberSidebar roomId={roomId} />
+                        </aside>
+                    </>
+                )}
             </div>
+
+            {/* ── Command palette ───────────────────────────────────────── */}
+            {commandOpen && (
+                <CommandPalette
+                    roomId={roomId}
+                    onClose={() => setCommandOpen(false)}
+                    onTogglePanel={togglePanel}
+                    hiddenPanels={hiddenPanels}
+                    onToggleFocus={() => setFocusMode((v) => !v)}
+                    focusMode={focusMode}
+                />
+            )}
         </div>
     );
 }

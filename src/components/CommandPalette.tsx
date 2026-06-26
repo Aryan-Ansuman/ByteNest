@@ -134,11 +134,11 @@ export default function CommandPalette({
         <>
             <button
                 onClick={() => setOpen(true)}
-                className="relative flex h-11 w-full max-w-2xl items-center rounded-xl border border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-500 shadow-none transition duration-200 ease-out hover:border-white/15"
+                className="relative flex h-11 w-full max-w-2xl items-center rounded-xl border border-white/5 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-500 shadow-none transition duration-200 ease-out hover:border-white/15"
             >
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
                 <span className="truncate">Search questions, tags, or authors…</span>
-                <span className="ml-auto hidden items-center gap-0.5 rounded-md border border-white/10 bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 sm:flex">
+                <span className="ml-auto hidden items-center gap-0.5 rounded-md border border-white/5 bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 sm:flex">
                     <span>⌘</span>K
                 </span>
             </button>
@@ -158,9 +158,9 @@ export default function CommandPalette({
                             exit={{ opacity: 0, y: -8, scale: 0.98 }}
                             transition={{ duration: 0.15, ease: "easeOut" }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-xl overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c0c] shadow-[0_24px_70px_-12px_rgba(0,0,0,0.7)]"
+                            className="w-full max-w-xl overflow-hidden rounded-2xl border border-white/5 bg-[#0c0c0c] shadow-[0_24px_70px_-12px_rgba(0,0,0,0.7)]"
                         >
-                            <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5">
+                            <div className="flex items-center gap-3 border-b border-white/5 px-4 py-3.5">
                                 <Search className="size-4 shrink-0 text-zinc-500" />
                                 <input
                                     ref={inputRef}
@@ -215,7 +215,7 @@ export default function CommandPalette({
                                                                 setOpen(false);
                                                                 router.push(`/questions?tag=${encodeURIComponent(tag)}`);
                                                             }}
-                                                            className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-400 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
+                                                            className="flex items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-400 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
                                                         >
                                                             <TrendingUp className="size-3" />
                                                             {tag}

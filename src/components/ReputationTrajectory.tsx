@@ -329,7 +329,7 @@ export default function ReputationTrajectory() {
     if (state.status === "error") return null;
 
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             {/* Widget header */}
             <div className="mb-3 flex items-center gap-2">
                 <TrendingUp className="size-4 text-[#a7c8b3]" />

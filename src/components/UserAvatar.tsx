@@ -55,7 +55,7 @@ export default function UserAvatar({ name, size = "md", className, src }: UserAv
                 src={src}
                 alt={name}
                 className={cn(
-                    "shrink-0 rounded-xl border border-white/10 object-cover",
+                    "shrink-0 rounded-xl border border-white/5 object-cover",
                     sizeClass,
                     className
                 )}

@@ -63,7 +63,7 @@ export default function ProfileMenu({ name, reputation }: ProfileMenuProps) {
             <div className="flex items-center gap-2">
                 <Link
                     href="/login"
-                    className="flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition duration-150 ease-out hover:bg-white/[0.08] hover:text-zinc-100"
+                    className="flex h-9 items-center rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 transition duration-150 ease-out hover:bg-white/[0.08] hover:text-zinc-100"
                 >
                     Sign in
                 </Link>
@@ -98,7 +98,7 @@ export default function ProfileMenu({ name, reputation }: ProfileMenuProps) {
                     "flex h-10 items-center gap-2 rounded-xl border px-1.5 transition duration-150 ease-out",
                     open
                         ? "border-white/15 bg-white/[0.08]"
-                        : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                        : "border-white/5 bg-white/[0.04] hover:bg-white/[0.07]"
                 )}
             >
                 <UserAvatar
@@ -122,7 +122,7 @@ export default function ProfileMenu({ name, reputation }: ProfileMenuProps) {
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: "easeOut" }}
                         role="menu"
-                        className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c0c]/95 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                        className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-white/5 bg-[#0c0c0c]/95 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                     >
                         {/* Profile header */}
                         <Link

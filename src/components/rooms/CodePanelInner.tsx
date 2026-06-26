@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
+import { Search, Wand2, Settings } from "lucide-react";
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
 import type { CodeSession, SessionFile } from "@/types/rooms";
@@ -37,6 +38,7 @@ export default function CodePanelInner({ roomId, session }: Props) {
 
     const [activeFile, setActiveFile] = useState(session.activeFile);
     const [isEditorReady, setIsEditorReady] = useState(false);
+    const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
 
     const parsedFiles: SessionFile[] = (() => {
         try {
@@ -123,6 +125,27 @@ export default function CodePanelInner({ roomId, session }: Props) {
     ) {
         editorRef.current = editor;
         monacoRef.current = monaco;
+
+        monaco.editor.defineTheme("bytenest-dark", {
+            base: "vs-dark",
+            inherit: true,
+            rules: [],
+            colors: {
+                "editor.background": "#1A1A20",
+                "editorCursor.foreground": "#a7c8b3",
+                "editor.selectionBackground": "#a7c8b333",
+                "editor.lineHighlightBackground": "#1A1A20",
+                "editor.lineHighlightBorder": "#a7c8b31a",
+                "editorIndentGuide.background": "#ffffff0d",
+                "editorIndentGuide.activeBackground": "#ffffff26",
+            }
+        });
+        monaco.editor.setTheme("bytenest-dark");
+
+        editor.onDidChangeCursorPosition((e) => {
+            setCursorPos({ line: e.position.lineNumber, col: e.position.column });
+        });
+
         setIsEditorReady(true);
     }
 
@@ -149,19 +172,29 @@ export default function CodePanelInner({ roomId, session }: Props) {
     }
 
     // ── End session ────────────────────────────────────────────────
+    const [ending, setEnding] = useState(false);
+    
     async function handleEndSession() {
-        if (!ydoc) return;
-        const state = Y.encodeStateAsUpdate(ydoc);
+        setEnding(true);
+        let yjsSnapshotB64: string | undefined = undefined;
+        if (ydoc) {
+            const state = Y.encodeStateAsUpdate(ydoc);
+            yjsSnapshotB64 = uint8ToBase64(state);
+        }
+        
         try {
             await apiFetch(`/api/rooms/${roomId}/session/${session.$id}`, {
                 method: "PATCH",
                 body: JSON.stringify({
                     action: "end",
-                    yjsSnapshotB64: uint8ToBase64(state),
+                    ...(yjsSnapshotB64 ? { yjsSnapshotB64 } : {})
                 }),
             });
-        } catch {
-            // best effort
+            toast.success("Code session ended");
+        } catch (e: any) {
+            toast.error(e?.message ?? "Failed to end session");
+        } finally {
+            setEnding(false);
         }
     }
 
@@ -169,7 +202,7 @@ export default function CodePanelInner({ roomId, session }: Props) {
         parsedFiles.find((f) => f.name === activeFile)?.language ?? "javascript";
 
     return (
-        <div className="flex flex-col h-full bg-[#0a0a0a]">
+        <div className="flex flex-col h-full bg-[#09090b]">
             {/* File tab bar */}
             <FileTabBar
                 files={parsedFiles}
@@ -179,40 +212,48 @@ export default function CodePanelInner({ roomId, session }: Props) {
                 sessionId={session.$id}
                 onSwitch={handleSwitchFile}
                 onAddFile={handleAddFile}
+                onEndSession={handleEndSession}
+                ending={ending}
             />
 
-            {/* Host toolbar */}
-            {isHost && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 border-b border-zinc-800 shrink-0">
+            <div className="flex-1 flex flex-col min-h-0 bg-[#1A1A20] rounded-t-[8px] overflow-hidden border border-white/[0.04]">
+                {/* Editor Toolbar */}
+                <div className="flex items-center gap-3 px-4 h-[44px] bg-[#17171B] border-b border-white/[0.04] shrink-0">
                     <ViewOnlyToggle
                         roomId={roomId}
                         sessionId={session.$id}
                         isHost={isHost}
                         viewOnly={liveSession.viewOnly}
                     />
+                    
+                    {/* Auto Save indicator */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/[0.02] border border-white/[0.03]">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#a7c8b3]/70 animate-pulse" />
+                        <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">Auto Save</span>
+                    </div>
+
                     <div className="flex-1" />
-                    <button
-                        onClick={handleEndSession}
-                        className="text-[11px] font-medium px-2.5 py-1 rounded-md border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors"
-                    >
-                        End Session
-                    </button>
-                </div>
-            )}
 
-            {/* View-only banner for non-hosts */}
-            {isViewOnly && (
-                <div className="shrink-0 text-center py-1.5 text-[11px] font-medium text-amber-400 bg-amber-500/10 border-b border-amber-500/20">
-                    🔒 View only — the host has disabled editing
+                    {/* Mini Actions */}
+                    <div className="flex items-center gap-1">
+                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Search (⌘F)">
+                            <Search className="w-[14px] h-[14px]" />
+                        </button>
+                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Format (⇧⌥F)">
+                            <Wand2 className="w-[14px] h-[14px]" />
+                        </button>
+                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Editor Settings">
+                            <Settings className="w-[14px] h-[14px]" />
+                        </button>
+                    </div>
                 </div>
-            )}
 
-            {/* Monaco */}
-            <div className="flex-1 overflow-hidden">
-                <Editor
+                {/* Monaco */}
+                <div className="flex-1 overflow-hidden relative">
+                    <Editor
                     height="100%"
                     language={currentLang}
-                    theme="vs-dark"
+                    theme="bytenest-dark"
                     onMount={handleEditorDidMount}
                     options={{
                         readOnly: isViewOnly,
@@ -233,6 +274,23 @@ export default function CodePanelInner({ roomId, session }: Props) {
                         </div>
                     }
                 />
+                </div>
+
+                {/* Status Bar */}
+                <div className="flex items-center justify-between px-4 h-[28px] bg-[#17171B] border-t border-white/[0.04] shrink-0 text-[11px] text-zinc-500 font-medium tracking-wide">
+                    <div className="flex items-center gap-4">
+                        <span className="capitalize">{currentLang}</span>
+                        <span>UTF-8</span>
+                        <span>Spaces: 4</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
+                            <span>Live</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

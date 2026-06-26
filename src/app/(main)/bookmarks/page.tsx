@@ -110,7 +110,7 @@ export default function BookmarksPage() {
 
     return (
         <div className="mx-auto max-w-4xl">
-            <div className="mb-6 border-b border-white/10 pb-5">
+            <div className="mb-6 border-b border-white/5 pb-5">
                 <h1 className="text-2xl font-bold text-zinc-100">Bookmarks</h1>
                 <p className="mt-1 text-sm text-zinc-500">
                     {bookmarkIds.length} saved question{bookmarkIds.length === 1 ? "" : "s"}

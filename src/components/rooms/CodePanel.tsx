@@ -5,13 +5,14 @@ import { useState } from "react";
 import { useRoomStore } from "@/store/roomStore";
 import type { CodeSession } from "@/types/rooms";
 import SessionStartModal from "./SessionStartModal";
-import { Code2 } from "lucide-react";
+import { Code2, Code } from "lucide-react";
+import { motion } from "framer-motion";
 
 // Monaco must not run on server
 const CodePanelInner = dynamic(() => import("./CodePanelInner"), {
     ssr: false,
     loading: () => (
-        <div className="flex h-full items-center justify-center bg-[#0a0a0a] text-zinc-600 text-sm">
+        <div className="flex h-full items-center justify-center bg-[#080808] text-tx-disabled text-sm">
             Loading editor…
         </div>
     ),
@@ -30,36 +31,60 @@ export default function CodePanel({ roomId, session }: Props) {
 
     if (!session) {
         return (
-            <div className="flex flex-col h-full items-center justify-center bg-[#0a0a0a] gap-5">
-                {isHost ? (
-                    <>
-                        <div className="text-center space-y-3">
-                            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400 mb-4 shadow-sm">
-                                <Code2 strokeWidth={1.5} className="w-6 h-6" />
-                            </div>
-                            <p className="text-zinc-300 text-sm font-medium">
-                                No active code session
-                            </p>
-                            <p className="text-zinc-500 text-xs max-w-xs leading-relaxed">
-                                Start a session to code collaboratively with
-                                everyone in real time
-                            </p>
+            <div className="flex flex-col h-full bg-[#09090b]">
+                <div className="flex-1 flex flex-col justify-center items-center p-6 text-center">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="flex flex-col items-center"
+                    >
+                        {/* Glow + Icon */}
+                        <div className="relative mb-8">
+                            <div className="absolute inset-0 bg-[#a7c8b3] opacity-[0.15] blur-2xl rounded-full" />
+                            <Code className="w-12 h-12 text-[#a7c8b3] relative z-10 opacity-90" strokeWidth={1.5} />
                         </div>
-                        <button
-                            onClick={() => setShowModal(true)}
-                            className="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white text-[13px] font-medium rounded-xl transition-all duration-200 active:scale-95 shadow-sm shadow-indigo-500/20"
-                        >
-                            Start Code Session
-                        </button>
-                    </>
-                ) : (
-                    <div className="text-center space-y-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500/50 mx-auto animate-ping" />
-                        <p className="text-zinc-500 text-xs font-medium">
-                            Waiting for host to start a session…
-                        </p>
-                    </div>
-                )}
+
+                        <h3 className="text-[20px] font-semibold text-zinc-100 mb-3 tracking-tight">Ready to collaborate</h3>
+                        
+                        {isHost ? (
+                            <>
+                                <p className="text-[14px] text-zinc-400 mb-8 max-w-[280px] leading-relaxed">
+                                    Invite teammates or start typing.
+                                </p>
+                                
+                                <div className="flex flex-col gap-3 mb-10 items-center">
+                                    <div className="flex items-center gap-3 text-[12px] text-zinc-500 font-medium">
+                                        <div className="flex items-center gap-1">
+                                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300">⌘</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300">P</span>
+                                        </div>
+                                        <span>Open File</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-[12px] text-zinc-500 font-medium">
+                                        <div className="flex items-center gap-1">
+                                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300">⌘</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300">⇧</span>
+                                            <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300">P</span>
+                                        </div>
+                                        <span>Command Palette</span>
+                                    </div>
+                                </div>
+                                
+                                <button
+                                    onClick={() => setShowModal(true)}
+                                    className="px-6 py-2.5 bg-[#a7c8b3] hover:bg-white text-[#08100b] text-[13px] font-[600] rounded-xl transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(167,200,179,0.3)]"
+                                >
+                                    Start Session
+                                </button>
+                            </>
+                        ) : (
+                            <p className="text-[14px] text-zinc-500 max-w-[280px] mt-4">
+                                Waiting for the host to start a code session.
+                            </p>
+                        )}
+                    </motion.div>
+                </div>
 
                 {showModal && (
                     <SessionStartModal

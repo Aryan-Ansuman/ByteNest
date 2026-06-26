@@ -52,7 +52,7 @@ export default function CustomizeFeedModal({
                         exit={{ x: "100%" }}
                         transition={{ duration: 0.22, ease: "easeOut" }}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-full w-full max-w-sm overflow-y-auto border-l border-white/10 bg-[#0c0c0c] p-6"
+                        className="h-full w-full max-w-sm overflow-y-auto border-l border-white/5 bg-[#0c0c0c] p-6"
                     >
                         <div className="mb-6 flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export default function CustomizeFeedModal({
                         </p>
 
                         {!user ? (
-                            <p className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-500">
+                            <p className="rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm text-zinc-500">
                                 Sign in to follow tags and personalize your feed.
                             </p>
                         ) : (
@@ -93,7 +93,7 @@ export default function CustomizeFeedModal({
                                                 "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50",
                                                 isFollowed
                                                     ? "border-[#a7c8b3]/30 bg-[#a7c8b3]/15 text-[#a7c8b3]"
-                                                    : "border-white/10 bg-white/[0.03] text-zinc-400 hover:border-[#a7c8b3]/20 hover:text-zinc-200"
+                                                    : "border-white/5 bg-white/[0.03] text-zinc-400 hover:border-[#a7c8b3]/20 hover:text-zinc-200"
                                             )}
                                         >
                                             {isFollowed ? <Check className="size-3" /> : <Hash className="size-3" />}

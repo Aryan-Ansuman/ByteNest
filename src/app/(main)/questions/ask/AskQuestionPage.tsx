@@ -362,7 +362,7 @@ export default function AskQuestionPage() {
                                                 onChange={(e) => setTitle(e.target.value)}
                                                 placeholder="e.g. How do I debounce a search input in React with hooks?"
                                                 maxLength={100}
-                                                className="h-12 rounded-xl border-white/10 bg-white/[0.04] text-base text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                                className="h-12 rounded-xl border-white/5 bg-white/[0.04] text-base text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                                 onKeyDown={(e) => {
                                                     if (e.key === "Enter") nextStep();
                                                 }}
@@ -451,7 +451,7 @@ export default function AskQuestionPage() {
                                         <div className="mt-5">
                                             {/* Tag input */}
                                             <div className="relative">
-                                                <div className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 focus-within:border-[#a7c8b3]/60 focus-within:ring-2 focus-within:ring-[#a7c8b3]/15">
+                                                <div className="flex min-h-12 flex-wrap items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-3 py-2.5 focus-within:border-[#a7c8b3]/60 focus-within:ring-2 focus-within:ring-[#a7c8b3]/15">
                                                     {tags.map((tag) => (
                                                         <span
                                                             key={tag}
@@ -484,7 +484,7 @@ export default function AskQuestionPage() {
                                                             initial={{ opacity: 0, y: 4 }}
                                                             animate={{ opacity: 1, y: 0 }}
                                                             exit={{ opacity: 0, y: 4 }}
-                                                            className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-2xl"
+                                                            className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-white/5 bg-[#111] shadow-2xl"
                                                         >
                                                             {filteredSuggestions.map((s) => (
                                                                 <button
@@ -513,7 +513,7 @@ export default function AskQuestionPage() {
                                                         <button
                                                             key={tag}
                                                             onClick={() => addTag(tag)}
-                                                            className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:bg-[#a7c8b3]/10 hover:text-[#a7c8b3]"
+                                                            className="rounded-full border border-white/5 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:bg-[#a7c8b3]/10 hover:text-[#a7c8b3]"
                                                         >
                                                             {tag}
                                                         </button>
@@ -537,7 +537,7 @@ export default function AskQuestionPage() {
                                         />
                                         <div className="mt-5">
                                             {imagePreview ? (
-                                                <div className="relative overflow-hidden rounded-xl border border-white/10">
+                                                <div className="relative overflow-hidden rounded-xl border border-white/5">
                                                     <img
                                                         src={imagePreview}
                                                         alt="Preview"
@@ -549,13 +549,13 @@ export default function AskQuestionPage() {
                                                     >
                                                         <X className="size-4" />
                                                     </button>
-                                                    <div className="border-t border-white/10 bg-black/30 px-4 py-2 text-xs text-zinc-500">
+                                                    <div className="border-t border-white/5 bg-black/30 px-4 py-2 text-xs text-zinc-500">
                                                         {attachment?.name} · {((attachment?.size || 0) / 1024).toFixed(0)} KB
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/20 bg-white/[0.025] px-6 py-14 text-center transition hover:border-[#a7c8b3]/40 hover:bg-white/[0.04]">
-                                                    <div className="flex size-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05]">
+                                                    <div className="flex size-12 items-center justify-center rounded-xl border border-white/5 bg-white/[0.05]">
                                                         <ImageIcon className="size-5 text-zinc-500" />
                                                     </div>
                                                     <div>
@@ -639,7 +639,7 @@ export default function AskQuestionPage() {
                                             )}
 
                                             {/* Checklist */}
-                                            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                                            <div className="rounded-xl border border-white/5 bg-white/[0.025] p-4">
                                                 <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-600">
                                                     Checklist
                                                 </p>
@@ -703,7 +703,7 @@ export default function AskQuestionPage() {
                                         if (idx > 0) { setError(""); setActiveStep(STEPS[idx - 1].id); }
                                     }}
                                     disabled={activeStep === "title"}
-                                    className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+                                    className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
                                 >
                                     <ArrowLeft className="size-4" />
                                     Back
@@ -805,7 +805,7 @@ function StepPanel({ children }: { children: React.ReactNode }) {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 shadow-xl"
+            className="rounded-2xl border border-white/5 bg-white/[0.02] p-6 shadow-xl"
         >
             {children}
         </motion.div>
@@ -832,7 +832,7 @@ function PreviewBlock({ label, children }: { label: string; children: React.Reac
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">
                 {label}
             </p>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-zinc-300">
+            <div className="rounded-xl border border-white/5 bg-white/[0.03] p-4 text-zinc-300">
                 {children}
             </div>
         </div>

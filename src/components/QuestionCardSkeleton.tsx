@@ -9,7 +9,7 @@ export function QuestionCardSkeleton({ index = 0 }: { index?: number }) {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: index * 0.04 }}
-            className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.025] p-5"
+            className="overflow-hidden rounded-xl border border-white/5 bg-white/[0.025] p-5"
         >
             <div className="flex gap-4">
                 <div className="flex shrink-0 flex-col items-center gap-2 pt-0.5">

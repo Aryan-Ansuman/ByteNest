@@ -214,7 +214,7 @@ export default function EditProfileClient({
             </div>
 
             {/* ── Section tabs ── */}
-            <div className="mb-6 flex gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <div className="mb-6 flex gap-1 rounded-xl border border-white/5 bg-white/[0.03] p-1">
                 {sections.map((s) => (
                     <button
                         key={s.id}
@@ -250,7 +250,7 @@ export default function EditProfileClient({
                         className="space-y-4"
                     >
                         {/* Avatar card */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.025] p-6">
                             <h2 className="mb-5 flex items-center gap-2 text-base font-semibold text-zinc-100">
                                 <User className="size-4 text-[#a7c8b3]" />
                                 Profile Picture
@@ -261,7 +261,7 @@ export default function EditProfileClient({
                                         name={name || initialName}
                                         size="xl"
                                         src={avatarUrl}
-                                        className="size-20 rounded-2xl border border-white/10"
+                                        className="size-20 rounded-2xl border border-white/5"
                                     />
                                     <div className="absolute -bottom-1.5 -right-1.5 flex size-7 items-center justify-center rounded-full border border-white/20 bg-[#080808]">
                                         <Camera className="size-3.5 text-zinc-400" />
@@ -279,7 +279,7 @@ export default function EditProfileClient({
                         </div>
 
                         {/* Name + Email */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.025] p-6">
                             <h2 className="mb-5 flex items-center gap-2 text-base font-semibold text-zinc-100">
                                 <User className="size-4 text-[#a7c8b3]" />
                                 Personal Information
@@ -302,7 +302,7 @@ export default function EditProfileClient({
                                             }}
                                             placeholder="Your display name"
                                             maxLength={64}
-                                            className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                            className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                         />
                                     </div>
                                     <div className="mt-1.5 flex items-center justify-between text-xs">
@@ -328,7 +328,7 @@ export default function EditProfileClient({
                                         <Input
                                             value={initialEmail}
                                             readOnly
-                                            className="h-11 cursor-not-allowed rounded-xl border-white/10 bg-white/[0.02] pl-10 text-zinc-500 focus-visible:ring-0"
+                                            className="h-11 cursor-not-allowed rounded-xl border-white/5 bg-white/[0.02] pl-10 text-zinc-500 focus-visible:ring-0"
                                         />
                                     </div>
                                     <p className="mt-1.5 text-xs text-zinc-600">
@@ -395,7 +395,7 @@ export default function EditProfileClient({
                         <div className="flex items-center justify-between gap-3 pt-1">
                             <Link
                                 href={`/users/${userId}/${slugify(initialName)}`}
-                                className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                                className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                             >
                                 <ArrowLeft className="size-4" />
                                 Cancel
@@ -428,7 +428,7 @@ export default function EditProfileClient({
                         className="space-y-4"
                     >
                         {/* Change password */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+                        <div className="rounded-2xl border border-white/5 bg-white/[0.025] p-6">
                             <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-zinc-100">
                                 <Lock className="size-4 text-[#a7c8b3]" />
                                 Change Password
@@ -453,7 +453,7 @@ export default function EditProfileClient({
                                                 setPasswordError("");
                                             }}
                                             placeholder="Enter current password"
-                                            className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                            className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                         />
                                         <button
                                             type="button"
@@ -480,7 +480,7 @@ export default function EditProfileClient({
                                                 setPasswordError("");
                                             }}
                                             placeholder="Enter new password"
-                                            className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                                            className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                                         />
                                         <button
                                             type="button"
@@ -538,7 +538,7 @@ export default function EditProfileClient({
                                             }}
                                             placeholder="Confirm new password"
                                             className={cn(
-                                                "h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-offset-0",
+                                                "h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-10 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-offset-0",
                                                 confirmPassword && newPassword !== confirmPassword
                                                     ? "border-red-500/40 focus-visible:border-red-500/60 focus-visible:ring-red-500/10"
                                                     : confirmPassword && newPassword === confirmPassword
@@ -632,7 +632,7 @@ export default function EditProfileClient({
                                     setConfirmPassword("");
                                     setPasswordError("");
                                 }}
-                                className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                                className="flex h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-4 text-sm text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                             >
                                 <X className="size-4" />
                                 Clear

@@ -17,7 +17,7 @@ export function Avatar({ name, small = false }: { name: string; small?: boolean 
     return (
         <span
             className={cn(
-                "flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-[#2D2D2D] to-[#1A1A1A] font-medium text-zinc-300",
+                "flex shrink-0 items-center justify-center rounded-full border border-white/5 bg-gradient-to-br from-[#2D2D2D] to-[#1A1A1A] font-medium text-zinc-300",
                 small ? "size-7 text-[10px]" : "size-10 text-sm"
             )}
         >
@@ -82,7 +82,7 @@ export function ConfirmDialog({
                         exit={{ opacity: 0, y: 8, scale: 0.97 }}
                         transition={{ duration: 0.15, ease: "easeOut" }}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0c0c] p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)]"
+                        className="w-full max-w-sm rounded-2xl border border-white/5 bg-[#0c0c0c] p-5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)]"
                         aria-busy={busy}
                     >
                         <div className="flex items-start gap-3">
@@ -106,7 +106,7 @@ export function ConfirmDialog({
                             <button
                                 onClick={onCancel}
                                 disabled={busy}
-                                className="flex h-9 items-center rounded-xl border border-white/10 bg-white/[0.04] px-3.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-9 items-center rounded-xl border border-white/5 bg-white/[0.04] px-3.5 text-sm text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {cancelLabel}
                             </button>

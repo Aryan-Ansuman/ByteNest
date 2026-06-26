@@ -94,7 +94,7 @@ export default function CreateMenu() {
                         transition={{ duration: 0.16, ease: "easeOut" }}
                         role="menu"
                         aria-orientation="vertical"
-                        className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c0c]/95 p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                        className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-white/5 bg-[#0c0c0c]/95 p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                     >
                         {items.map((item) => (
                             <Link
@@ -104,7 +104,7 @@ export default function CreateMenu() {
                                 onClick={() => setOpen(false)}
                                 className="group flex items-start gap-3 rounded-xl px-3 py-2.5 transition duration-150 ease-out hover:bg-white/[0.06] focus:bg-white/[0.06] focus:outline-none"
                             >
-                                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 transition group-hover:border-[#a7c8b3]/30 group-hover:text-[#a7c8b3]">
+                                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/[0.04] text-zinc-400 transition group-hover:border-[#a7c8b3]/30 group-hover:text-[#a7c8b3]">
                                     {item.icon}
                                 </span>
                                 <span className="min-w-0">

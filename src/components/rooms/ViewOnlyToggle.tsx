@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2, Pen, Lock } from "lucide-react";
 import { useHostControls } from "@/hooks/useHostControls";
 
 interface Props {
@@ -32,12 +31,13 @@ export function ViewOnlyToggle({ roomId, sessionId, isHost, viewOnly }: Props) {
         setOptimistic(null);
     }, [viewOnly]);
 
-    if (!isHost || !sessionId) return null;
+    if (!sessionId) return null;
 
     const current = optimistic ?? viewOnly;
     const isBusy = loading?.startsWith("view_only") ?? false;
 
     async function handleToggle() {
+        if (!isHost) return;
         const next = !current;
         setOptimistic(next); // immediate feedback
         try {
@@ -49,48 +49,36 @@ export function ViewOnlyToggle({ roomId, sessionId, isHost, viewOnly }: Props) {
         }
     }
 
+    if (!isHost) {
+        return (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium select-none bg-white/[0.03] border border-white/[0.05] ${
+                current ? "text-[#E2C792]" : "text-[#A7C8B3]"
+            }`}>
+                {current ? <Lock size={12} className="shrink-0" /> : <Pen size={12} className="shrink-0" />}
+                <span className="leading-none">{current ? "View Only" : "Live Editing"}</span>
+            </div>
+        );
+    }
+
     return (
         <button
             onClick={handleToggle}
             disabled={isBusy}
-            title={
-                current
-                    ? "Disable view-only (allow edits)"
-                    : "Enable view-only (read-only for members)"
-            }
-            className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/50 px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-all hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-40 select-none"
+            title={current ? "Disable view-only (allow edits)" : "Enable view-only (read-only for members)"}
+            className={`group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 select-none overflow-hidden bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.06] ${
+                current ? "text-[#E2C792]" : "text-[#A7C8B3]"
+            } ${isBusy ? "opacity-60 cursor-not-allowed" : "cursor-pointer active:scale-95"}`}
         >
-            {/* icon */}
             {isBusy ? (
-                <Loader2 size={12} className="animate-spin shrink-0" />
-            ) : current ? (
-                <Eye size={12} className="shrink-0 text-amber-400" />
+                <Loader2 size={12} className="animate-spin shrink-0 text-zinc-400" />
             ) : (
-                <EyeOff size={12} className="shrink-0" />
+                <>
+                    {current ? <Lock size={12} className="shrink-0" /> : <Pen size={12} className="shrink-0" />}
+                    <span className="leading-none">{current ? "View Only" : "Live Editing"}</span>
+                </>
             )}
-
-            {/* label */}
-            <span className="leading-none">
-                {current ? "View only" : "Editable"}
-            </span>
-
-            {/* pill */}
-            <div
-                className={`relative h-4 w-7 shrink-0 rounded-full border transition-colors duration-150 ${
-                    current
-                        ? "border-amber-500/30 bg-amber-500/20"
-                        : "border-zinc-700 bg-zinc-800"
-                }`}
-            >
-                <motion.div
-                    layout
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                    className={`absolute top-0.5 h-3 w-3 rounded-full transition-colors duration-150 ${
-                        current ? "bg-amber-400" : "bg-zinc-500"
-                    }`}
-                    style={{ left: current ? "calc(100% - 14px)" : "2px" }}
-                />
-            </div>
+            
+            <div className={`w-1 h-1 rounded-full ml-1 ${current ? "bg-[#E2C792]/50" : "bg-[#A7C8B3]/50"}`} />
         </button>
     );
 }

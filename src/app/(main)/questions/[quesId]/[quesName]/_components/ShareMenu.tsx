@@ -95,7 +95,7 @@ export default function ShareMenu({
                 <div
                     role="menu"
                     className={cn(
-                        "absolute top-10 z-50 w-48 overflow-hidden rounded-lg border border-white/10 bg-[#0c0c0c]/98 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl",
+                        "absolute top-10 z-50 w-48 overflow-hidden rounded-lg border border-white/5 bg-[#0c0c0c]/98 py-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] backdrop-blur-xl",
                         align === "right" ? "right-0" : "left-0"
                     )}
                 >

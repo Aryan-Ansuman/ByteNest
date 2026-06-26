@@ -150,7 +150,7 @@ function SkillProfileSkeleton({ rows = 4 }: { rows?: number }) {
 
 export function SkillProfileWidgetFallback() {
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             <div className="mb-4 flex items-center gap-2">
                 <Sparkles className="size-4 text-[#a7c8b3]" />
                 <h3 className="text-sm font-semibold text-zinc-100">Skill Profile</h3>
@@ -199,7 +199,7 @@ export default function SkillProfileWidget() {
     const profileHref = user ? `/users/${user.$id}/${slugify(user.name)}#skills` : "#";
 
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             <div className="mb-4 flex items-center gap-2">
                 <Sparkles className="size-4 text-[#a7c8b3]" />
                 <h3 className="text-sm font-semibold text-zinc-100">Skill Profile</h3>

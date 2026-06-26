@@ -405,7 +405,7 @@ export default function HomeClient({
                         </div>
                         <button
                             onClick={() => setCustomizeFeedOpen(true)}
-                            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                            className="flex items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                         >
                             <Settings2 className="size-3.5" />
                             Customize feed
@@ -413,7 +413,7 @@ export default function HomeClient({
                     </div>
 
                     <div
-                        className="mb-5 flex overflow-x-auto items-center border-b border-white/10 no-scrollbar"
+                        className="mb-5 flex overflow-x-auto items-center border-b border-white/5 no-scrollbar"
                         role="tablist"
                         aria-label="Feed sections"
                     >
@@ -497,7 +497,7 @@ export default function HomeClient({
                                 <button
                                     onClick={handleLoadMore}
                                     disabled={isLoadingMore}
-                                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] text-sm text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] text-sm text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {isLoadingMore ? (
                                         <>
@@ -562,7 +562,7 @@ function HeroBanner({
     totalAnswers: number;
 }) {
     return (
-        <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#0a1410] min-h-[240px]">
+        <div className="relative mb-6 overflow-hidden rounded-2xl border border-white/5 bg-[#0a1410] min-h-[240px]">
             <div className="absolute inset-y-0 right-0 w-full md:w-2/3 lg:w-[60%]">
                 <div
                     className="absolute inset-0 z-10"
@@ -600,7 +600,7 @@ function HeroBanner({
                     </Link>
                     <Link
                         href="/questions"
-                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.04] hover:border-white/20"
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-transparent px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.04] hover:border-white/20"
                     >
                         Explore Questions
                     </Link>
@@ -624,7 +624,7 @@ function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: {
             label: "Reputation",
             sub: "Keep contributing!",
             icon: (
-                <div className="flex size-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10">
+                <div className="flex size-10 items-center justify-center rounded-xl border border-white/5lue-500/20 bg-blue-500/10">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                         <circle cx="12" cy="8" r="4" stroke="#60a5fa" strokeWidth="1.5" />
                         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round" />
@@ -672,7 +672,7 @@ function StatsRow({ user, totalQuestions, totalAnswers, shouldReduceMotion }: {
                     initial={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.25, delay: i * 0.06 }}
-                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4 transition hover:bg-white/[0.04]"
+                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.025] p-4 transition hover:bg-white/[0.04]"
                 >
                     {stat.icon}
                     <div className="min-w-0">
@@ -708,7 +708,7 @@ function QuestionCard({
         <motion.article
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="group rounded-xl border border-white/10 bg-white/[0.025] transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
+            className="group rounded-xl border border-white/5 bg-white/[0.025] transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
         >
             <div className="flex gap-4 p-5">
                 <div className="flex shrink-0 flex-col items-center gap-1 pt-0.5">
@@ -797,7 +797,7 @@ function QuestionCard({
                                 key={tag}
                                 href={`/questions?tag=${tag}`}
                                 onClick={(e) => e.stopPropagation()}
-                                className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
+                                className="rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
                             >
                                 {tag}
                             </Link>
@@ -849,7 +849,7 @@ function CommunityHighlights({ contributors }: { contributors: { name: string; $
     if (contributors.length === 0) return null;
 
     return (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+        <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.025] p-4">
             <div className="mb-4 flex items-center gap-2">
                 <Trophy className="size-4 text-amber-400" />
                 <h3 className="text-sm font-semibold text-zinc-100">Community Highlights</h3>
@@ -885,9 +885,9 @@ function EmptyState({ filter, onCustomize }: { filter: string; onCustomize?: () 
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] py-16 text-center"
+            className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16 text-center"
         >
-            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04]">
                 <MessageCircle className="size-6 text-zinc-500" />
             </div>
             <h3 className="text-base font-semibold text-zinc-200">

@@ -132,7 +132,7 @@ export default function AnswersClient({
                     </div>
 
                     {/* Sort tabs */}
-                    <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                    <div className="inline-flex rounded-xl border border-white/5 bg-white/[0.03] p-1">
                         {SORT_OPTIONS.map((opt) => (
                             <button
                                 key={opt.id}
@@ -161,15 +161,15 @@ export default function AnswersClient({
 
             {/* Stats row */}
             <div className="mb-6 grid grid-cols-3 gap-3 md:grid-cols-4 lg:grid-cols-5">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3">
                     <p className="text-xs text-zinc-500">Total</p>
                     <p className="text-xl font-bold text-zinc-100">{total}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3">
                     <p className="text-xs text-zinc-500">Avg Votes</p>
                     <p className="text-xl font-bold text-[#a7c8b3]">{avgVotes}</p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3">
                     <p className="text-xs text-zinc-500">Upvoted</p>
                     <p className="text-xl font-bold text-emerald-400">{upvotedCount}</p>
                 </div>
@@ -182,7 +182,7 @@ export default function AnswersClient({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Filter by question, content or tag…"
-                    className="h-11 rounded-xl border-white/10 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
+                    className="h-11 rounded-xl border-white/5 bg-white/[0.04] pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 shadow-none transition hover:border-white/15 focus-visible:border-[#a7c8b3]/60 focus-visible:ring-2 focus-visible:ring-[#a7c8b3]/15 focus-visible:ring-offset-0"
                 />
                 {search && (
                     <button
@@ -196,7 +196,7 @@ export default function AnswersClient({
 
             {/* Summary strip */}
             {search && (
-                <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5">
+                <div className="mb-4 flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-2.5">
                     <Filter className="size-3.5 text-zinc-500" />
                     <span className="text-sm text-zinc-400">
                         Showing{" "}
@@ -276,14 +276,14 @@ function AnswerCard({
             ? "border-[#a7c8b3]/25 bg-[#a7c8b3]/10 text-[#a7c8b3]"
             : answer.totalVotes < 0
             ? "border-red-400/25 bg-red-400/10 text-red-400"
-            : "border-white/10 bg-black/20 text-zinc-400";
+            : "border-white/5 bg-black/20 text-zinc-400";
 
     return (
         <motion.article
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: index * 0.035 }}
-            className="group rounded-xl border border-white/10 bg-white/[0.025] p-5 transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
+            className="group rounded-xl border border-white/5 bg-white/[0.025] p-5 transition-[background,border-color] duration-200 hover:border-white/15 hover:bg-white/[0.04]"
         >
             <div className="flex gap-4">
                 {/* Vote badge */}
@@ -335,7 +335,7 @@ function AnswerCard({
                                     key={tag}
                                     href={`/questions?tag=${tag}`}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
+                                    className="flex items-center gap-1 rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:border-[#a7c8b3]/30 hover:text-[#a7c8b3]"
                                 >
                                     <Hash className="size-2.5" />
                                     {tag}
@@ -351,7 +351,7 @@ function AnswerCard({
                             </span>
                             <Link
                                 href={`/questions/${answer.questionId}/${slugify(answer.questionTitle)}`}
-                                className="flex h-7 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-xs text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
+                                className="flex h-7 items-center gap-1.5 rounded-lg border border-white/5 bg-white/[0.04] px-2.5 text-xs text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100"
                             >
                                 View answer
                                 <ExternalLink className="size-3" />
@@ -371,9 +371,9 @@ function EmptyState({ search }: { search: string }) {
         <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] py-20 text-center"
+            className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-20 text-center"
         >
-            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.04]">
                 <MessageCircle className="size-6 text-zinc-500" />
             </div>
             <h3 className="text-lg font-semibold text-zinc-200">
@@ -433,7 +433,7 @@ function Pagination({
             <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+                className="flex size-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
             >
                 <ChevronLeft className="size-4" />
             </button>
@@ -451,7 +451,7 @@ function Pagination({
                             "flex size-9 items-center justify-center rounded-xl border text-sm font-medium transition",
                             p === currentPage
                                 ? "border-[#a7c8b3]/30 bg-[#a7c8b3]/15 text-[#a7c8b3]"
-                                : "border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
+                                : "border-white/5 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-100"
                         )}
                     >
                         {p}
@@ -462,7 +462,7 @@ function Pagination({
             <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="flex size-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
+                className="flex size-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-zinc-100 disabled:pointer-events-none disabled:opacity-30"
             >
                 <ChevronRight className="size-4" />
             </button>
