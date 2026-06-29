@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { SessionFile } from "@/types/rooms";
 import { cn } from "@/lib/utils";
-import { SiJavascript, SiTypescript, SiPython, SiRust, SiGo, SiHtml5, SiCss3 } from "@icons-pack/react-simple-icons";
+import { SiJavascript, SiTypescript, SiPython, SiRust, SiGo, SiHtml5, SiCss } from "@icons-pack/react-simple-icons";
 import { File } from "lucide-react";
 
 const FILE_ICONS: Record<string, React.ElementType> = {
@@ -13,7 +13,7 @@ const FILE_ICONS: Record<string, React.ElementType> = {
     rust: SiRust,
     go: SiGo,
     html: SiHtml5,
-    css: SiCss3,
+    css: SiCss,
 };
 
 const FILE_LANG_COLOR: Record<string, string> = {

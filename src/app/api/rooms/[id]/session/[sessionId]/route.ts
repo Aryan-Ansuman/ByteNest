@@ -7,7 +7,9 @@ import {
     codeSessionsCollection,
     discussionRoomsCollection,
     roomMessagesCollection,
+    collabMessagesCollection,
 } from "@/models/name";
+import { Query } from "node-appwrite";
 
 export async function GET(
     _req: NextRequest,
@@ -139,6 +141,33 @@ export async function PATCH(
                 if (body.yjsSnapshotB64) {
                     updateData.yjsSnapshotB64 = body.yjsSnapshotB64;
                 }
+
+                // Fire-and-forget background cleanup of collab_messages
+                const deleteCollabMessages = async () => {
+                    try {
+                        let hasMore = true;
+                        while (hasMore) {
+                            const msgs = await databases.listDocuments(db, collabMessagesCollection, [
+                                Query.equal("sessionId", sessionId),
+                                Query.limit(100),
+                            ]);
+                            if (msgs.documents.length === 0) {
+                                hasMore = false;
+                            } else {
+                                await Promise.all(
+                                    msgs.documents.map((doc) =>
+                                        databases.deleteDocument(db, collabMessagesCollection, doc.$id)
+                                    )
+                                );
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Failed to cleanup collab messages:", e);
+                    }
+                };
+                
+                // Do not await to avoid blocking the response
+                deleteCollabMessages();
 
                 await Promise.all([
                     databases.updateDocument(

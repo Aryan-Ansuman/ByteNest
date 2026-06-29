@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, memo } from "react";
 import { DiscussionRoom, RoomMessage, RoomMember } from "@/types/rooms";
 import { client } from "@/models/client/config";
-import { db, discussionRoomsCollection } from "@/models/name";
+import { db, discussionRoomsCollection, roomMembersCollection } from "@/models/name";
 import Link from "next/link";
+import { RelativeTime } from "@/components/RelativeTime";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Users, Code2, Lock, Globe, Search, X, Plus, Radio,
@@ -63,23 +64,14 @@ const TAG_DEFAULT = "border-white/[0.08] bg-white/[0.04] text-zinc-400";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function relTime(dateStr?: string): string {
-    if (!dateStr) return "";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const m = Math.floor(diff / 60_000);
-    if (m < 1)  return "just now";
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-}
+// (relTime moved to RelativeTime component)
 
 function activityLevel(room: EnrichedRoom): { bars: number; label: string; color: string } {
     const members = room.memberCount;
-    if (members >= 10) return { bars: 4, label: "High",   color: "bg-[#a7c8b3]" };
-    if (members >= 5)  return { bars: 3, label: "Medium", color: "bg-[#a7c8b3]" };
-    if (members >= 2)  return { bars: 2, label: "Low",    color: "bg-zinc-500"   };
-    return               { bars: 1, label: "Low",    color: "bg-zinc-600"   };
+    if (members >= 10) return { bars: 4, label: "High",     color: "bg-[#a7c8b3]" };
+    if (members >= 5)  return { bars: 3, label: "Medium",   color: "bg-[#a7c8b3]" };
+    if (members >= 2)  return { bars: 2, label: "Low",      color: "bg-zinc-500"  };
+    return               { bars: 1, label: "Very Low", color: "bg-zinc-600"  };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -91,39 +83,69 @@ export default function RoomsClient({ enrichedRooms, errorParam }: Props) {
     const [activeTab,   setActiveTab  ] = useState("all");
     const [showFilters, setShowFilters] = useState(false);
 
-    // Realtime upsert (room metadata only — no message enrichment on RT updates)
+    // Realtime upsert (rooms + members)
     useEffect(() => {
-        const channel = `databases.${db}.collections.${discussionRoomsCollection}.documents`;
-        const unsub = client.subscribe(channel, (response) => {
-            const payload = response.payload as DiscussionRoom;
-            const isValid = payload.status === "active" && payload.visibility === "public";
+        const channelRooms = `databases.${db}.collections.${discussionRoomsCollection}.documents`;
+        const channelMembers = `databases.${db}.collections.${roomMembersCollection}.documents`;
 
-            setRooms((cur) => {
-                if (response.events.some((e) => e.includes(".delete"))) {
-                    return cur.filter((r) => r.$id !== payload.$id);
-                }
-                if (response.events.some((e) => e.includes(".create") || e.includes(".update"))) {
-                    if (!isValid) return cur.filter((r) => r.$id !== payload.$id);
-                    const exists = cur.some((r) => r.$id === payload.$id);
-                    if (exists) {
-                        return cur.map((r) =>
-                            r.$id === payload.$id ? { ...r, ...payload } : r
-                        );
+        const unsub = client.subscribe([channelRooms, channelMembers], (response) => {
+            if (response.channels.includes(channelRooms)) {
+                const payload = response.payload as DiscussionRoom;
+                const isValid = payload.status === "active" && payload.visibility === "public";
+
+                setRooms((cur) => {
+                    if (response.events.some((e) => e.includes(".delete"))) {
+                        return cur.filter((r) => r.$id !== payload.$id);
                     }
-                    return [...cur, { ...payload, onlineMembers: [], lastMessage: undefined }];
-                }
-                return cur;
-            });
+                    if (response.events.some((e) => e.includes(".create") || e.includes(".update"))) {
+                        if (!isValid) return cur.filter((r) => r.$id !== payload.$id);
+                        const exists = cur.some((r) => r.$id === payload.$id);
+                        if (exists) {
+                            return cur.map((r) =>
+                                r.$id === payload.$id ? { ...r, ...payload } : r
+                            );
+                        }
+                        return [...cur, { ...payload, onlineMembers: [], lastMessage: undefined }];
+                    }
+                    return cur;
+                });
+            } else if (response.channels.includes(channelMembers)) {
+                const member = response.payload as RoomMember;
+                setRooms((cur) => cur.map((r) => {
+                    if (r.$id === member.roomId) {
+                        const isOnline = member.status !== "offline";
+                        const isDeleted = response.events.some(e => e.includes(".delete"));
+                        const onlineMembers = r.onlineMembers || [];
+                        const existingIdx = onlineMembers.findIndex(m => m.$id === member.$id);
+                        
+                        let newMembers = [...onlineMembers];
+                        if (isDeleted || !isOnline) {
+                            if (existingIdx !== -1) newMembers.splice(existingIdx, 1);
+                        } else {
+                            if (existingIdx !== -1) {
+                                newMembers[existingIdx] = member;
+                            } else {
+                                newMembers.unshift(member);
+                            }
+                        }
+                        if (newMembers.length > 5) newMembers = newMembers.slice(0, 5);
+                        return { ...r, onlineMembers: newMembers };
+                    }
+                    return r;
+                }));
+            }
         });
         return () => unsub();
     }, []);
 
     // ── Derived data ──────────────────────────────────────────────────────
+    const tagsDependency = rooms.map(r => r.tags?.join(',')).join('|');
     const allTags = useMemo(() => {
         const counts = new Map<string, number>();
         rooms.forEach((r) => r.tags?.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
         return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 14).map(([t]) => t);
-    }, [rooms]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tagsDependency]);
 
     const filtered = useMemo(() => {
         let res = [...rooms];
@@ -180,7 +202,7 @@ export default function RoomsClient({ enrichedRooms, errorParam }: Props) {
                 </div>
                 <Link
                     href="/rooms/create"
-                    className="flex shrink-0 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 py-2.5 text-sm font-[600] text-[#08100b] transition-all hover:bg-white hover:shadow-[0_0_15px_rgba(167,200,179,0.4)] hover:scale-[1.02]"
+                    className="flex shrink-0 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 py-2.5 text-sm font-[600] text-[#08100b] transition-all hover:bg-[#b4d6bf] hover:scale-[1.02]"
                 >
                     <Plus size={14} />
                     Create Room
@@ -253,6 +275,7 @@ export default function RoomsClient({ enrichedRooms, errorParam }: Props) {
                                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none" />
                                 <input
                                     type="text"
+                                    aria-label="Search rooms"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     placeholder="Search rooms…"
@@ -369,7 +392,7 @@ export default function RoomsClient({ enrichedRooms, errorParam }: Props) {
                         )}
                         <Link
                             href="/rooms/create"
-                            className="flex h-9 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 text-sm font-semibold text-[#08100b] transition hover:bg-[#a78bfa]"
+                            className="flex h-9 items-center gap-2 rounded-xl border border-[#a7c8b3]/20 bg-[#a7c8b3] px-4 text-sm font-semibold text-[#08100b] transition hover:bg-[#b4d6bf]"
                         >
                             <Plus size={14} /> Create a Room
                         </Link>
@@ -406,7 +429,7 @@ function RoomTable({ rooms }: { rooms: EnrichedRoom[] }) {
 
 // ─── Room Row ─────────────────────────────────────────────────────────────────
 
-function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
+const RoomRow = memo(function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
     const act = activityLevel(room);
     const isLive = Boolean(room.activeCodeSessionId);
     const capacity = room.maxMembers > 0 ? room.memberCount / room.maxMembers : 0;
@@ -466,7 +489,6 @@ function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
                             {room.description || "No description provided."}
                         </p>
 
-                        {/* Tags */}
                         {room.tags && room.tags.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
                                 {room.tags.slice(0, 3).map((t) => (
@@ -480,6 +502,11 @@ function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
                                         {t}
                                     </span>
                                 ))}
+                                {room.tags.length > 3 && (
+                                    <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                                        +{room.tags.length - 3}
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>
@@ -539,9 +566,10 @@ function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
                                 <span className="text-[12px] font-semibold text-zinc-300 truncate">
                                     {room.lastMessage.authorName}
                                 </span>
-                                <span className="shrink-0 text-[10px] text-zinc-600">
-                                    {relTime(room.lastMessage.$createdAt)}
-                                </span>
+                                <RelativeTime 
+                                    dateStr={room.lastMessage.$createdAt} 
+                                    className="shrink-0 text-[10px] text-zinc-600" 
+                                />
                             </div>
                             <p className="mt-0.5 line-clamp-1 text-[12px] text-zinc-500">
                                 {room.lastMessage.type === "code"
@@ -556,20 +584,20 @@ function RoomRow({ room, index }: { room: EnrichedRoom; index: number }) {
 
                 {/* ── Col 5: Join CTA ───────────────────────────────── */}
                 <div className="flex md:justify-end">
-                    <span className="flex items-center gap-1 rounded-lg bg-[#a7c8b3] px-4 py-1.5 text-xs font-[600] text-[#08100b] transition-all group-hover:bg-white group-hover:shadow-[0_0_15px_rgba(167,200,179,0.4)] group-hover:scale-[1.02]">
+                    <span className="flex items-center gap-1 rounded-lg bg-[#a7c8b3] px-4 py-1.5 text-xs font-[600] text-[#08100b] transition-all group-hover:bg-[#b4d6bf] group-hover:scale-[1.02]">
                         Join <ChevronRight size={12} />
                     </span>
                 </div>
             </Link>
         </motion.div>
     );
-}
+});
 
 // ─── Activity bars (like signal strength) ─────────────────────────────────────
 
 function ActivityBars({ level, color }: { level: number; color: string }) {
     return (
-        <div className="flex items-end gap-0.5">
+        <div className="flex items-end gap-0.5" aria-hidden="true">
             {[1, 2, 3, 4].map((bar) => (
                 <div
                     key={bar}
@@ -618,12 +646,23 @@ function getRoomIcon(tags: string[] | undefined, name: string) {
 
     if (skill) {
         return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img 
-                src={`https://skillicons.dev/icons?i=${skill}&theme=dark`} 
-                alt={primary} 
-                className="size-6 rounded-sm" 
-            />
+            <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                    src={`https://skillicons.dev/icons?i=${skill}&theme=dark`} 
+                    alt={primary} 
+                    className="size-6 rounded-sm"
+                    onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        if (e.currentTarget.nextElementSibling) {
+                            (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
+                        }
+                    }}
+                />
+                <div style={{ display: 'none' }}>
+                    <Terminal size={20} strokeWidth={1.5} />
+                </div>
+            </>
         );
     }
 

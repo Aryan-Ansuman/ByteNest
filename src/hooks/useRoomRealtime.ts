@@ -68,7 +68,13 @@ export function useRoomRealtime(roomId: string) {
                 const isDelete = event.events.some((e: string) => e.includes(".delete"));
 
                 if (isCreate || isUpdate) upsertMember(payload);
-                if (isDelete) removeMember(payload.$id);
+                if (isDelete) {
+                    removeMember(payload.$id);
+                    const store = useRoomStore.getState();
+                    if (store.currentMember?.userId === payload.userId) {
+                        window.location.href = "/rooms";
+                    }
+                }
             }
         );
 

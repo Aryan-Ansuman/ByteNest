@@ -51,7 +51,18 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────
     useEffect(() => {
+        if (window.innerWidth < 768) {
+            setHiddenPanels(new Set(["code", "members", "info"]));
+        }
+
         function onKey(e: KeyboardEvent) {
+            const target = e.target as HTMLElement;
+            const isInput =
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLTextAreaElement ||
+                target.isContentEditable;
+            
+            const isPaletteInput = target.closest('[cmdk-root]') !== null;
             // Cmd/Ctrl + K → command palette
             if ((e.metaKey || e.ctrlKey) && e.key === "k") {
                 e.preventDefault();
@@ -64,8 +75,10 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
             }
             // Escape closes palette
             if (e.key === "Escape") {
-                setCommandOpen(false);
-                setShowInfo(false);
+                if (!isInput || isPaletteInput) {
+                    setCommandOpen(false);
+                    setShowInfo(false);
+                }
             }
         }
         window.addEventListener("keydown", onKey);
@@ -135,26 +148,24 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
             />
 
             {/* ── Body ─────────────────────────────────────────────────── */}
-            <div className="flex flex-1 overflow-hidden">
-
-
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
                 {/* Chat panel — resizable */}
                 {chatVisible && (
                     <>
                         <div
                             className={cn(
-                                "shrink-0 flex flex-col overflow-hidden bg-[#111113]",
-                                codeVisible ? "border-r border-white/5" : "flex-1"
+                                "flex flex-col overflow-hidden bg-[#111113]",
+                                (codeVisible || membersVisible) ? "border-b md:border-b-0 md:border-r border-white/5 flex-1 md:flex-none w-full md:w-[var(--chat-width)] md:shrink-0 min-h-[300px]" : "flex-1 w-full"
                             )}
-                            style={codeVisible ? { width: chatWidth } : {}}
+                            style={(codeVisible || membersVisible) ? { '--chat-width': `${chatWidth}px` } as any : {}}
                         >
                             <ChatPanel roomId={roomId} />
                         </div>
                         {/* Drag handle / Gutter */}
-                        {codeVisible && (
+                        {(codeVisible || membersVisible) && (
                             <div
-                                className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                                className="hidden md:flex w-2 shrink-0 cursor-col-resize group items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
                                 onMouseDown={(e) => startDrag("chat", e)}
                             >
                                 <div className="absolute inset-y-0 -left-1 -right-1" />
@@ -167,12 +178,15 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
                 {/* Files Sidebar (Adjacent to CodePanel) */}
                 {!focusMode && hasCodeSession && (
                     <>
-                        <div style={{ width: filesWidth }} className="shrink-0 flex flex-col overflow-hidden bg-[#111113] border-r border-white/5">
+                        <div 
+                            style={{ '--files-width': `${filesWidth}px` } as any} 
+                            className="w-full md:w-[var(--files-width)] md:shrink-0 flex flex-col overflow-hidden bg-[#111113] border-b md:border-b-0 md:border-r border-white/5 min-h-[250px]"
+                        >
                             <LeftNav roomId={roomId} />
                         </div>
                         {/* Drag handle / Gutter */}
                         <div
-                            className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                            className="hidden md:flex w-2 shrink-0 cursor-col-resize group items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
                             onMouseDown={(e) => startDrag("files", e)}
                         >
                             <div className="absolute inset-y-0 -left-1 -right-1" />
@@ -183,7 +197,7 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
 
                 {/* Code / info panel — fills remaining */}
                 {codeVisible && (
-                    <div className="flex-1 overflow-hidden min-w-0 relative">
+                    <div className="flex-1 overflow-hidden min-w-0 relative w-full min-h-[400px]">
                         {showInfo ? (
                             <RoomInfoPanel room={room} onClose={() => setShowInfo(false)} />
                         ) : (
@@ -197,15 +211,15 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
                     <>
                         {/* Drag handle / Gutter */}
                         <div
-                            className="w-2 shrink-0 cursor-col-resize group flex items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
+                            className="hidden md:flex w-2 shrink-0 cursor-col-resize group items-center justify-center relative hover:bg-white/[0.02] transition-colors z-10 bg-[#09090b]"
                             onMouseDown={(e) => startDrag("members", e)}
                         >
                             <div className="absolute inset-y-0 -left-1 -right-1" />
                             <div className="h-8 w-1 rounded-full bg-zinc-800/60 group-hover:bg-brand/50 transition-colors" />
                         </div>
                         <aside
-                            className="shrink-0 overflow-hidden bg-[#111113] border-l border-white/5 flex flex-col"
-                            style={{ width: membersWidth }}
+                            className="w-full md:w-[var(--members-width)] md:shrink-0 overflow-hidden bg-[#111113] border-t md:border-t-0 md:border-l border-white/5 flex flex-col min-h-[300px]"
+                            style={{ '--members-width': `${membersWidth}px` } as any}
                             aria-label="Room members"
                         >
                             <MemberSidebar roomId={roomId} />

@@ -106,6 +106,7 @@ export function MemberContextMenu({
         <div ref={menuRef} className="relative">
             {/* trigger — parent row needs `group` class */}
             <button
+                id={`menu-trigger-${member.userId}`}
                 onClick={() => {
                     setOpen((v) => !v);
                     setConfirmKick(false);

@@ -3,20 +3,19 @@
 import { useState } from "react";
 import { useRoomStore } from "@/store/roomStore";
 import {
-    Hash, Folder, File, FolderOpen, ChevronDown,
-    MessageSquare, Settings, Bell, Radio, Plus, Code2
+    ChevronDown, File, Plus
 } from "lucide-react";
-import { SiJavascript, SiTypescript, SiPython, SiRust, SiGo, SiHtml5, SiCss3 } from "@icons-pack/react-simple-icons";
+import { SiJavascript, SiTypescript, SiPython, SiRust, SiGo, SiHtml5, SiCss } from "@icons-pack/react-simple-icons";
 import { cn } from "@/lib/utils";
 
 const FILE_ICONS: Record<string, React.ElementType> = {
-    js: SiJavascript,
-    ts: SiTypescript,
-    py: SiPython,
-    rs: SiRust,
-    go: SiGo,
+    js:   SiJavascript,
+    ts:   SiTypescript,
+    py:   SiPython,
+    rs:   SiRust,
+    go:   SiGo,
     html: SiHtml5,
-    css: SiCss3,
+    css:  SiCss,
 };
 
 const FILE_LANG_COLOR: Record<string, string> = {
@@ -31,10 +30,15 @@ const FILE_LANG_COLOR: Record<string, string> = {
     json: "text-yellow-300",
 };
 
-const FILE_LANG_LABEL: Record<string, string> = {
-    js: "JS", ts: "TS", py: "PY", rs: "RS",
-    go: "GO", html: "HT", css: "CS", md: "MD", json: "{}",
-};
+const LANG_OPTIONS = [
+    { label: "JavaScript", value: "javascript", ext: "js" },
+    { label: "TypeScript", value: "typescript", ext: "ts" },
+    { label: "Python",     value: "python",     ext: "py" },
+    { label: "Rust",       value: "rust",       ext: "rs" },
+    { label: "Go",         value: "go",         ext: "go" },
+    { label: "HTML",       value: "html",       ext: "html" },
+    { label: "CSS",        value: "css",        ext: "css" },
+];
 
 function getExt(name: string) {
     return name.split(".").pop()?.toLowerCase() ?? "";
@@ -42,26 +46,50 @@ function getExt(name: string) {
 
 interface Props {
     roomId: string;
+    /** Called when user clicks a file — wired to CodePanelInner.handleSwitchFile */
+    onSwitchFile?: (filename: string) => void;
+    /** Called when user adds a new file — wired to CodePanelInner.handleAddFile */
+    onAddFile?: (name: string, language: string) => void;
+    /** Whether the current user is the host (controls add-file button visibility) */
+    isHost?: boolean;
 }
 
-export default function LeftNav({ roomId }: Props) {
-    const room        = useRoomStore((s) => s.room);
+export default function LeftNav({ roomId, onSwitchFile, onAddFile, isHost }: Props) {
     const codeSession = useRoomStore((s) => s.codeSession);
 
+    // Fix 6: read activeFile from live session store — stays in sync with all clients
+    const activeFile = codeSession?.activeFile ?? null;
+
     const [filesOpen, setFilesOpen] = useState(true);
-    const [activeFile, setActiveFile] = useState<string | null>(null);
+
+    // Fix 5: add-file inline form state (mirrors FileTabBar behaviour)
+    const [adding,  setAdding]  = useState(false);
+    const [newName, setNewName] = useState("");
+    const [newLang, setNewLang] = useState("javascript");
 
     const parsedFiles: Array<{ name: string; language: string }> = (() => {
         try { return JSON.parse(codeSession?.files ?? "[]"); }
         catch { return []; }
     })();
 
+    function handleAdd() {
+        const name = newName.trim();
+        if (!name) return;
+        onAddFile?.(name, newLang);
+        setNewName("");
+        setNewLang("javascript");
+        setAdding(false);
+    }
 
+    // Fix 6: file click delegates to the prop — CodePanelInner drives the editor
+    function handleFileClick(filename: string) {
+        onSwitchFile?.(filename);
+    }
 
     return (
         <aside className="w-full h-full shrink-0 bg-[#111113] flex flex-col overflow-hidden select-none">
-            {/* FILES section */}
             <div className="px-4 py-4 flex-1 min-h-0 flex flex-col">
+                {/* Files header */}
                 <div className="flex items-center justify-between w-full mb-3 px-1">
                     <button
                         className="flex items-center gap-1 group"
@@ -75,13 +103,66 @@ export default function LeftNav({ roomId }: Props) {
                             Files
                         </h2>
                     </button>
-                    <button className="p-1 rounded hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors" title="New File">
-                        <Plus className="w-3.5 h-3.5" />
-                    </button>
+
+                    {/* Fix 5: Plus button now toggles inline add-file form */}
+                    {isHost && (
+                        <button
+                            onClick={() => setAdding((v) => !v)}
+                            className="p-1 rounded hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors"
+                            title="New File"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
 
+                {/* Fix 5: inline add-file form */}
+                {adding && isHost && (
+                    <div className="mb-3 px-1 flex flex-col gap-1.5">
+                        <input
+                            autoFocus
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handleAdd();
+                                if (e.key === "Escape") setAdding(false);
+                            }}
+                            placeholder="filename.ts"
+                            className="w-full bg-[#18181b] border border-white/5 rounded-lg px-3 py-1.5 text-[12px] font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-[#a7c8b3] caret-[#a7c8b3] transition-colors"
+                        />
+                        <div className="flex items-center gap-1.5">
+                            <select
+                                value={newLang}
+                                onChange={(e) => setNewLang(e.target.value)}
+                                className="flex-1 bg-[#18181b] border border-white/5 rounded-lg px-2 py-1.5 text-[11px] text-zinc-400 focus:outline-none focus:border-[#a7c8b3] transition-colors cursor-pointer"
+                            >
+                                {LANG_OPTIONS.map((l) => (
+                                    <option key={l.value} value={l.value} className="bg-zinc-900">
+                                        {l.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleAdd}
+                                className="px-3 py-1.5 rounded-lg bg-[#a7c8b3]/15 border border-[#a7c8b3]/20 text-[11px] font-semibold text-[#a7c8b3] hover:bg-[#a7c8b3]/25 transition-colors"
+                            >
+                                Add
+                            </button>
+                            <button
+                                onClick={() => setAdding(false)}
+                                className="px-2 py-1.5 rounded-lg text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {filesOpen && (
-                    <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.06) transparent" }}>
+                    <div
+                        className="flex-1 overflow-y-auto"
+                        style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.06) transparent" }}
+                    >
                         {parsedFiles.length === 0 ? (
                             <div className="px-4 py-8 text-center text-zinc-600 text-[11px]">
                                 No files yet.
@@ -91,11 +172,12 @@ export default function LeftNav({ roomId }: Props) {
                                 <FolderRow label="src" defaultOpen={true}>
                                     <div className="mt-1 space-y-1">
                                         {parsedFiles.map((f) => (
+                                            // Fix 6: onClick calls onSwitchFile
                                             <FileRow
                                                 key={f.name}
                                                 name={f.name}
                                                 active={activeFile === f.name}
-                                                onClick={() => setActiveFile(f.name)}
+                                                onClick={() => handleFileClick(f.name)}
                                             />
                                         ))}
                                     </div>
@@ -109,24 +191,10 @@ export default function LeftNav({ roomId }: Props) {
     );
 }
 
-function NavChannel({ label, active = false }: { label: string; active?: boolean }) {
-    return (
-        <button className={cn(
-            "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] transition-colors text-left",
-            active
-                ? "bg-zinc-800/70 text-zinc-100 font-medium"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
-        )}>
-            <Hash className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{label}</span>
-        </button>
-    );
-}
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function FolderRow({
-    label,
-    children,
-    defaultOpen = false,
+    label, children, defaultOpen = false,
 }: {
     label: string;
     children: React.ReactNode;
@@ -148,17 +216,15 @@ function FolderRow({
 }
 
 function FileRow({
-    name,
-    active = false,
-    onClick,
+    name, active = false, onClick,
 }: {
     name: string;
     active?: boolean;
     onClick?: () => void;
 }) {
-    const ext = getExt(name);
+    const ext   = getExt(name);
     const color = FILE_LANG_COLOR[ext] ?? "text-zinc-500";
-    const Icon = FILE_ICONS[ext] ?? File;
+    const Icon  = FILE_ICONS[ext] ?? File;
 
     return (
         <button
@@ -178,5 +244,3 @@ function FileRow({
         </button>
     );
 }
-
-

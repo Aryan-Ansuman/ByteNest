@@ -12,6 +12,7 @@ import {
     ArrowRight, Hash, Keyboard, ChevronRight, Radio,
 } from "lucide-react";
 import type { SlowMode } from "@/types/rooms";
+import SessionStartModal from "./SessionStartModal";
 
 type PanelId = "chat" | "code" | "members" | "info";
 
@@ -45,6 +46,7 @@ export default function CommandPalette({
 
     const [query,     setQuery    ] = useState("");
     const [cursor,    setCursor   ] = useState(0);
+    const [showSessionModal, setShowSessionModal] = useState(false);
     const inputRef                  = useRef<HTMLInputElement>(null);
     const listRef                   = useRef<HTMLUListElement>(null);
 
@@ -65,6 +67,34 @@ export default function CommandPalette({
             keywords: ["go", "back", "home", "exit", "rooms"],
             action: () => { router.push("/rooms"); onClose(); },
         },
+
+        // ── Code Session ──────────────────────────────────────────────────
+        ...(isHost && !codeSession ? [{
+            id: "start-session",
+            group: "Code Session",
+            label: "Start Code Session",
+            icon: <Code2 className="w-4 h-4" />,
+            keywords: ["start", "code", "session", "new", "begin"],
+            action: () => setShowSessionModal(true),
+        } as CommandItem] : []),
+        ...(isHost && codeSession ? [{
+            id: "end-session",
+            group: "Code Session",
+            label: "End Code Session",
+            icon: <LogOut className="w-4 h-4 text-status-danger" />,
+            keywords: ["end", "stop", "close", "kill", "session"],
+            action: () => {
+                apiFetch(`/api/rooms/${roomId}/session/${codeSession.$id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ action: "end" })
+                }).then(() => {
+                    toast.success("Code session ended");
+                    onClose();
+                }).catch((e: any) => {
+                    toast.error(e?.message ?? "Failed to end session");
+                });
+            },
+        } as CommandItem] : []),
 
         // ── Panels ───────────────────────────────────────────────────────
         {
@@ -236,13 +266,14 @@ export default function CommandPalette({
     let globalIdx = -1;
 
     return (
-        /* Backdrop */
-        <div
-            className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            {/* Blur backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <>
+            {/* Backdrop */}
+            <div
+                className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+                onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+            >
+                {/* Blur backdrop */}
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
             {/* Panel */}
             <div className="relative w-full max-w-[560px] mx-4 rounded-2xl border border-white/5 bg-[#111111] shadow-2xl shadow-black/60 overflow-hidden">
@@ -322,9 +353,6 @@ export default function CommandPalette({
                                                                 {cmd.shortcut}
                                                             </kbd>
                                                         )}
-                                                        {isActive && (
-                                                            <ChevronRight className="w-3.5 h-3.5 text-tx-disabled shrink-0" />
-                                                        )}
                                                     </button>
                                                 </li>
                                             );
@@ -337,18 +365,29 @@ export default function CommandPalette({
                 </ul>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2 border-t border-b bg-panel/20">
-                    <div className="flex items-center gap-3 text-[10px] text-zinc-700">
+                <div className="flex items-center justify-between px-4 py-2 border-t border-white/5 bg-black/20">
+                    <div className="flex items-center gap-3 text-[10px] text-zinc-500">
                         <span className="flex items-center gap-1">
-                            <kbd className="border border-white/5 rounded px-1 py-0.5">↑↓</kbd> navigate
+                            <kbd className="border border-white/10 rounded px-1 py-0.5">↑↓</kbd> navigate
                         </span>
                         <span className="flex items-center gap-1">
-                            <kbd className="border border-white/5 rounded px-1 py-0.5">↵</kbd> select
+                            <kbd className="border border-white/10 rounded px-1 py-0.5">↵</kbd> select
                         </span>
                     </div>
-                    <span className="text-[10px] text-zinc-700">{filtered.length} commands</span>
+                    <span className="text-[10px] text-zinc-500">{filtered.length} commands</span>
                 </div>
             </div>
         </div>
+
+            {showSessionModal && (
+                <SessionStartModal
+                    roomId={roomId}
+                    onClose={() => {
+                        setShowSessionModal(false);
+                        onClose();
+                    }}
+                />
+            )}
+        </>
     );
 }

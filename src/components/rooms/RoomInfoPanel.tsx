@@ -10,6 +10,7 @@ import {
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Props {
     room: DiscussionRoom;
@@ -45,7 +46,30 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
 
     async function copyRoomUrl() {
         await navigator.clipboard.writeText(window.location.href);
-        toast.success("Room URL copied");
+        toast.success("Room link copied");
+    }
+
+    async function updateSetting(key: string, val: string | number) {
+        try {
+            if (key === "slow_mode") {
+                await apiFetch(`/api/rooms/${room.$id}/moderate`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ action: "slow_mode", slowMode: val })
+                });
+            } else if (key === "visibility") {
+                await apiFetch(`/api/rooms/${room.$id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ visibility: val })
+                });
+            } else if (key === "capacity") {
+                await apiFetch(`/api/rooms/${room.$id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ maxMembers: val })
+                });
+            }
+        } catch (err: any) {
+            toast.error(err.message || "Failed to update setting");
+        }
     }
 
     return (
@@ -75,7 +99,7 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
                         </div>
                         <div className="min-w-0">
                             <h3 className="text-[14px] font-semibold text-tx mb-0.5">{room.name}</h3>
-                            <p className="text-[12px] text-tx-secondary max-w-[200px] truncate">{room.id}</p>
+                            <p className="text-[12px] text-tx-secondary max-w-[200px] truncate">{room.$id}</p>
                             <div className="flex items-center gap-1.5 mt-1">
                                 {room.visibility === "private"
                                     ? <Lock className="w-3 h-3 text-tx-disabled" />
@@ -179,18 +203,59 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
                         <SettingRow
                             icon={<Timer className="w-4 h-4" />}
                             label="Slow mode"
-                            value={SLOW_MODE_LABEL[room.slowMode] ?? "Disabled"}
+                            value={isHost ? (
+                                <select 
+                                    className="bg-transparent text-right outline-none text-tx font-medium cursor-pointer"
+                                    value={room.slowMode}
+                                    onChange={(e) => updateSetting("slow_mode", e.target.value)}
+                                >
+                                    <option value="off" className="bg-[#111113]">Disabled</option>
+                                    <option value="5s" className="bg-[#111113]">5 seconds</option>
+                                    <option value="30s" className="bg-[#111113]">30 seconds</option>
+                                    <option value="60s" className="bg-[#111113]">60 seconds</option>
+                                </select>
+                            ) : (
+                                SLOW_MODE_LABEL[room.slowMode] ?? "Disabled"
+                            )}
                         />
                         <SettingRow
                             icon={room.visibility === "private" ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
                             label="Visibility"
-                            value={room.visibility === "private" ? "Private" : "Public"}
-                            capitalize
+                            value={isHost ? (
+                                <select 
+                                    className="bg-transparent text-right outline-none text-tx font-medium capitalize cursor-pointer"
+                                    value={room.visibility}
+                                    onChange={(e) => updateSetting("visibility", e.target.value)}
+                                >
+                                    <option value="public" className="bg-[#111113]">Public</option>
+                                    <option value="private" className="bg-[#111113]">Private</option>
+                                </select>
+                            ) : (
+                                room.visibility === "private" ? "Private" : "Public"
+                            )}
+                            capitalize={!isHost}
                         />
                         <SettingRow
                             icon={<Users className="w-4 h-4" />}
                             label="Capacity"
-                            value={`${room.maxMembers} members`}
+                            value={isHost ? (
+                                <div className="flex items-center justify-end gap-1">
+                                    <input 
+                                        type="number" 
+                                        className="bg-transparent text-right outline-none w-10 text-tx font-medium"
+                                        min={2}
+                                        max={50}
+                                        value={room.maxMembers}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            if (!isNaN(val)) updateSetting("capacity", val);
+                                        }}
+                                    />
+                                    <span>members</span>
+                                </div>
+                            ) : (
+                                `${room.maxMembers} members`
+                            )}
                         />
                     </div>
                 </section>
@@ -249,16 +314,16 @@ function StatCard({ icon, label, value, accent }: { icon: React.ReactNode, label
     );
 }
 
-function SettingRow({ icon, label, value, capitalize }: { icon: React.ReactNode, label: string, value: string, capitalize?: boolean }) {
+function SettingRow({ icon, label, value, capitalize }: { icon: React.ReactNode, label: string, value: React.ReactNode, capitalize?: boolean }) {
     return (
         <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-surface-hover transition-colors">
             <div className="flex items-center gap-2.5 text-tx-secondary">
                 {icon}
                 <span className="text-[12px]">{label}</span>
             </div>
-            <span className={cn("text-[12px] font-medium text-tx", capitalize && "capitalize")}>
+            <div className={cn("text-[12px] font-medium text-tx", capitalize && "capitalize")}>
                 {value}
-            </span>
+            </div>
         </div>
     );
 }

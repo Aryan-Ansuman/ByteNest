@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoType from "monaco-editor";
-import { Search, Wand2, Settings } from "lucide-react";
+import { Search, Wand2, Settings, Minus, Plus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
 import type { CodeSession, SessionFile } from "@/types/rooms";
@@ -11,6 +12,7 @@ import { useRoomStore } from "@/store/roomStore";
 import { useCodeSession } from "@/hooks/useCodeSession";
 import { uint8ToBase64 } from "@/lib/yjs/utils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import FileTabBar from "./FileTabBar";
 import { ViewOnlyToggle } from "./ViewOnlyToggle";
 import { apiFetch } from "@/lib/api-fetch";
@@ -39,6 +41,9 @@ export default function CodePanelInner({ roomId, session }: Props) {
     const [activeFile, setActiveFile] = useState(session.activeFile);
     const [isEditorReady, setIsEditorReady] = useState(false);
     const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
+    const [showSettings, setShowSettings] = useState(false);
+    const [editorOpts, setEditorOpts] = useState({ fontSize: 13, tabSize: 4, wordWrap: "off" as "off" | "on" });
+    const settingsRef = useRef<HTMLDivElement>(null);
 
     const parsedFiles: SessionFile[] = (() => {
         try {
@@ -87,6 +92,17 @@ export default function CodePanelInner({ roomId, session }: Props) {
         [ydoc, awareness]
         // parsedFiles intentionally excluded — accessed via filesRef.current
     );
+
+    // Close settings popover on outside click
+    useEffect(() => {
+        function handler(e: MouseEvent) {
+            if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+                setShowSettings(false);
+            }
+        }
+        if (showSettings) document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [showSettings]);
 
     // When ydoc initialises (after snapshot hydration) + editor ready → bind
     useEffect(() => {
@@ -138,6 +154,20 @@ export default function CodePanelInner({ roomId, session }: Props) {
                 "editor.lineHighlightBorder": "#a7c8b31a",
                 "editorIndentGuide.background": "#ffffff0d",
                 "editorIndentGuide.activeBackground": "#ffffff26",
+                "editorWidget.background": "#17171B",
+                "editorWidget.border": "#ffffff1a",
+                "editorWidget.resizeBorder": "#a7c8b3",
+                "editorHoverWidget.background": "#17171B",
+                "editorHoverWidget.border": "#ffffff1a",
+                "editorHoverWidget.foreground": "#e4e4e7",
+                "editorFindMatch.background": "#a7c8b366",
+                "editorFindMatchHighlight.background": "#a7c8b326",
+                "input.background": "#09090b",
+                "input.border": "#ffffff1a",
+                "input.foreground": "#e4e4e7",
+                "inputOption.activeBackground": "#a7c8b333",
+                "inputOption.activeBorder": "#a7c8b3",
+                "inputOption.activeForeground": "#a7c8b3",
             }
         });
         monaco.editor.setTheme("bytenest-dark");
@@ -236,20 +266,123 @@ export default function CodePanelInner({ roomId, session }: Props) {
 
                     {/* Mini Actions */}
                     <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Search (⌘F)">
+                        <button
+                            onClick={() => editorRef.current?.getAction("actions.find")?.run()}
+                            className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors"
+                            title="Search (⌘F)"
+                        >
                             <Search className="w-[14px] h-[14px]" />
                         </button>
-                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Format (⇧⌥F)">
+                        <button
+                            onClick={() => editorRef.current?.getAction("editor.action.formatDocument")?.run()}
+                            className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors"
+                            title="Format (⇧⌥F)"
+                        >
                             <Wand2 className="w-[14px] h-[14px]" />
                         </button>
-                        <button className="p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors" title="Editor Settings">
-                            <Settings className="w-[14px] h-[14px]" />
-                        </button>
+                        <div className="relative" ref={settingsRef}>
+                            <button
+                                onClick={() => setShowSettings((v) => !v)}
+                                className={cn(
+                                    "p-1.5 rounded hover:bg-white/[0.04] text-zinc-400 hover:text-zinc-200 transition-colors",
+                                    showSettings && "bg-white/[0.04] text-zinc-200"
+                                )}
+                                title="Editor Settings"
+                            >
+                                <Settings className="w-[14px] h-[14px]" />
+                            </button>
+
+                            <AnimatePresence>
+                                {showSettings && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                                        transition={{ duration: 0.12, ease: "easeOut" }}
+                                        className="absolute right-0 top-9 z-50 w-[200px] rounded-xl border border-white/5 bg-[#0e0e0e] shadow-2xl p-3 space-y-3"
+                                    >
+                                        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Editor Settings</p>
+
+                                        {/* Font Size */}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] text-zinc-400">Font Size</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => {
+                                                        const next = Math.max(10, editorOpts.fontSize - 1);
+                                                        setEditorOpts((o) => ({ ...o, fontSize: next }));
+                                                        editorRef.current?.updateOptions({ fontSize: next });
+                                                    }}
+                                                    className="w-5 h-5 flex items-center justify-center rounded bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                                                >
+                                                    <Minus className="w-3 h-3" />
+                                                </button>
+                                                <span className="text-[11px] text-zinc-200 w-5 text-center tabular-nums">{editorOpts.fontSize}</span>
+                                                <button
+                                                    onClick={() => {
+                                                        const next = Math.min(24, editorOpts.fontSize + 1);
+                                                        setEditorOpts((o) => ({ ...o, fontSize: next }));
+                                                        editorRef.current?.updateOptions({ fontSize: next });
+                                                    }}
+                                                    className="w-5 h-5 flex items-center justify-center rounded bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                                                >
+                                                    <Plus className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Tab Size */}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] text-zinc-400">Tab Size</span>
+                                            <div className="flex items-center gap-1">
+                                                {[2, 4, 8].map((size) => (
+                                                    <button
+                                                        key={size}
+                                                        onClick={() => {
+                                                            setEditorOpts((o) => ({ ...o, tabSize: size }));
+                                                            editorRef.current?.updateOptions({ tabSize: size });
+                                                        }}
+                                                        className={cn(
+                                                            "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                                                            editorOpts.tabSize === size
+                                                                ? "bg-[#a7c8b3]/20 text-[#a7c8b3]"
+                                                                : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                                                        )}
+                                                    >
+                                                        {size}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Word Wrap */}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] text-zinc-400">Word Wrap</span>
+                                            <button
+                                                onClick={() => {
+                                                    const next = editorOpts.wordWrap === "off" ? "on" : "off";
+                                                    setEditorOpts((o) => ({ ...o, wordWrap: next as "off" | "on" }));
+                                                    editorRef.current?.updateOptions({ wordWrap: next });
+                                                }}
+                                                className={cn(
+                                                    "px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                                                    editorOpts.wordWrap === "on"
+                                                        ? "bg-[#a7c8b3]/20 text-[#a7c8b3]"
+                                                        : "bg-white/[0.04] text-zinc-500 hover:text-zinc-300"
+                                                )}
+                                            >
+                                                {editorOpts.wordWrap === "on" ? "On" : "Off"}
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 </div>
 
                 {/* Monaco */}
-                <div className="flex-1 overflow-hidden relative">
+                <div className="flex-1 relative">
                     <Editor
                     height="100%"
                     language={currentLang}
@@ -261,7 +394,7 @@ export default function CodePanelInner({ roomId, session }: Props) {
                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                         minimap: { enabled: false },
                         scrollBeyondLastLine: false,
-                        padding: { top: 12 },
+                        padding: { top: 40 },
                         lineNumbers: "on",
                         renderLineHighlight: "line",
                         cursorBlinking: "smooth",

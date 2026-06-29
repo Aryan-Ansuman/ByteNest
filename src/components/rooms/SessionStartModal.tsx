@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,11 @@ interface Props {
 
 export default function SessionStartModal({ roomId, onClose }: Props) {
     const [lang, setLang] = useState(LANGUAGES[0]);
+    const [customFilename, setCustomFilename] = useState(LANGUAGES[0].file);
     const [loading, setLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => setMounted(true), []);
 
     async function handleStart() {
         setLoading(true);
@@ -34,7 +39,7 @@ export default function SessionStartModal({ roomId, onClose }: Props) {
                 method: "POST",
                 body: JSON.stringify({
                     language: lang.value,
-                    filename: lang.file,
+                    filename: customFilename.trim() || lang.file,
                 }),
             });
 
@@ -47,7 +52,9 @@ export default function SessionStartModal({ roomId, onClose }: Props) {
         }
     }
 
-    return (
+    if (!mounted) return null;
+
+    return createPortal(
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -77,7 +84,10 @@ export default function SessionStartModal({ roomId, onClose }: Props) {
                         {LANGUAGES.map((l) => (
                             <button
                                 key={l.value}
-                                onClick={() => setLang(l)}
+                                onClick={() => {
+                                    setLang(l);
+                                    setCustomFilename(l.file);
+                                }}
                                 className={cn(
                                     "flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-[14px] border transition-all font-medium focus-visible:ring-[3px] focus-visible:ring-[#a7c8b3]/[0.18] focus-visible:outline-none",
                                     lang.value === l.value
@@ -95,9 +105,15 @@ export default function SessionStartModal({ roomId, onClose }: Props) {
                 <div className="grid grid-cols-2 gap-4 bg-[#141416] border border-white/[0.08] rounded-xl p-3.5 mt-2">
                     <div>
                         <p className="text-[10px] font-medium text-tx-muted mb-2 uppercase tracking-wider">Workspace</p>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 focus-within:ring-1 focus-within:ring-[#a7c8b3]/30 rounded-md bg-[#0a0a0a] px-2 py-1.5 border border-white/5 transition-all">
                             <FileText className="w-4 h-4 text-zinc-500 shrink-0" />
-                            <span className="text-[12px] text-zinc-300 font-mono truncate">{lang.file}</span>
+                            <input
+                                type="text"
+                                value={customFilename}
+                                onChange={(e) => setCustomFilename(e.target.value)}
+                                className="bg-transparent text-[12px] text-zinc-300 font-mono focus:outline-none w-full min-w-0"
+                                spellCheck={false}
+                            />
                         </div>
                     </div>
                     <div>
@@ -125,6 +141,7 @@ export default function SessionStartModal({ roomId, onClose }: Props) {
                     </button>
                 </div>
             </motion.div>
-        </motion.div>
+        </motion.div>,
+        document.body
     );
 }

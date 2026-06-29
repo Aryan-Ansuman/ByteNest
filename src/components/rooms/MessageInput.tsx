@@ -2,9 +2,15 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { RoomMessage } from "@/types/rooms";
-import { Send, X, Clock, AtSign, Hash, Code, Smile, ArrowUp } from "lucide-react";
+import { X, Clock, AtSign, Hash, Smile, ArrowUp } from "lucide-react";
 import { useRoomStore } from "@/store/roomStore";
+import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { cn } from "@/lib/utils";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
 interface Props {
     roomId: string;
@@ -16,6 +22,11 @@ interface Props {
 
 const MAX_CHARS = 2000;
 
+const QUICK_EMOJI = [
+    "👍", "❤️", "😂", "🔥", "✅", "👀", "🎉", "💯",
+    "🤔", "😍", "🚀", "👏", "😅", "🙏", "💪", "⚡",
+];
+
 export default function MessageInput({
     roomId,
     replyTo,
@@ -26,21 +37,22 @@ export default function MessageInput({
     const [value, setValue]       = useState("");
     const [sending, setSending]   = useState(false);
     const [cooldown, setCooldown] = useState(0);
-    const [isTyping, setIsTyping] = useState(false);
     const [focused, setFocused]   = useState(false);
 
-    const textareaRef   = useRef<HTMLTextAreaElement>(null);
-    const cooldownRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-    const typingRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const textareaRef  = useRef<HTMLTextAreaElement>(null);
+    const cooldownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const setTypingStatus = useRoomStore((s) => s.setTypingStatus);
+    // ── Real typing indicator (Appwrite-backed) ────────────────────────────
+    const { startTyping, stopTyping } = useTypingIndicator(roomId);
+
+    const members = useRoomStore((s) => s.members);
 
     // Auto-focus on reply
     useEffect(() => {
         if (replyTo) textareaRef.current?.focus();
     }, [replyTo]);
 
-    // Auto-resize
+    // Auto-resize textarea
     useEffect(() => {
         const el = textareaRef.current;
         if (!el) return;
@@ -48,18 +60,31 @@ export default function MessageInput({
         el.style.height = Math.min(el.scrollHeight, 140) + "px";
     }, [value]);
 
+    // ── Helpers: insert text at cursor position ────────────────────────────
+    function insertAtCursor(text: string) {
+        const el = textareaRef.current;
+        if (!el) return;
+        const start = el.selectionStart ?? value.length;
+        const end   = el.selectionEnd   ?? value.length;
+        const next  = value.slice(0, start) + text + value.slice(end);
+        if (next.length > MAX_CHARS) return;
+        setValue(next);
+        // Restore cursor after the inserted text
+        requestAnimationFrame(() => {
+            el.focus();
+            el.selectionStart = start + text.length;
+            el.selectionEnd   = start + text.length;
+        });
+    }
+
     function handleTyping(val: string) {
         if (val.length > MAX_CHARS) return;
         setValue(val);
-        if (!isTyping && val.trim()) {
-            setIsTyping(true);
-            setTypingStatus?.(roomId, true);
+        if (val.trim()) {
+            startTyping();
+        } else {
+            stopTyping();
         }
-        if (typingRef.current) clearTimeout(typingRef.current);
-        typingRef.current = setTimeout(() => {
-            setIsTyping(false);
-            setTypingStatus?.(roomId, false);
-        }, 2000);
     }
 
     function startCooldown(seconds: number) {
@@ -78,6 +103,7 @@ export default function MessageInput({
         if (!body || sending || cooldown > 0) return;
 
         setSending(true);
+        stopTyping();
         try {
             await onSend(body, replyTo?.$id);
             setValue("");
@@ -96,6 +122,18 @@ export default function MessageInput({
             e.preventDefault();
             submit();
         }
+    }
+
+    // ── Mention: insert @name of first matching online member ──────────────
+    function handleMention() {
+        insertAtCursor("@");
+        textareaRef.current?.focus();
+    }
+
+    // ── Tag: insert # ──────────────────────────────────────────────────────
+    function handleHashTag() {
+        insertAtCursor("#");
+        textareaRef.current?.focus();
     }
 
     return (
@@ -130,7 +168,10 @@ export default function MessageInput({
                     onChange={(e) => handleTyping(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onFocus={() => setFocused(true)}
-                    onBlur={() => setFocused(false)}
+                    onBlur={() => {
+                        setFocused(false);
+                        stopTyping();
+                    }}
                     placeholder={cooldown > 0 ? `Slow mode: wait ${cooldown}s…` : "Type a message..."}
                     className="flex-1 max-h-[140px] bg-transparent text-sm text-tx placeholder-[#7A7A82] resize-none outline-none px-4 pt-3 pb-2 leading-relaxed caret-[#a7c8b3]"
                     rows={1}
@@ -138,15 +179,56 @@ export default function MessageInput({
 
                 {/* Bottom Tools & Send */}
                 <div className="flex items-center justify-between px-2 pb-2">
-                    {/* Formatting / Attachments */}
+                    {/* Formatting tools */}
                     <div className="flex items-center gap-1 text-tx-muted">
-                        <button className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95" title="Emoji">
-                            <Smile className="w-4 h-4" />
-                        </button>
-                        <button className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95" title="Mention">
+                        {/* Emoji Picker */}
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                                    title="Emoji"
+                                >
+                                    <Smile className="w-4 h-4" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                                side="top"
+                                align="start"
+                                className="w-auto p-2 bg-[#18181b] border-white/5 shadow-xl rounded-xl"
+                            >
+                                <div className="grid grid-cols-8 gap-1">
+                                    {QUICK_EMOJI.map((e) => (
+                                        <button
+                                            key={e}
+                                            type="button"
+                                            onClick={() => insertAtCursor(e)}
+                                            className="text-base hover:scale-125 transition-transform px-1 py-0.5 rounded-md hover:bg-white/[0.04]"
+                                        >
+                                            {e}
+                                        </button>
+                                    ))}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+
+                        {/* Mention */}
+                        <button
+                            type="button"
+                            onClick={handleMention}
+                            className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                            title="Mention someone"
+                        >
                             <AtSign className="w-4 h-4" />
                         </button>
-                        <button className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95" title="Tag">
+
+                        {/* Tag */}
+                        <button
+                            type="button"
+                            onClick={handleHashTag}
+                            className="p-1.5 rounded-lg hover:bg-surface-hover hover:text-tx-secondary transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                            title="Tag"
+                        >
                             <Hash className="w-4 h-4" />
                         </button>
                     </div>
@@ -161,6 +243,7 @@ export default function MessageInput({
 
                         {/* Send Button */}
                         <button
+                            type="button"
                             onClick={submit}
                             disabled={!value.trim() || sending || cooldown > 0}
                             className={cn(

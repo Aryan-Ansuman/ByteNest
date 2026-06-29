@@ -90,6 +90,7 @@ export default function TopBar({
                     href="/rooms"
                     className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors -ml-1.5"
                     title="Back to Rooms"
+                    aria-label="Back to Rooms"
                 >
                     <ChevronLeft className="w-5 h-5" />
                 </Link>
@@ -103,7 +104,7 @@ export default function TopBar({
 
             {/* ── Center — panel toggle tabs ────────────────────────────── */}
             {!focusMode && (
-                <div className="hidden md:flex items-center gap-6">
+                <div className="flex items-center gap-3 sm:gap-6">
                     <PanelToggle
                         label="Chat"
                         active={!hiddenPanels.has("chat")}
@@ -125,11 +126,45 @@ export default function TopBar({
             {/* ── Right — avatars, stats, actions ──────────────────────── */}
             <div className="flex items-center justify-end gap-2 shrink-0 w-1/3">
 
+                {/* Slow mode badge */}
+                {slowModeActive && (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-[#a7c8b3]/10 border border-[#a7c8b3]/20 mr-1">
+                        <Timer className="w-3 h-3 text-[#a7c8b3]" />
+                        <span className="text-[9px] font-[600] text-[#a7c8b3] uppercase tracking-wider">{room.slowMode}</span>
+                    </div>
+                )}
+
+                {/* Avatar stack */}
+                <div className="hidden lg:flex items-center -space-x-2 mr-1">
+                    {onlineAvatars.map((m) => (
+                        <div
+                            key={m.userId}
+                            title={m.displayName}
+                            className={cn(
+                                "w-7 h-7 rounded-full border-2 border-[#0a0a0a] flex items-center justify-center text-[10px] font-bold text-white shadow-sm",
+                                AVATAR_BG[m.avatarColor] || AVATAR_BG.indigo
+                            )}
+                        >
+                            {m.displayName.slice(0, 2).toUpperCase()}
+                        </div>
+                    ))}
+                    {overflow > 0 && (
+                        <div className="w-7 h-7 rounded-full border-2 border-[#0a0a0a] bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 shadow-sm z-10">
+                            +{overflow}
+                        </div>
+                    )}
+                </div>
+
+                {(slowModeActive || onlineAvatars.length > 0) && (
+                    <div className="hidden lg:block h-4 w-px bg-white/5 mr-1" />
+                )}
+
                 {/* Command palette trigger */}
                 <button
                     onClick={onOpenCommand}
                     className="hidden sm:flex items-center justify-center px-2.5 py-1.5 text-[11px] font-semibold font-mono text-tx-muted border border-white/5 rounded-lg hover:bg-zinc-800/40 hover:text-tx-secondary transition-all"
                     title="Command palette (⌘K)"
+                    aria-label="Command palette"
                 >
                     ⌘K
                 </button>
@@ -139,6 +174,7 @@ export default function TopBar({
                     onClick={onToggleInfo}
                     className="p-1.5 text-tx-muted hover:text-tx-secondary hover:bg-zinc-800/40 rounded-lg transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                     title="Room info & settings"
+                    aria-label="Room info and settings"
                 >
                     <Settings className="w-4 h-4" />
                 </button>
@@ -153,6 +189,7 @@ export default function TopBar({
                             : "text-tx-muted hover:text-tx-secondary hover:bg-zinc-800/40"
                     )}
                     title={focusMode ? "Exit focus mode (⌘\\)" : "Focus mode (⌘\\)"}
+                    aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"}
                 >
                     {focusMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>

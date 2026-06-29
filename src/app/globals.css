@@ -166,3 +166,18 @@
         border-color: rgb(255 255 255 / 0.1);
     }
 }
+
+/* Monaco Editor Find Widget Overrides */
+.monaco-editor .find-widget .button {
+    color: #e4e4e7 !important;
+    border-radius: 4px !important;
+}
+
+/* Prevent Find Widget hover tooltips from flickering by ignoring pointer events */
+body:has(.find-widget:hover) .monaco-hover,
+body:has(.find-widget:hover) .monaco-editor-hover,
+body:has(.find-widget:hover) .workbench-hover-container,
+.monaco-editor:has(.find-widget:hover) .monaco-hover,
+.monaco-editor:has(.find-widget:hover) .monaco-editor-hover {
+    pointer-events: none !important;
+}
