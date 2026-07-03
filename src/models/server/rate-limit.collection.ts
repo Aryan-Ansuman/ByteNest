@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, rateLimitCollection } from "../name";
 import { databases } from "./config";
 
@@ -12,7 +12,7 @@ export default async function createRateLimitCollection() {
     console.log("Rate limit collection created");
 
     await Promise.all([
-        databases.createStringAttribute(db, rateLimitCollection, "key", 255, true),
+        databases.createStringAttribute(db, rateLimitCollection, IndexType.Key, 255, true),
         databases.createStringAttribute(db, rateLimitCollection, "bucket", 64, true),
         databases.createIntegerAttribute(db, rateLimitCollection, "createdAt", true),
         databases.createIntegerAttribute(db, rateLimitCollection, "expiresAt", true),

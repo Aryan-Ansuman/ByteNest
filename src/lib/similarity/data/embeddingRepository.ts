@@ -173,7 +173,7 @@ export async function isContentDrifted(
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserialize(doc: any): QuestionEmbedding {
   return {
     $id: doc.$id,

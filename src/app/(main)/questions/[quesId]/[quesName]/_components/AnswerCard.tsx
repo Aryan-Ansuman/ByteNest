@@ -13,6 +13,7 @@ import {
     Trash2,
     MoreHorizontal,
     Loader2,
+    Tag as TagIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { markdownToPlainExcerpt } from "@/lib/sanitize";
@@ -24,6 +25,11 @@ import { AnswerDoc, useQuestionDetail } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
 import { Avatar, ConfirmDialog } from "./shared";
 import ShareMenu, { copyText } from "./ShareMenu";
+import VerificationBadge from "./VerificationBadge";
+import VersionContextEditor, { EMPTY_VERSION_CONTEXT, type VersionContextValue } from "./VersionContextEditor";
+import FreshnessBadge from "./FreshnessBadge";
+import StalenessReportButton from "./StalenessReportButton";
+import ConfirmStillValidButton from "./ConfirmStillValidButton";
 
 // ─── AnswerMoreMenu ───────────────────────────────────────────────────────────
 
@@ -31,11 +37,13 @@ function AnswerMoreMenu({
     answerId,
     isOwner,
     onDelete,
+    onEditVersion,
     disabled = false,
 }: {
     answerId: string;
     isOwner: boolean;
     onDelete: () => void;
+    onEditVersion: () => void;
     disabled?: boolean;
 }) {
     const [open, setOpen] = React.useState(false);
@@ -86,6 +94,15 @@ function AnswerMoreMenu({
         },
         ...(isOwner
             ? [
+                  {
+                      label: "Edit version context",
+                      icon: <TagIcon className="size-3.5" />,
+                      onClick: () => {
+                          setOpen(false);
+                          onEditVersion();
+                      },
+                      danger: false,
+                  },
                   {
                       label: "Delete answer",
                       icon: <Trash2 className="size-3.5" />,
@@ -267,10 +284,48 @@ export default function AnswerCard({
         isDeletingQuestion,
         acceptingAnswerId,
         question,
+        pendingAcceptOverride,
+        confirmAcceptOverride,
+        cancelAcceptOverride,
+        updateAnswerVersionContext,
+        patchAnswerFreshness,
     } = useQuestionDetail();
+
+    const canRetryVerification =
+        currentUser?.$id === answer.authorId || currentUser?.$id === question.authorId;
 
     const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
+    const [versionEditorOpen, setVersionEditorOpen] = React.useState(false);
+    const [versionDraft, setVersionDraft] = React.useState<VersionContextValue>(EMPTY_VERSION_CONTEXT);
+    const [isSavingVersion, setIsSavingVersion] = React.useState(false);
+
+    const questionTags = React.useMemo(
+        () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
+        [question.tags]
+    );
+
+    const openVersionEditor = () => {
+        setVersionDraft({
+            techPackage: answer.techPackage ?? "",
+            techEcosystem: answer.techEcosystem ?? null,
+            versionMin: answer.versionMin ?? "",
+            versionMax: answer.versionMax ?? "",
+        });
+        setVersionEditorOpen(true);
+    };
+
+    const handleSaveVersion = async () => {
+        setIsSavingVersion(true);
+        const saved = await updateAnswerVersionContext(answer.$id, {
+            versionMin: versionDraft.versionMin.trim() || "",
+            versionMax: versionDraft.versionMax.trim() || "",
+            techPackage: versionDraft.techPackage.trim() || "",
+            techEcosystem: versionDraft.techEcosystem,
+        });
+        setIsSavingVersion(false);
+        if (saved) setVersionEditorOpen(false);
+    };
 
     const votedStatus = getVoteStatus("answer", answer.$id);
     const voteScore = getAnswerScore(answer);
@@ -326,7 +381,8 @@ export default function AnswerCard({
             <div
                 className={cn(
                     "min-w-0 flex-1 rounded-xl border border-white/[0.05] bg-[#0c0c0c] p-3 sm:p-5",
-                    isBest && "border-[#CFE8D5]/20 bg-[#CFE8D5]/[0.025]"
+                    isBest && "border-[#CFE8D5]/20 bg-[#CFE8D5]/[0.025]",
+                    answer.freshnessLabel === "stale" && "opacity-80"
                 )}
             >
                 {/* Author row */}
@@ -344,6 +400,14 @@ export default function AnswerCard({
                                 OP
                             </span>
                         )}
+                        {question.hasTestSuite && (
+                            <VerificationBadge
+                                answerId={answer.$id}
+                                initialStatus={answer.verificationStatus}
+                                initialScore={answer.verificationScore}
+                                canRetry={canRetryVerification}
+                            />
+                        )}
                         <span className="text-zinc-600 text-sm">·</span>
                         <span className="text-sm text-zinc-500">
                             answered {convertDateToRelativeTime(new Date(answer.$createdAt))}
@@ -354,14 +418,44 @@ export default function AnswerCard({
                         {wasEdited && (
                             <span className="text-xs text-zinc-600">Edited {convertDateToRelativeTime(new Date(answer.$updatedAt))}</span>
                         )}
+
                         <AnswerMoreMenu
                             answerId={answer.$id}
                             isOwner={isAnswerOwner}
                             onDelete={() => setDeleteDialogOpen(true)}
+                            onEditVersion={openVersionEditor}
                             disabled={interactionsDisabled}
                         />
                     </div>
                 </div>
+
+                {(answer.freshnessLabel === "aging" ||
+                    answer.freshnessLabel === "outdated" ||
+                    answer.freshnessLabel === "stale") && (
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
+                        <FreshnessBadge
+                            label={answer.freshnessLabel}
+                            lastFreshnessCheck={answer.lastFreshnessCheck}
+                            techPackage={answer.techPackage}
+                            versionMax={answer.versionMax}
+                            stalenessVoteCount={answer.stalenessVoteCount}
+                        />
+                        {isAnswerOwner &&
+                            (answer.freshnessLabel === "outdated" || answer.freshnessLabel === "stale") && (
+                                <ConfirmStillValidButton
+                                    answerId={answer.$id}
+                                    disabled={interactionsDisabled}
+                                    onConfirmed={(result) =>
+                                        patchAnswerFreshness(answer.$id, {
+                                            freshnessScore: result.freshnessScore,
+                                            freshnessLabel: result.freshnessLabel,
+                                            verifiedByAuthorAt: result.verifiedByAuthorAt,
+                                        })
+                                    }
+                                />
+                            )}
+                    </div>
+                )}
 
                 {/* Markdown body */}
                 <div
@@ -370,7 +464,42 @@ export default function AnswerCard({
                     role="region"
                     aria-label="Answer body"
                 >
-                    <MarkdownPreview source={answer.content} />
+                    <div className="prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/40">
+                        <MarkdownPreview source={answer.content} />
+                    </div>
+
+                    {versionEditorOpen && (
+                        <div className="mt-4 rounded-xl border border-white/[0.08] bg-black/20 p-4">
+                            <div className="mb-1 flex items-center justify-between">
+                                <p className="text-xs font-medium text-zinc-400">Edit version context</p>
+                            </div>
+                            <VersionContextEditor
+                                questionTags={questionTags}
+                                value={versionDraft}
+                                onChange={setVersionDraft}
+                                disabled={isSavingVersion}
+                            />
+                            <div className="mt-3 flex items-center justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setVersionEditorOpen(false)}
+                                    disabled={isSavingVersion}
+                                    className="h-9 rounded-xl border border-white/[0.08] px-3.5 text-sm text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveVersion}
+                                    disabled={isSavingVersion}
+                                    className="flex h-9 items-center gap-2 rounded-xl border border-[#CFE8D5]/20 bg-[#CFE8D5] px-3.5 text-sm font-semibold text-[#08100B] transition hover:bg-[#ddf3e2] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isSavingVersion ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                                    {isSavingVersion ? "Saving..." : "Save"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Action bar */}
@@ -394,6 +523,27 @@ export default function AnswerCard({
                         variant="inline"
                         align="left"
                     />
+
+                    {!isAnswerOwner && (
+                        <StalenessReportButton
+                            answerId={answer.$id}
+                            stalenessVoteCount={answer.stalenessVoteCount ?? 0}
+                            hasReported={Boolean(answer.viewerHasReportedStale)}
+                            disabled={interactionsDisabled}
+                            onReported={(count) =>
+                                patchAnswerFreshness(answer.$id, {
+                                    stalenessVoteCount: count,
+                                    viewerHasReportedStale: true,
+                                })
+                            }
+                            onRetracted={(count) =>
+                                patchAnswerFreshness(answer.$id, {
+                                    stalenessVoteCount: count,
+                                    viewerHasReportedStale: false,
+                                })
+                            }
+                        />
+                    )}
                 </div>
 
                 {/* Discussion thread */}
@@ -417,6 +567,16 @@ export default function AnswerCard({
                 onCancel={() => setDeleteDialogOpen(false)}
                 onConfirm={handleConfirmDelete}
                 busy={isDeleting}
+            />
+
+            <ConfirmDialog
+                open={pendingAcceptOverride?.answerId === answer.$id}
+                title="Accept anyway?"
+                description="This answer hasn't passed the test suite. Sometimes the test suite itself is wrong — you can still accept this answer if you're confident it's correct."
+                confirmLabel={isAccepting ? "Accepting…" : "Accept anyway"}
+                onCancel={cancelAcceptOverride}
+                onConfirm={confirmAcceptOverride}
+                busy={isAccepting}
             />
         </article>
     );

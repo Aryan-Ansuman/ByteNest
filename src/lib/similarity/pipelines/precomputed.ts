@@ -12,11 +12,18 @@ export async function runPrecomputedLookup(
   return {
     consumerId: consumer.id,
     candidates: stored.map((c) => ({
-      questionId: c.candidateId,
+      candidateId: c.candidateId,
       title: "",
       hybridScore: c.hybridScore,
       explanationTokens: c.explanationTokens,
       url: `/questions/${c.candidateId}`,
+      scores: {
+        semantic: c.semanticScore,
+        intent: c.intentMatchScore,
+        tag: c.tagOverlapScore,
+        community: c.communityScore,
+        hybrid: c.hybridScore,
+      }
     })),
     computedAt: new Date(),
     servedFromCache: true,

@@ -16,11 +16,13 @@ export interface DiscussionRoom {
   visibility: RoomVisibility;
   status: RoomStatus;
   memberCount: number;
+  messageCount: number;
   maxMembers: number;
   lastActivityAt: string;
   activeCodeSessionId?: string;
   inviteToken?: string;
   slowMode: SlowMode;
+  pinnedMessageId?: string;
 }
 
 export interface RoomMessage {
@@ -79,6 +81,23 @@ export interface CollabMessage {
 export interface SessionFile {
   name: string;
   language: string;
+}
+
+export interface CodeComment {
+  $id: string;
+  $createdAt: string;
+  sessionId: string;
+  roomId: string;
+  filename: string;
+  anchorOffset: number;        // durable Yjs character-offset anchor
+  lineNumberAtCreate: number;  // fallback line number for first paint
+  authorId: string;
+  authorName: string;
+  authorColor: string;
+  body: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  parentId?: string;           // null/undefined = root comment of a thread
 }
 
 export interface ParsedReactions {

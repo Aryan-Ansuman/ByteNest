@@ -31,7 +31,7 @@ export default async function createGraphEdgesCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, graphEdgesCollection, "source_target", "unique", ["sourceId", "targetId", "edgeType"]),
+        databases.createIndex(db, graphEdgesCollection, "source_target", IndexType.Unique, ["sourceId", "targetId", "edgeType"]),
         databases.createIndex(db, graphEdgesCollection, "source_index", IndexType.Key, ["sourceId"]),
         databases.createIndex(db, graphEdgesCollection, "target_index", IndexType.Key, ["targetId"]),
     ]);

@@ -19,7 +19,7 @@
  * and the error is logged without rolling back the prefs update.
  */
 
-import { Client, Databases, ID, Users } from "node-appwrite";
+import { Client, Databases, ID, Query, Users } from "node-appwrite";
 
 export default async ({ req, res, log, error }) => {
     if (!req.variables.APPWRITE_FUNCTION_EVENT) {
@@ -46,6 +46,8 @@ export default async ({ req, res, log, error }) => {
 
     const DB_ID                    = "6a2bbffd00190eccf0b8";
     const REPUTATION_EVENTS_COLL   = "reputation_events";
+    const TEST_RUNS_COLL           = "test_runs"; // ← new
+    const TVA_VERIFIED_BONUS       = 15;          // ← new — matches TVA_VERIFIED_REPUTATION_BONUS in models/name.ts
 
     // ── Event type flags ───────────────────────────────────────────────────────
 
@@ -291,6 +293,56 @@ export default async ({ req, res, log, error }) => {
                 `Acceptance-based reputation is handled by the PATCH /api/answer ` +
                 `route directly. No change applied here to avoid double-counting.`
             );
+
+            // ── TVA — Phase 7: award reputation on a machine-verified pass ──
+            //
+            // Appwrite update events carry no previous-state diff, so we
+            // can't tell "just transitioned to passed" from "already was
+            // passed and something unrelated changed" directly from the
+            // payload. Idempotency is enforced downstream instead: the
+            // sourceId used is the *test_runs* document, not the answer —
+            // one distinct, dedupable event per execution attempt. If a
+            // reputation_events row already exists for that test run, this
+            // is a no-op; otherwise it's a genuine new pass and gets awarded.
+            if (document.verificationStatus === "passed") {
+                try {
+                    const latestRuns = await databases.listDocuments(
+                        DB_ID,
+                        TEST_RUNS_COLL,
+                        [
+                            Query.equal("answerId", document.$id),
+                            Query.equal("status", "complete"),
+                            Query.orderDesc("createdAt"),
+                            Query.limit(1),
+                        ]
+                    );
+                    const latestRun = latestRuns.documents[0];
+
+                    if (latestRun && latestRun.exitCode === 0) {
+                        const existingEvent = await databases.listDocuments(
+                            DB_ID,
+                            REPUTATION_EVENTS_COLL,
+                            [
+                                Query.equal("sourceId", latestRun.$id),
+                                Query.equal("eventType", "answer_verified"),
+                                Query.limit(1),
+                            ]
+                        );
+
+                        if (existingEvent.documents.length === 0) {
+                            await adjustRep(
+                                authorId,
+                                TVA_VERIFIED_BONUS,
+                                "answer_verified",
+                                latestRun.$id,
+                                "test_run"
+                            );
+                        }
+                    }
+                } catch (err) {
+                    error(`[TVA] Failed to process verification reputation for answer ${document.$id}: ${err?.message}`);
+                }
+            }
         }
     }
 

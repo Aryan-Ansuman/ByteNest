@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, codeSessionsCollection } from "../name";
 import { databases } from "./config";
 
@@ -36,7 +36,7 @@ export default async function createCodeSessionsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, codeSessionsCollection, "room_session_status", "key", ["roomId", "status"]),
+        databases.createIndex(db, codeSessionsCollection, "room_session_status", IndexType.Key, ["roomId", "status"]),
     ]);
     console.log("Code Sessions indexes created");
 }

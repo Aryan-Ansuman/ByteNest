@@ -1,4 +1,4 @@
-import { computeAnswerComplexity } from "../nlp/answerComplexity";
+import { computeAnswerComplexity } from "../../nlp/answerComplexity";
 
 // Numeric values used by the future ranking formula
 export const TIER_SCORES: Record<string, number> = {

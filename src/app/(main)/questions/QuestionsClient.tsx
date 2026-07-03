@@ -38,6 +38,8 @@ export interface Question {
     totalVotes: number;
     totalViews: number;
     hasAcceptedAnswer: boolean;
+    /** Phase 8 — "fresh" (has fresh/aging answers), "outdated" (all answers decayed), "none" (no answers yet). */
+    answerFreshnessIndicator?: "fresh" | "outdated" | "none";
     author: {
         $id: string;
         name: string;
@@ -419,12 +421,15 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
             </div>
 
             <div className="min-w-0 flex-1">
-                <Link
-                    href={`/questions/${question.$id}/${slugify(question.title)}`}
-                    className="text-[15px] font-medium leading-snug text-[#a7c8b3] decoration-[#a7c8b3]/60 underline-offset-4 transition group-hover:text-[#c6e2cf] group-hover:underline"
-                >
-                    {question.title}
-                </Link>
+                <div className="flex items-start gap-2">
+                    <FreshnessIndicatorDot indicator={question.answerFreshnessIndicator} />
+                    <Link
+                        href={`/questions/${question.$id}/${slugify(question.title)}`}
+                        className="text-[15px] font-medium leading-snug text-[#a7c8b3] decoration-[#a7c8b3]/60 underline-offset-4 transition group-hover:text-[#c6e2cf] group-hover:underline"
+                    >
+                        {question.title}
+                    </Link>
+                </div>
 
                 {excerpt && <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">{excerpt}</p>}
 
@@ -474,6 +479,30 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                 </div>
             </div>
         </article>
+    );
+}
+
+function FreshnessIndicatorDot({ indicator }: { indicator?: "fresh" | "outdated" | "none" }) {
+    const resolved = indicator ?? "none";
+
+    const label =
+        resolved === "fresh"
+            ? "Has verified or up-to-date answers"
+            : resolved === "outdated"
+            ? "All answers may be outdated"
+            : "No answers yet";
+
+    return (
+        <span
+            title={label}
+            aria-label={label}
+            className={cn(
+                "mt-[7px] inline-block size-2 shrink-0 rounded-full",
+                resolved === "fresh" && "bg-emerald-400",
+                resolved === "outdated" && "bg-amber-400",
+                resolved === "none" && "bg-zinc-700"
+            )}
+        />
     );
 }
 

@@ -90,7 +90,7 @@ export async function getStrongestCooccurrences(
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserialize(doc: any): TagCooccurrence {
   return {
     $id: doc.$id,

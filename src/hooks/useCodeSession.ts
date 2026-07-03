@@ -13,6 +13,7 @@ import { AppwriteProvider } from "@/lib/yjs/AppwriteProvider";
 import { uint8ToBase64, base64ToUint8, debounce } from "@/lib/yjs/utils";
 import { useRoomStore } from "@/store/roomStore";
 import type { CodeSession } from "@/types/rooms";
+import { apiFetch } from "@/lib/api-fetch";
 
 export const CURSOR_COLORS: Record<string, string> = {
     indigo: "#6366f1",
@@ -23,7 +24,11 @@ export const CURSOR_COLORS: Record<string, string> = {
     cyan: "#06b6d4",
 };
 
-export function useCodeSession(roomId: string, session: CodeSession | null) {
+export function useCodeSession(
+    roomId: string,
+    session: CodeSession | null,
+    initialActiveFile?: string
+) {
     const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
     const [awareness, setAwareness] = useState<Awareness | null>(null);
 
@@ -45,11 +50,17 @@ export function useCodeSession(roomId: string, session: CodeSession | null) {
             }
         }
 
-        // 3. Create Awareness with user info for cursor display
+        // 3. Create Awareness with user info for cursor display + presence map.
+        //    `userId` lets any component match an awareness entry back to a
+        //    RoomMember from the store; `activeFile` is what the presence
+        //    map renders. Both travel over the existing awareness relay —
+        //    no new Appwrite writes, no new collection.
         const aw = new Awareness(doc);
         aw.setLocalStateField("user", {
+            userId: currentMember.userId,
             name: currentMember.displayName,
             color: CURSOR_COLORS[currentMember.avatarColor] ?? "#6366f1",
+            activeFile: initialActiveFile ?? session.activeFile,
         });
 
         // 4. Create provider — starts realtime relay subscriptions
@@ -69,9 +80,8 @@ export function useCodeSession(roomId: string, session: CodeSession | null) {
         const saveSnapshot = debounce(async (d: Y.Doc, sid: string) => {
             try {
                 const state = Y.encodeStateAsUpdate(d);
-                await fetch(`/api/rooms/${roomId}/session/${sid}`, {
+                await apiFetch(`/api/rooms/${roomId}/session/${sid}`, {
                     method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         action: "snapshot",
                         yjsSnapshotB64: uint8ToBase64(state),

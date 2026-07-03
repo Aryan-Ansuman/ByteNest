@@ -204,7 +204,28 @@ export async function PATCH(
                 return NextResponse.json({ ok: true });
             }
 
-            default:
+            // ── Delete file (host only) ────────────────────────────────────
+            case "delete_file": {
+                if (!(await verifyHost())) {
+                    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+                }
+                const files = JSON.parse(session.files ?? "[]");
+                const filtered = files.filter((f: any) => f.name !== body.name);
+                if (filtered.length === files.length) {
+                    return NextResponse.json({ error: "File not found" }, { status: 404 });
+                }
+                // If we deleted the active file, switch to the first remaining
+                const newActive = body.name === session.activeFile
+                    ? (filtered[0]?.name ?? "")
+                    : session.activeFile;
+                const updated = await databases.updateDocument(
+                    db, codeSessionsCollection, sessionId,
+                    { files: JSON.stringify(filtered), activeFile: newActive }
+                );
+                return NextResponse.json({ session: updated });
+            }
+
+                        default:
                 return NextResponse.json(
                     { error: "Unknown action" },
                     { status: 400 }

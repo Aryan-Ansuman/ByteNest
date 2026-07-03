@@ -10,6 +10,7 @@ import {
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { checkGlobalMessageLimit } from "@/lib/messageLimits";
 import { sanitizeMarkdownSource } from "@/lib/sanitize";
+import { requireRoomMember } from "@/lib/rooms/server";
 
 const SLOW_MODE_MS: Record<string, number> = {
     off: 0,
@@ -30,11 +31,13 @@ export async function GET(
         const before = searchParams.get("before");
         const limit = 50;
 
+        await requireRoomMember(roomId, userId);
+
         const queries = [
             Query.equal("roomId", roomId),
             Query.isNull("deletedAt"),
             Query.orderDesc("$createdAt"),
-            Query.limit(limit),
+            Query.limit(limit + 1),
         ];
 
         if (before) queries.push(Query.lessThan("$createdAt", before));
@@ -45,9 +48,11 @@ export async function GET(
             queries
         );
 
+        const page = result.documents.slice(0, limit);
+
         return NextResponse.json({
-            messages: result.documents.reverse(),
-            hasMore: result.total > limit,
+            messages: page.reverse(),
+            hasMore: result.documents.length > limit,
         });
     } catch (error: any) {
         if (error instanceof Response) return error;

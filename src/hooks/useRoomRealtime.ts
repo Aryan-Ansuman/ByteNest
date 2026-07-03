@@ -1,15 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { client, databases } from "@/models/client/config";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { client } from "@/models/client/config";
 import { db, roomMessagesCollection, roomMembersCollection, discussionRoomsCollection, typingIndicatorsCollection } from "@/models/name";
 import { useRoomStore } from "@/store/roomStore";
 import type { RoomMessage, RoomMember, DiscussionRoom } from "@/types/rooms";
-import { Query } from "appwrite";
 import { apiFetch } from "@/lib/api-fetch";
 
 export function useRoomRealtime(roomId: string) {
+    const router = useRouter();
     const prevCodeSessionId = useRef<string | null | undefined>(undefined);
+    const typingUsersRef = useRef<
+        Map<string, { displayName: string; updatedAt: number }>
+    >(new Map());
 
     const addMessage = useRoomStore((s) => s.addMessage);
     const updateMessage = useRoomStore((s) => s.updateMessage);
@@ -23,6 +28,26 @@ export function useRoomRealtime(roomId: string) {
 
     useEffect(() => {
         if (!roomId) return;
+
+        function publishTypingUsers() {
+            const store = useRoomStore.getState();
+            const now = Date.now();
+            const names: string[] = [];
+
+            for (const [userId, entry] of Array.from(typingUsersRef.current.entries())) {
+                if (now - entry.updatedAt > 3500) {
+                    typingUsersRef.current.delete(userId);
+                    continue;
+                }
+                if (userId !== store.currentMember?.userId) {
+                    names.push(entry.displayName);
+                }
+            }
+
+            setTypingUsers(names);
+        }
+
+        const typingPruneInterval = window.setInterval(publishTypingUsers, 1000);
 
         // ── Subscription 1: room_messages ────────────────────────────────
         const unsubMessages = client.subscribe(
@@ -72,7 +97,10 @@ export function useRoomRealtime(roomId: string) {
                     removeMember(payload.$id);
                     const store = useRoomStore.getState();
                     if (store.currentMember?.userId === payload.userId) {
-                        window.location.href = "/rooms";
+                        toast.error("You were removed from the room");
+                        window.setTimeout(() => {
+                            router.replace("/rooms?error=kicked");
+                        }, 700);
                     }
                 }
             }
@@ -80,7 +108,7 @@ export function useRoomRealtime(roomId: string) {
 
         // ── Subscription 3: discussion_rooms ─────────────────────────────
         const unsubRoom = client.subscribe(
-            `databases.${db}.collections.${discussionRoomsCollection}.documents`,
+            `databases.${db}.collections.${discussionRoomsCollection}.documents.${roomId}`,
             async (event: any) => {
                 const payload = event.payload as DiscussionRoom;
                 if (payload.$id !== roomId) return;
@@ -115,7 +143,7 @@ export function useRoomRealtime(roomId: string) {
         // ── Subscription 4: typing_indicators ────────────────────────────
         const unsubTyping = client.subscribe(
             `databases.${db}.collections.${typingIndicatorsCollection}.documents`,
-            async (event: any) => {
+            (event: any) => {
                 const payload = event.payload as {
                     $id: string;
                     roomId: string;
@@ -126,37 +154,28 @@ export function useRoomRealtime(roomId: string) {
 
                 if (payload.roomId !== roomId) return;
 
-                // Re-query all typing indicators for this room fresh
-                // Filter to those updated in last 3.5s, exclude self
-                try {
-                    const since = new Date(Date.now() - 3500).toISOString();
-                    const result = await databases.listDocuments(
-                        db,
-                        typingIndicatorsCollection,
-                        [
-                            Query.equal("roomId", roomId),
-                            Query.greaterThan("$updatedAt", since),
-                            Query.limit(20),
-                        ]
-                    );
-
-                    const { currentMember } = useRoomStore.getState();
-                    const names = result.documents
-                        .filter((d) => d.userId !== currentMember?.userId)
-                        .map((d) => d.displayName as string);
-
-                    setTypingUsers(names);
-                } catch {
-                    // best effort
+                const isDelete = event.events.some((e: string) => e.includes(".delete"));
+                if (isDelete) {
+                    typingUsersRef.current.delete(payload.userId);
+                } else {
+                    typingUsersRef.current.set(payload.userId, {
+                        displayName: payload.displayName,
+                        updatedAt: Date.now(),
+                    });
                 }
+
+                publishTypingUsers();
             }
         );
 
         return () => {
+            window.clearInterval(typingPruneInterval);
             unsubMessages();
             unsubMembers();
             unsubRoom();
             unsubTyping();
+            typingUsersRef.current.clear();
+            setTypingUsers([]);
         };
-    }, [roomId]);
+    }, [roomId, router]);
 }

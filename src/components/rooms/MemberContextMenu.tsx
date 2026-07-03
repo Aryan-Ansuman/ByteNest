@@ -35,6 +35,7 @@ export function MemberContextMenu({
 }: Props) {
     const [open, setOpen] = useState(false);
     const [confirmKick, setConfirmKick] = useState(false);
+    const [confirmTransfer, setConfirmTransfer] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     const { loading, muteMember, unmuteMember, kickMember, transferHost } =
@@ -48,6 +49,7 @@ export function MemberContextMenu({
             ) {
                 setOpen(false);
                 setConfirmKick(false);
+                setConfirmTransfer(false);
             }
         }
         if (open) document.addEventListener("mousedown", onClickOutside);
@@ -78,16 +80,24 @@ export function MemberContextMenu({
     }
 
     async function handleTransferHost() {
+        if (!confirmTransfer) {
+            setConfirmTransfer(true);
+            setConfirmKick(false);
+            return;
+        }
+
         try {
             await transferHost(member.userId);
         } finally {
             setOpen(false);
+            setConfirmTransfer(false);
         }
     }
 
     async function handleKick() {
         if (!confirmKick) {
             setConfirmKick(true);
+            setConfirmTransfer(false);
             return;
         }
         try {
@@ -110,6 +120,7 @@ export function MemberContextMenu({
                 onClick={() => {
                     setOpen((v) => !v);
                     setConfirmKick(false);
+                    setConfirmTransfer(false);
                 }}
                 className="flex items-center justify-center rounded-lg p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface text-tx-muted hover:text-tx-secondary"
                 aria-label={`Options for ${member.displayName}`}
@@ -155,6 +166,7 @@ export function MemberContextMenu({
                         <MenuItem
                             onClick={handleTransferHost}
                             disabled={anyBusy}
+                            confirm={confirmTransfer}
                             icon={
                                 isBusy("transfer") ? (
                                     <Loader2
@@ -168,7 +180,7 @@ export function MemberContextMenu({
                                     />
                                 )
                             }
-                            label="Transfer host"
+                            label={confirmTransfer ? "Confirm transfer" : "Transfer host"}
                         />
 
                         <div className="my-1 border-t border-b" />

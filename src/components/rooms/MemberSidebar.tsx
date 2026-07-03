@@ -7,13 +7,15 @@ import { Search, ChevronDown, ChevronRight, UserPlus, Crown } from "lucide-react
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { MemberContextMenu } from "./MemberContextMenu";
+import { getRoomInviteUrl } from "@/lib/rooms/invite";
+import { MemberProfileModal } from "./MemberProfileModal";
 
 const AVATAR_COLORS: Record<string, string> = {
     indigo:  "bg-indigo-500",
     violet:  "bg-violet-500",
-    emerald: "bg-status-success",
+    emerald: "bg-emerald-500",
     amber:   "bg-amber-500",
-    rose:    "bg-status-danger",
+    rose:    "bg-rose-500",
     cyan:    "bg-cyan-500",
 };
 
@@ -26,8 +28,9 @@ export default function MemberSidebar({ roomId }: Props) {
     const members       = useRoomStore((s) => s.members);
     const currentMember = useRoomStore((s) => s.currentMember);
 
-    const [searchQuery, setSearchQuery] = useState("");
-    const [openSections, setOpenSections] = useState({
+    const [searchQuery, setSearchQuery]         = useState("");
+    const [profileMember, setProfileMember]     = useState<RoomMember | null>(null);
+    const [openSections, setOpenSections]       = useState({
         online:  true,
         muted:   true,
         away:    true,
@@ -38,12 +41,9 @@ export default function MemberSidebar({ roomId }: Props) {
         setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
     }
 
-    // ── Fix 2: wire invite button ─────────────────────────────────────────
     async function copyInvite() {
         if (!room) return;
-        const link = room.inviteToken
-            ? `${window.location.origin}/rooms/join/${room.inviteToken}`
-            : window.location.href;
+        const link = getRoomInviteUrl(room, window.location.origin);
         await navigator.clipboard.writeText(link);
         toast.success("Invite link copied to clipboard");
     }
@@ -52,8 +52,8 @@ export default function MemberSidebar({ roomId }: Props) {
         m.displayName.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const isHost        = (member: RoomMember) => member.userId === room?.hostId;
-    const iAmHost       = currentMember?.userId === room?.hostId;
+    const isHost  = (member: RoomMember) => member.userId === room?.hostId;
+    const iAmHost = currentMember?.userId === room?.hostId;
 
     const online  = filtered.filter((m) => m.status === "online");
     const muted   = filtered.filter((m) => m.status === "muted");
@@ -64,96 +64,113 @@ export default function MemberSidebar({ roomId }: Props) {
     const totalCount  = members.length;
 
     return (
-        <div className="flex flex-col h-full bg-[#111113]">
-            {/* Header */}
-            <div className="shrink-0 px-6 py-6 border-b border-white/5">
-                <div className="flex items-center justify-between mb-2 px-1">
-                    <h2 className="text-[15px] font-[600] text-zinc-200">
-                        Members{" "}
-                        <span className="text-zinc-500 ml-1 font-medium text-[12px]">
-                            {onlineCount} / {totalCount}
-                        </span>
-                    </h2>
-                    {/* Fix 2: invite button wired */}
-                    <button
-                        onClick={copyInvite}
-                        className="p-1 text-tx-muted hover:text-[#a7c8b3] transition-colors"
-                        title="Copy invite link"
-                    >
-                        <UserPlus className="w-3.5 h-3.5" />
-                    </button>
+        <>
+            <div className="flex flex-col h-full bg-[#111113]">
+                {/* Header */}
+                <div className="shrink-0 px-6 py-6 border-b border-white/5">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                        <h2 className="text-[15px] font-[600] text-zinc-200">
+                            Members{" "}
+                            <span className="text-zinc-500 ml-1 font-medium text-[12px]">
+                                {onlineCount} / {totalCount}
+                            </span>
+                        </h2>
+                        <button
+                            onClick={copyInvite}
+                            className="p-1 text-tx-muted hover:text-[#a7c8b3] transition-colors"
+                            title="Copy invite link"
+                        >
+                            <UserPlus className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+
+                    <div className="relative group">
+                        <Search className="w-3.5 h-3.5 text-tx-muted absolute left-2.5 top-1/2 -translate-y-1/2 group-focus-within:text-[#a7c8b3] transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Search members..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-[#18181b] border border-white/5 rounded-[14px] py-2 pl-8 pr-3 text-[13px] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-[#a7c8b3] focus:ring-1 focus:ring-[#a7c8b3] caret-[#a7c8b3] transition-all shadow-sm"
+                        />
+                    </div>
                 </div>
 
-                <div className="relative group">
-                    <Search className="w-3.5 h-3.5 text-tx-muted absolute left-2.5 top-1/2 -translate-y-1/2 group-focus-within:text-[#a7c8b3] transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Search members..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-[#18181b] border border-white/5 rounded-[14px] py-2 pl-8 pr-3 text-[13px] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-[#a7c8b3] focus:ring-1 focus:ring-[#a7c8b3] caret-[#a7c8b3] transition-all shadow-sm"
-                    />
+                {/* List */}
+                <div
+                    className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+                    style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.06) transparent" }}
+                >
+                    {online.length > 0 && (
+                        <MemberSection
+                            title="Online"
+                            members={online}
+                            isHostFn={isHost}
+                            currentUserId={currentMember?.userId}
+                            iAmHost={iAmHost}
+                            roomId={roomId}
+                            isOpen={openSections.online}
+                            onToggle={() => toggleSection("online")}
+                            onOpenProfile={setProfileMember}
+                            baseZIndex={400}
+                        />
+                    )}
+                    {muted.length > 0 && (
+                        <MemberSection
+                            title="Muted"
+                            members={muted}
+                            isHostFn={isHost}
+                            currentUserId={currentMember?.userId}
+                            iAmHost={iAmHost}
+                            roomId={roomId}
+                            isOpen={openSections.muted}
+                            onToggle={() => toggleSection("muted")}
+                            onOpenProfile={setProfileMember}
+                            accent="rose"
+                            baseZIndex={300}
+                        />
+                    )}
+                    {away.length > 0 && (
+                        <MemberSection
+                            title="Away"
+                            members={away}
+                            isHostFn={isHost}
+                            currentUserId={currentMember?.userId}
+                            iAmHost={iAmHost}
+                            roomId={roomId}
+                            isOpen={openSections.away}
+                            onToggle={() => toggleSection("away")}
+                            onOpenProfile={setProfileMember}
+                            accent="amber"
+                            baseZIndex={200}
+                        />
+                    )}
+                    {offline.length > 0 && (
+                        <MemberSection
+                            title="Offline"
+                            members={offline}
+                            isHostFn={isHost}
+                            currentUserId={currentMember?.userId}
+                            iAmHost={iAmHost}
+                            roomId={roomId}
+                            isOpen={openSections.offline}
+                            onToggle={() => toggleSection("offline")}
+                            onOpenProfile={setProfileMember}
+                            dimmed
+                            baseZIndex={100}
+                        />
+                    )}
                 </div>
             </div>
 
-            {/* List */}
-            <div
-                className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
-                style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.06) transparent" }}
-            >
-                {online.length > 0 && (
-                    <MemberSection
-                        title="Online"
-                        members={online}
-                        isHostFn={isHost}
-                        currentUserId={currentMember?.userId}
-                        iAmHost={iAmHost}
-                        roomId={roomId}
-                        isOpen={openSections.online}
-                        onToggle={() => toggleSection("online")}
-                    />
-                )}
-                {muted.length > 0 && (
-                    <MemberSection
-                        title="Muted"
-                        members={muted}
-                        isHostFn={isHost}
-                        currentUserId={currentMember?.userId}
-                        iAmHost={iAmHost}
-                        roomId={roomId}
-                        isOpen={openSections.muted}
-                        onToggle={() => toggleSection("muted")}
-                        accent="rose"
-                    />
-                )}
-                {away.length > 0 && (
-                    <MemberSection
-                        title="Away"
-                        members={away}
-                        isHostFn={isHost}
-                        currentUserId={currentMember?.userId}
-                        iAmHost={iAmHost}
-                        roomId={roomId}
-                        isOpen={openSections.away}
-                        onToggle={() => toggleSection("away")}
-                        accent="amber"
-                    />
-                )}
-                {offline.length > 0 && (
-                    <MemberSection
-                        title="Offline"
-                        members={offline}
-                        isHostFn={isHost}
-                        currentUserId={currentMember?.userId}
-                        iAmHost={iAmHost}
-                        roomId={roomId}
-                        isOpen={openSections.offline}
-                        onToggle={() => toggleSection("offline")}
-                        dimmed
-                    />
-                )}
-            </div>
-        </div>
+            {/* Member profile modal */}
+            {profileMember && (
+                <MemberProfileModal
+                    member={profileMember}
+                    onClose={() => setProfileMember(null)}
+                />
+            )}
+        </>
     );
 }
 
@@ -161,18 +178,20 @@ export default function MemberSidebar({ roomId }: Props) {
 
 function MemberSection({
     title, members, isHostFn, currentUserId, iAmHost, roomId,
-    isOpen, onToggle, accent, dimmed,
+    isOpen, onToggle, onOpenProfile, accent, dimmed, baseZIndex = 100,
 }: {
     title: string;
     members: RoomMember[];
     isHostFn: (m: RoomMember) => boolean;
     currentUserId?: string;
-    iAmHost?: boolean;
+    iAmHost: boolean;
     roomId: string;
     isOpen: boolean;
     onToggle: () => void;
+    onOpenProfile: (member: RoomMember) => void;
     accent?: "rose" | "amber";
     dimmed?: boolean;
+    baseZIndex?: number;
 }) {
     return (
         <div>
@@ -201,18 +220,13 @@ function MemberSection({
                         const isOnline = !dimmed && member.status === "online";
 
                         return (
-                            // Fix 11: group class lets MemberContextMenu trigger appear on hover
                             <div
                                 key={member.userId}
+                                style={{ zIndex: baseZIndex - index }}
                                 onClick={(e) => {
                                     // Don't trigger if they clicked the context menu button itself
-                                    if ((e.target as HTMLElement).closest('button')) return;
-                                    
-                                    if (iAmHost && !isMe) {
-                                        document.getElementById(`menu-trigger-${member.userId}`)?.click();
-                                    } else {
-                                        toast.info(`Profile for ${member.displayName} coming soon!`);
-                                    }
+                                    if ((e.target as HTMLElement).closest("button")) return;
+                                    onOpenProfile(member);
                                 }}
                                 className={cn(
                                     "relative flex items-center gap-3 p-3 rounded-[14px] bg-[#18181b] border border-white/5 group transition-all duration-150 shadow-sm",
@@ -264,7 +278,7 @@ function MemberSection({
                                     )}
                                 </div>
 
-                                {/* Fix 1: MemberContextMenu replaces dead hover buttons */}
+                                {/* Host moderation context menu (host only, non-self) */}
                                 {!isMe && (
                                     <MemberContextMenu
                                         member={member}

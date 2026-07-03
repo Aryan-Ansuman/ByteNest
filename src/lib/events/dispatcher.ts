@@ -5,6 +5,8 @@ import { processEmbeddingRequested } from "./processors/EmbeddingRequestedProces
 import { processQuestionCreated } from "./processors/QuestionCreatedProcessor";
 import { processDuplicateConfirmed } from "./processors/DuplicateConfirmedProcessor";
 import { processDuplicateRejected } from "./processors/DuplicateRejectedProcessor";
+import { processRecomputeFreshness } from "./processors/RecomputeFreshnessProcessor";
+import { processVerifyAnswer } from "./processors/VerifyAnswerProcessor";
 
 /**
  * Dispatches a queued event to its processor.
@@ -63,6 +65,16 @@ async function route(eventType: EventType, payload: unknown): Promise<void> {
     case "DuplicateRejected":
       return processDuplicateRejected(
         payload as EventPayloadMap["DuplicateRejected"]
+      );
+
+    case "RecomputeFreshness":
+      return processRecomputeFreshness(
+        payload as EventPayloadMap["RecomputeFreshness"]
+      );
+
+    case "VerifyAnswer":
+      return processVerifyAnswer(
+        payload as EventPayloadMap["VerifyAnswer"]
       );
 
     default: {

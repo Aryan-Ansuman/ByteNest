@@ -35,6 +35,11 @@ function extractPrimaryFields<T extends EventType>(
     DuplicateSuggested:    ["sessionId"],
     DuplicateConfirmed:    ["sessionId", "candidateId"],
     DuplicateRejected:     ["sessionId", "candidateId"],
+    // triggeredAtMs deliberately makes every publish unique — see the
+    // comment on RecomputeFreshnessPayload in types.ts for why this event
+    // must NOT coalesce across separate triggers the way other events do.
+    RecomputeFreshness:    ["answerId", "triggeredAtMs"],
+    VerifyAnswer:          ["answerId"],
   };
 
   const fields = fieldMap[eventType];

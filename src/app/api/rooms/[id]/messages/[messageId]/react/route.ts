@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { databases } from "@/models/server/config";
 import { db, roomMessagesCollection } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
+import { requireRoomMember } from "@/lib/rooms/server";
 
 export async function POST(
     req: NextRequest,
@@ -9,14 +10,19 @@ export async function POST(
 ) {
     try {
         const userId = await getAuthenticatedUserId();
-        const { messageId } = params;
+        const { id: roomId, messageId } = params;
         const { emoji } = await req.json();
 
         if (!emoji) {
             return NextResponse.json({ error: "No emoji provided" }, { status: 400 });
         }
 
+        await requireRoomMember(roomId, userId);
+
         const msg = await databases.getDocument(db, roomMessagesCollection, messageId);
+        if (msg.roomId !== roomId) {
+            return NextResponse.json({ error: "Message not found" }, { status: 404 });
+        }
 
         const reactions: Record<string, string[]> = JSON.parse(
             msg.reactions || "{}"

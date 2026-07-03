@@ -77,6 +77,8 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
             totalVotes: Number(question.totalVotes ?? 0),
             totalViews: Number(question.views ?? question.totalViews ?? 0),
             hasAcceptedAnswer: Boolean(question.acceptedAnswerId),
+            answerFreshnessIndicator:
+                (question.answerFreshnessIndicator as "fresh" | "outdated" | "none" | undefined) ?? "none",
             author,
         };
     });

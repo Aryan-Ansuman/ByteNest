@@ -9,7 +9,8 @@ import TypingIndicator from "./TypingIndicator";
 import { toast } from "sonner";
 import type { RoomMessage } from "@/types/rooms";
 import { apiFetch } from "@/lib/api-fetch";
-import { MessageSquare, ChevronDown, Loader2, ArrowDown } from "lucide-react";
+import PinnedMessageBar from "./PinnedMessageBar";
+import { MessageSquare, ChevronDown, Loader2, ArrowDown, Search, X as XIcon } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,24 @@ export default function ChatPanel({ roomId }: Props) {
     const [parentMap, setParentMap]   = useState<Record<string, RoomMessage>>({});
     const [showScrollBtn, setShowScrollBtn] = useState(false);
     const [newMsgCount, setNewMsgCount] = useState(0);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [showSearch, setShowSearch] = useState(false);
+    const [jumpHighlightId, setJumpHighlightId] = useState<string | null>(null);
+    const searchRef = useRef<HTMLInputElement>(null);
+
+    // Cmd/Ctrl+F → open message search
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+                const target = e.target as HTMLElement;
+                if (target instanceof HTMLTextAreaElement) return;
+                e.preventDefault();
+                setShowSearch((v) => { if (!v) setTimeout(() => searchRef.current?.focus(), 50); return !v; });
+            }
+        }
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, []);
 
     const scrollRef  = useRef<HTMLDivElement>(null);
     const bottomRef  = useRef<HTMLDivElement>(null);
@@ -173,6 +192,29 @@ export default function ChatPanel({ roomId }: Props) {
         }
     }
 
+    async function handlePin(messageId: string) {
+        try {
+            await apiFetch(`/api/rooms/${roomId}/moderate`, {
+                method: "PATCH",
+                body: JSON.stringify({ action: "pin", messageId }),
+            });
+            toast.success("Message pinned");
+        } catch {
+            toast.error("Failed to pin message");
+        }
+    }
+
+    function handleJumpToMessage(messageId: string) {
+        const el = document.getElementById(`msg-${messageId}`);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            setJumpHighlightId(messageId);
+            setTimeout(() => setJumpHighlightId(null), 2000);
+        } else {
+            toast.error("Message not currently loaded — try loading earlier messages");
+        }
+    }
+
     const slowModeSeconds =
         room?.slowMode === "off" ? 0
         : room?.slowMode === "5s" ? 5
@@ -180,10 +222,45 @@ export default function ChatPanel({ roomId }: Props) {
         : room?.slowMode === "60s" ? 60
         : 0;
 
-    const grouped = groupMessagesByDay(messages);
+    const filteredMessages = searchQuery.trim()
+        ? messages.filter((m) =>
+            m.type !== "system" &&
+            m.body.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        : messages;
+
+    const grouped = groupMessagesByDay(filteredMessages);
 
     return (
         <div className="flex flex-col h-full relative">
+
+            {/* Pinned message */}
+            <PinnedMessageBar roomId={roomId} onJumpTo={handleJumpToMessage} />
+
+            {/* Search bar */}
+            {showSearch && (
+                <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-[#111113] border-b border-white/5">
+                    <Search className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    <input
+                        ref={searchRef}
+                        autoFocus
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Escape") { setSearchQuery(""); setShowSearch(false); } }}
+                        placeholder="Search messages…"
+                        className="flex-1 bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 caret-[#a7c8b3]"
+                    />
+                    {searchQuery && (
+                        <span className="text-[11px] text-zinc-500 shrink-0">
+                            {filteredMessages.length} result{filteredMessages.length !== 1 ? "s" : ""}
+                        </span>
+                    )}
+                    <button onClick={() => { setSearchQuery(""); setShowSearch(false); }} className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors">
+                        <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
+
             {/* Load earlier */}
             {hasMore && (
                 <div className="shrink-0 flex items-center justify-center py-2 border-b border-white/5 bg-panel">
@@ -240,19 +317,24 @@ export default function ChatPanel({ roomId }: Props) {
                                             !msg.replyToId;
 
                                         return (
-                                            <MessageBubble
-                                                key={msg.$id}
-                                                message={msg}
-                                                currentUserId={currentMember?.userId ?? ""}
-                                                onReact={handleReact}
-                                                onReply={setReplyTo}
-                                                parentMessage={
-                                                    msg.replyToId
-                                                        ? parentMap[msg.replyToId] ?? null
-                                                        : null
-                                                }
-                                                compact={isGrouped}
-                                            />
+                                            <div key={msg.$id} id={`msg-${msg.$id}`}>
+                                                <MessageBubble
+                                                    message={msg}
+                                                    currentUserId={currentMember?.userId ?? ""}
+                                                    onReact={handleReact}
+                                                    onReply={setReplyTo}
+                                                    onPin={handlePin}
+                                                    isHost={currentMember?.userId === room?.hostId}
+                                                    isPinned={room?.pinnedMessageId === msg.$id}
+                                                    parentMessage={
+                                                        msg.replyToId
+                                                            ? parentMap[msg.replyToId] ?? null
+                                                            : null
+                                                    }
+                                                    compact={isGrouped}
+                                                    highlight={Boolean(searchQuery.trim()) || jumpHighlightId === msg.$id}
+                                                />
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -292,6 +374,15 @@ export default function ChatPanel({ roomId }: Props) {
 
             {/* Input area */}
             <div className="shrink-0 border-t border-white/5 bg-[#111113]">
+                {currentMember?.status === "muted" && (
+                    <div className="px-6 pt-3">
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                            <span className="text-[12px] text-amber-400 font-medium">
+                                You&apos;ve been muted by the host. You can&apos;t send messages right now.
+                            </span>
+                        </div>
+                    </div>
+                )}
                 <div className="px-6 pt-4 -mb-1">
                     <TypingIndicator />
                 </div>
@@ -301,6 +392,7 @@ export default function ChatPanel({ roomId }: Props) {
                     onClearReply={() => setReplyTo(null)}
                     onSend={handleSend}
                     slowModeSeconds={slowModeSeconds}
+                    disabled={currentMember?.status === "muted"}
                 />
             </div>
         </div>
@@ -322,3 +414,4 @@ function EmptyState({ roomName }: { roomName: string }) {
         </div>
     );
 }
+

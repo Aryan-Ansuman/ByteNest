@@ -8,6 +8,7 @@ import {
     roomMessagesCollection,
 } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
+import { syncRoomMemberCount } from "@/lib/rooms/server";
 
 export async function POST(
     req: NextRequest,
@@ -35,15 +36,10 @@ export async function POST(
         const memberDoc = existing.documents[0];
         const room = await databases.getDocument(db, discussionRoomsCollection, roomId);
         const isHost = memberDoc.role === "host";
-        const newCount = Math.max(0, room.memberCount - 1);
 
-        // 2. Delete member doc + decrement count
-        await Promise.all([
-            databases.deleteDocument(db, roomMembersCollection, memberDoc.$id),
-            databases.updateDocument(db, discussionRoomsCollection, roomId, {
-                memberCount: newCount,
-            }),
-        ]);
+        // 2. Delete member doc + reconcile count from the actual member docs
+        await databases.deleteDocument(db, roomMembersCollection, memberDoc.$id);
+        const newCount = await syncRoomMemberCount(roomId);
 
         // 3. Host transfer if needed
         if (isHost && newCount > 0) {
@@ -65,6 +61,7 @@ export async function POST(
                     }),
                     databases.updateDocument(db, discussionRoomsCollection, roomId, {
                         hostId: newHost.userId,
+                        memberCount: newCount,
                     }),
                     databases.createDocument(db, roomMessagesCollection, ID.unique(), {
                         roomId,

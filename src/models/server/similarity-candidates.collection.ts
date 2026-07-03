@@ -38,7 +38,7 @@ export default async function createSimilarityCandidatesCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, similarityCandidatesCollection, "question_candidate_unique", "unique", ["questionId", "candidateId"]),
+        databases.createIndex(db, similarityCandidatesCollection, "question_candidate_unique", IndexType.Unique, ["questionId", "candidateId"]),
         databases.createIndex(db, similarityCandidatesCollection, "question_score_sort", IndexType.Key, ["questionId", "hybridScore"]),
     ]);
     console.log("Similarity Candidates indexes created");

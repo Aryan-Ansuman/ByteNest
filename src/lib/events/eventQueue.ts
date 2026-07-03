@@ -151,7 +151,7 @@ export async function sweepOldEvents(olderThanDays = 7): Promise<number> {
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserialize(doc: any): QueuedEvent {
   return {
     $id: doc.$id,

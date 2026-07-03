@@ -3,6 +3,7 @@ import { Query } from "node-appwrite";
 import { databases } from "@/models/server/config";
 import { db, roomMembersCollection } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
+import { requireRoomMember } from "@/lib/rooms/server";
 
 export async function GET(
     _req: NextRequest,
@@ -10,6 +11,7 @@ export async function GET(
 ) {
     try {
         const userId = await getAuthenticatedUserId();
+        await requireRoomMember(params.id, userId);
 
         const result = await databases.listDocuments(
             db,

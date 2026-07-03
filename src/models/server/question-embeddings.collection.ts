@@ -37,7 +37,7 @@ export default async function createQuestionEmbeddingsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, questionEmbeddingsCollection, "questionId_unique", "unique", ["questionId"]),
+        databases.createIndex(db, questionEmbeddingsCollection, "questionId_unique", IndexType.Unique, ["questionId"]),
         databases.createIndex(db, questionEmbeddingsCollection, "status_sort", IndexType.Key, ["embeddingStatus"]),
     ]);
     console.log("Question Embeddings indexes created");

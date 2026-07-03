@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, graphNodesCollection } from "../name";
 import { databases } from "./config";
 
@@ -30,7 +30,7 @@ export default async function createGraphNodesCollection() {
 
     await Promise.all([
         // Composite index is not perfectly supported in Appwrite yet so we will query by nodeType and nodeId
-        databases.createIndex(db, graphNodesCollection, "type_id", "unique", ["nodeType", "nodeId"]),
+        databases.createIndex(db, graphNodesCollection, "type_id", IndexType.Unique, ["nodeType", "nodeId"]),
     ]);
     console.log("Graph Nodes indexes created");
 }

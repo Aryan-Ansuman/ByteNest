@@ -5,10 +5,14 @@
     "endpoint": "https://sgp.cloud.appwrite.io/v1",
     "functions": [
       {
-        "$id": "calculate-reputation",
+        "$id": "6a3658e0002b89aca597",
         "name": "Calculate Reputation",
-        "runtime": "node-18.0",
+        "enabled": true,
+        "logging": true,
+        "deploymentRetention": 0,
+        "runtime": "node-25",
         "execute": ["any"],
+        "scopes": ["users.read"],
         "events": [
           "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.create",
           "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.update",
@@ -127,6 +131,36 @@
         "commands": "npm install",
         "ignore": ["node_modules", ".npm"],
         "path": "functions/room-cleanup"
+      },
+      {
+        "$id": "tva-drift-check",
+        "name": "TVA Drift Check",
+        "enabled": true,
+        "logging": true,
+        "deploymentRetention": 0,
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "scopes": ["users.read"],
+        "events": [],
+        "schedule": "0 5 */3 * *",
+        "timeout": 300,
+        "entrypoint": "src/main.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/tva-drift-check"
+      },
+      {
+        "$id": "recompute-answer-freshness",
+        "name": "Recompute Answer Freshness",
+        "runtime": "node-18.0",
+        "execute": ["any"],
+        "events": [],
+        "schedule": "0 2 * * *",
+        "timeout": 900,
+        "entrypoint": "src/main.js",
+        "commands": "npm install",
+        "ignore": ["node_modules", ".npm"],
+        "path": "functions/recompute-answer-freshness"
       }
     ]
 }

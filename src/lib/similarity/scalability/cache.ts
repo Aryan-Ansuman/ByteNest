@@ -77,7 +77,7 @@ export async function readPartialCacheHit(
 
   const cached = all.filter((r) => candidateIds.has(r.questionId));
   const cachedIds = new Set(cached.map((r) => r.questionId));
-  const uncachedIds = new Set([...candidateIds].filter((id) => !cachedIds.has(id)));
+  const uncachedIds = new Set(Array.from(candidateIds).filter((id) => !cachedIds.has(id)));
 
   return { cached, uncachedIds };
 }

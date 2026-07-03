@@ -144,5 +144,5 @@ function mergeAndDedup(results: ANNQueryResult[], k: number): ANNQueryResult[] {
 async function resolveShardKeys(tags: string[]): Promise<ShardKey[]> {
   if (tags.length === 0) return ["default"];
   // Deduplicate shard keys — multiple tags may map to the same shard
-  return [...new Set(tags.slice(0, 2))]; // query at most 2 shards per request
+  return Array.from(new Set(tags.slice(0, 2))); // query at most 2 shards per request
 }

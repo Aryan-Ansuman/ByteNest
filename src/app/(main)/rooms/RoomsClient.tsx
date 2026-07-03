@@ -216,6 +216,12 @@ export default function RoomsClient({ enrichedRooms, errorParam }: Props) {
                     The invite link you used is invalid or has expired.
                 </div>
             )}
+            {errorParam === "kicked" && (
+                <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.07] px-4 py-3 text-sm text-amber-300">
+                    <AlertCircle size={14} className="shrink-0" />
+                    You were removed from that room by the host.
+                </div>
+            )}
 
             {/* ── Category tabs + Filter toggle ────────────────────────── */}
             <div className="flex items-center justify-between border-b border-white/[0.06]">

@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { commentCollection, db } from "../name";
 import { databases } from "./config";
 

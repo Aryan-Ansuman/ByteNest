@@ -75,6 +75,22 @@ export type DuplicateRejectedPayload = {
   timeToActionMs: number;
 };
 
+export type RecomputeFreshnessPayload = {
+  answerId: string;
+  // Included specifically so this event is never silently coalesced by the
+  // dedup window (see dedupKey.ts) — two staleness votes on the same
+  // answer minutes apart are both genuine state changes and must each get
+  // their own recompute, unlike e.g. EmbeddingRequested where a duplicate
+  // trigger for the same content really is redundant.
+  triggeredAtMs: number;
+};
+
+export type VerifyAnswerPayload = {
+  answerId: string;
+  questionId: string;
+  testRunId?: string;
+};
+
 // ─── Discriminated union ──────────────────────────────────────────────────────
 
 export type EventType =
@@ -85,7 +101,9 @@ export type EventType =
   | "QuestionCreated"
   | "DuplicateSuggested"
   | "DuplicateConfirmed"
-  | "DuplicateRejected";
+  | "DuplicateRejected"
+  | "RecomputeFreshness"
+  | "VerifyAnswer";
 
 export type EventPayloadMap = {
   QuestionDraftUpdated: QuestionDraftUpdatedPayload;
@@ -96,6 +114,8 @@ export type EventPayloadMap = {
   DuplicateSuggested: DuplicateSuggestedPayload;
   DuplicateConfirmed: DuplicateConfirmedPayload;
   DuplicateRejected: DuplicateRejectedPayload;
+  RecomputeFreshness: RecomputeFreshnessPayload;
+  VerifyAnswer: VerifyAnswerPayload;
 };
 
 export type TypedEvent<T extends EventType = EventType> = {

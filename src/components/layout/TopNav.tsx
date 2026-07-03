@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/Auth";
 import ProfileMenu from "@/components/ProfileMenu";
 import CreateMenu from "@/components/CreateMenu";
 import CommandPalette from "@/components/CommandPalette";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function TopNav() {
     const { session } = useAuthStore();
@@ -35,6 +36,7 @@ export default function TopNav() {
                 <div className="flex w-[240px] shrink-0 items-center justify-end">
                     {session ? (
                         <div className="flex items-center gap-3">
+                            <NotificationBell />
                             <CreateMenu />
                             <ProfileMenu />
                         </div>

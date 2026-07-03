@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, roomMessagesCollection } from "../name";
 import { databases } from "./config";
 
@@ -39,8 +39,8 @@ export default async function createRoomMessagesCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, roomMessagesCollection, "room_messages", "key", ["roomId", "$createdAt"]),
-        databases.createIndex(db, roomMessagesCollection, "room_author_time", "key", ["roomId", "authorId", "$createdAt"]),
+        databases.createIndex(db, roomMessagesCollection, "room_messages", IndexType.Key, ["roomId", "$createdAt"]),
+        databases.createIndex(db, roomMessagesCollection, "room_author_time", IndexType.Key, ["roomId", "authorId", "$createdAt"]),
     ]);
     console.log("Room Messages indexes created");
 }

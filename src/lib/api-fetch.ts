@@ -5,6 +5,12 @@ import { account } from "@/models/client/config";
  * to the `Authorization` header for secure cross-domain authentication
  * with Next.js API routes.
  */
+export interface ApiFetchError extends Error {
+    /** Machine-readable error code from the API response, when present (e.g. "VERIFICATION_REQUIRED"). */
+    code?: string;
+    status?: number;
+}
+
 export async function apiFetch<TResponse = any>(
     input: RequestInfo | URL,
     init?: RequestInit
@@ -38,7 +44,10 @@ export async function apiFetch<TResponse = any>(
     }
     
     if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || "Request failed");
+        const err = new Error(payload?.error || payload?.message || "Request failed") as ApiFetchError;
+        err.code = payload?.code;
+        err.status = response.status;
+        throw err;
     }
 
     return payload as TResponse;

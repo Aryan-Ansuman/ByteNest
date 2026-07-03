@@ -13,6 +13,9 @@ import RoomError from "@/components/rooms/RoomError";
 import RoomSkeleton from "@/components/rooms/RoomSkeleton";
 import CommandPalette from "@/components/rooms/CommandPalette";
 import RoomInfoPanel from "@/components/rooms/RoomInfoPanel";
+import SessionHistoryModal from "@/components/rooms/SessionHistoryModal";
+import ActivityLogModal from "@/components/rooms/ActivityLogModal";
+import MobileTabBar, { type MobileTab } from "@/components/rooms/MobileTabBar";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -32,6 +35,7 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
     const isInitializing = useRoomStore((s) => s.isInitializing);
     const initError      = useRoomStore((s) => s.initError);
     const codeSession    = useRoomStore((s) => s.codeSession);
+    const members        = useRoomStore((s) => s.members);
 
     // ── Panel state ───────────────────────────────────────────────────────
     const [hiddenPanels, setHiddenPanels]     = useState<Set<PanelId>>(new Set());
@@ -41,6 +45,12 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
     const [commandOpen, setCommandOpen]       = useState(false);
     const [showInfo, setShowInfo]             = useState(false);
     const [focusMode, setFocusMode]           = useState(false);
+    const [showHistory, setShowHistory]       = useState(false);
+    const [showActivityLog, setShowActivityLog] = useState(false);
+
+    // ── Mobile layout ───────────────────────────────────────────────────────
+    const [isMobile, setIsMobile]   = useState(false);
+    const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
 
     // Drag-resize refs
     const draggingRef     = useRef<"chat" | "members" | "files" | null>(null);
@@ -51,9 +61,15 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────
     useEffect(() => {
-        if (window.innerWidth < 768) {
-            setHiddenPanels(new Set(["code", "members", "info"]));
+        function applyViewport() {
+            const mobile = window.innerWidth < 768;
+            setIsMobile(mobile);
+            if (mobile) {
+                setHiddenPanels(new Set<PanelId>(["code", "members", "info"]));
+            }
         }
+        applyViewport();
+        window.addEventListener("resize", applyViewport);
 
         function onKey(e: KeyboardEvent) {
             const target = e.target as HTMLElement;
@@ -82,7 +98,10 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
             }
         }
         window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        return () => {
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("resize", applyViewport);
+        };
     }, []);
 
     // ── Drag-resize logic ─────────────────────────────────────────────────
@@ -123,6 +142,18 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
         });
     }
 
+    // Mobile bottom tab bar drives a single-panel-visible mode
+    function selectMobileTab(tab: MobileTab) {
+        setMobileTab(tab);
+        setShowInfo(false);
+        setHiddenPanels((prev) => {
+            const next = new Set(prev);
+            (["chat", "code", "members"] as PanelId[]).forEach((p) => next.add(p));
+            next.delete(tab as PanelId);
+            return next;
+        });
+    }
+
     // ── Render guards ─────────────────────────────────────────────────────
     if (initError)                        return <RoomError message={initError} />;
     if (isInitializing || !isInitialized) return <RoomSkeleton />;
@@ -145,6 +176,8 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
                 onToggleInfo={() => setShowInfo((v) => !v)}
                 focusMode={focusMode}
                 onToggleFocus={() => setFocusMode((v) => !v)}
+                onToggleHistory={() => setShowHistory((v) => !v)}
+                onToggleActivityLog={() => setShowActivityLog((v) => !v)}
             />
 
             {/* ── Body ─────────────────────────────────────────────────── */}
@@ -227,6 +260,24 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
                     </>
                 )}
             </div>
+
+            {/* ── Mobile bottom tab bar ───────────────────────────────────── */}
+            {isMobile && !focusMode && (
+                <MobileTabBar
+                    active={mobileTab}
+                    onChange={selectMobileTab}
+                    hasCodeSession={hasCodeSession}
+                    onlineCount={members.filter((m) => m.status === "online" || m.status === "muted").length}
+                />
+            )}
+
+            {showHistory && (
+                <SessionHistoryModal roomId={roomId} onClose={() => setShowHistory(false)} />
+            )}
+
+            {showActivityLog && (
+                <ActivityLogModal roomId={roomId} onClose={() => setShowActivityLog(false)} />
+            )}
 
             {/* ── Command palette ───────────────────────────────────────── */}
             {commandOpen && (

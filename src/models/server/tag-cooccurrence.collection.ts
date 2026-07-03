@@ -28,7 +28,7 @@ export default async function createTagCooccurrenceCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, tagCooccurrenceCollection, "tagA_tagB", "unique", ["tagA", "tagB"]),
+        databases.createIndex(db, tagCooccurrenceCollection, "tagA_tagB", IndexType.Unique, ["tagA", "tagB"]),
         databases.createIndex(db, tagCooccurrenceCollection, "tagA_index", IndexType.Key, ["tagA"]),
         databases.createIndex(db, tagCooccurrenceCollection, "tagB_index", IndexType.Key, ["tagB"]),
         databases.createIndex(db, tagCooccurrenceCollection, "strength_sort", IndexType.Key, ["strength"]),

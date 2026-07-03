@@ -31,9 +31,10 @@ export type ReputationEventType =
     | "answer_posted"
     | "answer_deleted"
     | "manual_adjustment"
-    | "historical_baseline";
+    | "historical_baseline"
+    | "answer_verified";
 
-export type ReputationSourceType = "vote" | "answer" | "question" | "system";
+export type ReputationSourceType = "vote" | "answer" | "question" | "system" | "test_run";
 
 export interface WriteReputationEventOptions {
     userId:           string;

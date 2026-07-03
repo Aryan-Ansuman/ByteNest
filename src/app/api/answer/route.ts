@@ -8,9 +8,11 @@ import { rateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { sanitizeMarkdownSource } from "@/lib/sanitize";
 import { revalidateQuestionCaches } from "@/lib/cache-invalidation";
 import { listAllDocuments } from "@/lib/appwrite-pagination";
+import { recomputeQuestionFreshnessIndicator } from "@/lib/decay/question-freshness-indicator";
 
 // Phase 3 — Step 3.4: import the skill trigger
 import { triggerSkillRecalculation } from "@/lib/skills/trigger-skill-recalculation";
+import { triggerVerification } from "@/lib/tva/trigger-verification";
 
 // Rate limit: 50 answers per user per 10 minutes
 const ANSWER_RATE_LIMIT = 50;
@@ -41,6 +43,12 @@ async function syncQuestionAnswerMetadata(
             ) && /totalAnswers|activityAt|acceptedAnswerId/i.test(error?.message ?? "");
         if (!missingNewAttribute) throw error;
     }
+
+    // A newly-posted answer starts freshnessScore=100/"fresh"; a deleted
+    // answer might have been the question's only fresh one. Either way the
+    // card's green/amber/grey dot can change — recompute it inline rather
+    // than waiting for the nightly job. Best-effort (see helper).
+    await recomputeQuestionFreshnessIndicator(questionId);
 }
 
 /**
@@ -77,7 +85,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { questionId, answer, authorId } = await request.json();
+        const { questionId, answer, authorId, solutionCode, solutionLanguage } = await request.json();
 
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
@@ -97,6 +105,11 @@ export async function POST(request: NextRequest) {
             authorId,
             questionId,
             isAccepted: false,
+            // TVA — solutionCode is separate from the markdown explanation in
+            // `content`. Both nullable: most answers won't carry one.
+            ...(typeof solutionCode === "string" && solutionCode.trim().length > 0
+                ? { solutionCode, solutionLanguage: solutionLanguage ?? null, verificationStatus: "unverified" }
+                : {}),
         });
 
         await syncQuestionAnswerMetadata(questionId, response.$createdAt);
@@ -114,7 +127,29 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        return NextResponse.json(response, { status: 201, headers: rlHeaders });
+        // ── TVA — queue verification if the question has a test suite ──
+        // Awaited (not fire-and-forget) so the response already reflects
+        // verificationStatus: "pending" — the UI shows "Verifying…" with
+        // zero extra round trips. The actual Piston call happens later via
+        // the event_queue worker, off the request path.
+        let verificationStatus: string | null = null;
+        try {
+            verificationStatus = await triggerVerification({
+                answerId: response.$id,
+                questionId,
+                solutionCode,
+                triggeredBy: authorId,
+            });
+        } catch (verifyErr) {
+            // Non-fatal — answer creation already succeeded. Worst case the
+            // answer stays "unverified" and can be retried manually later.
+            console.error("[answer/POST] Failed to trigger verification:", verifyErr);
+        }
+
+        return NextResponse.json(
+            { ...response, ...(verificationStatus ? { verificationStatus } : {}) },
+            { status: 201, headers: rlHeaders }
+        );
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;
@@ -129,38 +164,100 @@ export async function PATCH(request: NextRequest) {
     try {
         const requesterId = await getAuthenticatedUserId();
 
-        const { answerId, questionId, accept } = await request.json();
+        const {
+            answerId,
+            questionId,
+            accept,
+            versionMin,
+            versionMax,
+            techPackage,
+            techEcosystem,
+        } = await request.json();
 
-        if (!answerId || !questionId || typeof accept !== "boolean") {
-            return NextResponse.json(
-                { error: "answerId, questionId, and accept (boolean) are required" },
-                { status: 400 }
-            );
+        if (!answerId) {
+            return NextResponse.json({ error: "answerId is required" }, { status: 400 });
         }
 
-        const question = await databases.getDocument(db, questionCollection, questionId);
-        if (question.authorId !== requesterId) {
-            return forbiddenResponse("Only the question author can accept or unaccept answers");
+        const isAcceptRequest = typeof accept === "boolean";
+        const versionFieldsProvided =
+            versionMin !== undefined ||
+            versionMax !== undefined ||
+            techPackage !== undefined ||
+            techEcosystem !== undefined;
+
+        if (!isAcceptRequest && !versionFieldsProvided) {
+            return NextResponse.json(
+                { error: "Provide either accept (boolean) or version context fields to update" },
+                { status: 400 }
+            );
         }
 
         const targetAnswer = await databases.getDocument(db, answerCollection, answerId);
-        if (targetAnswer.questionId !== questionId) {
-            return NextResponse.json(
-                { error: "Answer does not belong to this question" },
-                { status: 400 }
+
+        // ── Temporal Answer Decay — Phase 4: version context correction ──
+        // Authorization is checked independently of whatever else is in
+        // the same request — combining `accept` and version fields in one
+        // call never lets the accept-path authorization (question author)
+        // stand in for the version-edit authorization (answer author), or
+        // vice versa. Both are validated up front, before either write happens.
+        let versionUpdate: Record<string, unknown> | null = null;
+        if (versionFieldsProvided) {
+            if (targetAnswer.authorId !== requesterId) {
+                return forbiddenResponse("Only the answer author can edit its version context");
+            }
+            versionUpdate = {
+                versionMin: typeof versionMin === "string" ? versionMin.trim() || null : undefined,
+                versionMax: typeof versionMax === "string" ? versionMax.trim() || null : undefined,
+                techPackage: typeof techPackage === "string" ? techPackage.trim() || null : undefined,
+                techEcosystem: techEcosystem === null ? null : isValidEcosystem(techEcosystem) ? techEcosystem : undefined,
+            };
+            // Strip keys the client didn't actually send (undefined), so a
+            // partial update doesn't clobber fields the client omitted.
+            versionUpdate = Object.fromEntries(
+                Object.entries(versionUpdate).filter(([, v]) => v !== undefined)
             );
         }
 
-        const currentAcceptedAnswerId =
-            typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId
-                ? question.acceptedAnswerId
-                : null;
-        const nextAcceptedAnswerId =
-            accept
-                ? answerId
-                : currentAcceptedAnswerId === answerId
-                ? null
-                : currentAcceptedAnswerId;
+        let question: Awaited<ReturnType<typeof databases.getDocument>> | null = null;
+        let currentAcceptedAnswerId: string | null = null;
+        let nextAcceptedAnswerId: string | null = null;
+
+        if (isAcceptRequest) {
+            if (!questionId) {
+                return NextResponse.json({ error: "questionId is required when accepting/unaccepting" }, { status: 400 });
+            }
+
+            question = await databases.getDocument(db, questionCollection, questionId);
+            if (question.authorId !== requesterId) {
+                return forbiddenResponse("Only the question author can accept or unaccept answers");
+            }
+            if (targetAnswer.questionId !== questionId) {
+                return NextResponse.json(
+                    { error: "Answer does not belong to this question" },
+                    { status: 400 }
+                );
+            }
+
+            currentAcceptedAnswerId =
+                typeof question.acceptedAnswerId === "string" && question.acceptedAnswerId
+                    ? question.acceptedAnswerId
+                    : null;
+            nextAcceptedAnswerId =
+                accept
+                    ? answerId
+                    : currentAcceptedAnswerId === answerId
+                    ? null
+                    : currentAcceptedAnswerId;
+        }
+
+        // ── Both authorization checks have now passed independently (or
+        // only one path was requested at all) — safe to apply writes. ──
+
+        if (!isAcceptRequest) {
+            // Version-only edit — apply and return without touching accept state.
+            const updated = await databases.updateDocument(db, answerCollection, answerId, versionUpdate!);
+            return NextResponse.json({ data: updated }, { status: 200 });
+        }
 
         try {
             await databases.updateDocument(db, questionCollection, questionId, {
@@ -192,15 +289,15 @@ export async function PATCH(request: NextRequest) {
 
         const updated = await databases.updateDocument(db, answerCollection, answerId, {
             isAccepted: nextAcceptedAnswerId === answerId,
+            // versionUpdate is only non-null here if versionFieldsProvided
+            // AND its own answer-author check already passed above — never
+            // applied on the strength of the accept-path check alone.
+            ...(versionUpdate ?? {}),
         });
-        await revalidateQuestionCaches(questionId, [question.title as string]);
+        await revalidateQuestionCaches(questionId, [question!.title as string]);
 
-        // ── Step 3.4: Trigger skill recalculation on answer accepted — HIGH priority ──
-        // Both the answer author (score boost from acceptance) and potentially
-        // other answerers (acceptance removed) should be recalculated.
-        const tags = (question.tags as string[]) ?? [];
+        const tags = (question!.tags as string[]) ?? [];
         if (tags.length > 0) {
-            // Recalculate the answer author with high priority
             triggerSkillRecalculation({
                 userId:           targetAnswer.authorId as string,
                 tags,
@@ -209,8 +306,6 @@ export async function PATCH(request: NextRequest) {
                 sourceDocumentId: answerId,
             });
 
-            // If a previously accepted answer was de-accepted, also recalculate
-            // that author so their score reflects the change
             if (
                 currentAcceptedAnswerId &&
                 currentAcceptedAnswerId !== answerId &&
@@ -244,6 +339,10 @@ export async function PATCH(request: NextRequest) {
             { status: e?.status || e?.code || 500 }
         );
     }
+}
+
+function isValidEcosystem(value: unknown): value is "npm" | "pypi" | "crates" | "github" {
+    return value === "npm" || value === "pypi" || value === "crates" || value === "github";
 }
 
 export async function DELETE(request: NextRequest) {

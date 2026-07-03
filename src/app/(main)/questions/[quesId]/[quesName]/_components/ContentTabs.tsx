@@ -2,7 +2,8 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import { MessageCircle, Send, Loader2 } from "lucide-react";
+import { MessageCircle, Loader2, Send } from "lucide-react";
+import VersionContextEditor, { EMPTY_VERSION_CONTEXT, type VersionContextValue } from "./VersionContextEditor";
 import { cn } from "@/lib/utils";
 import { type AnswerSort, useQuestionDetail } from "./QuestionDetailContext";
 import AnswerCard from "./AnswerCard";
@@ -19,7 +20,7 @@ export default function ContentTabs({
     isLoadingMoreAnswers?: boolean;
     onLoadMoreAnswers?: () => void;
 }) {
-    const { answers, bestAnswer, communityAnswers } = useQuestionDetail();
+    const { answers, bestAnswer, activeCommunityAnswers, staleCommunityAnswers } = useQuestionDetail();
 
     if (isLoadingDynamic) return <AnswersSkeleton />;
 
@@ -27,7 +28,8 @@ export default function ContentTabs({
         <div className="mt-10">
             <AnswersTab
                 bestAnswer={bestAnswer}
-                communityAnswers={communityAnswers}
+                activeCommunityAnswers={activeCommunityAnswers}
+                staleCommunityAnswers={staleCommunityAnswers}
                 total={answers.total}
                 isLoadingMore={isLoadingMoreAnswers}
                 onLoadMore={onLoadMoreAnswers}
@@ -75,19 +77,22 @@ export function AnswersSkeleton() {
 
 function AnswersTab({
     bestAnswer,
-    communityAnswers,
+    activeCommunityAnswers,
+    staleCommunityAnswers,
     total,
     isLoadingMore,
     onLoadMore,
 }: {
     bestAnswer: any;
-    communityAnswers: any[];
+    activeCommunityAnswers: any[];
+    staleCommunityAnswers: any[];
     total: number;
     isLoadingMore: boolean;
     onLoadMore?: () => void;
 }) {
     const {
         currentUser,
+        question,
         openAnswerComposer,
         answerComposerOpen,
         closeAnswerComposer,
@@ -98,16 +103,30 @@ function AnswersTab({
         answerPagination,
     } = useQuestionDetail();
     const [draft, setDraft] = React.useState("");
+    const [versionContext, setVersionContext] = React.useState<VersionContextValue>(EMPTY_VERSION_CONTEXT);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    const questionTags = React.useMemo(
+        () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
+        [question.tags]
+    );
+
+    const [staleExpanded, setStaleExpanded] = React.useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isDeletingQuestion || !draft.trim()) return;
         setIsSubmitting(true);
-        const posted = await submitAnswer(draft);
+        const posted = await submitAnswer(draft, {
+            versionMin: versionContext.versionMin.trim() || "",
+            versionMax: versionContext.versionMax.trim() || "",
+            techPackage: versionContext.techPackage.trim() || "",
+            techEcosystem: versionContext.techEcosystem,
+        });
         setIsSubmitting(false);
         if (posted) {
             setDraft("");
+            setVersionContext(EMPTY_VERSION_CONTEXT);
             closeAnswerComposer();
         }
     };
@@ -118,7 +137,7 @@ function AnswersTab({
                 <h3 className="text-lg font-bold text-zinc-100">{total} Answers</h3>
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex h-9 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03] p-1">
-                        {(["Votes", "Active", "Oldest"] satisfies AnswerSort[]).map((sort) => (
+                        {(["Votes", "Active", "Oldest", "Freshness"] satisfies AnswerSort[]).map((sort) => (
                             <button
                                 key={sort}
                                 type="button"
@@ -147,6 +166,18 @@ function AnswersTab({
                 </div>
             </div>
 
+            {question.hasTestSuite && answerSort === "Votes" && (
+                <p className="-mt-3 text-xs text-zinc-600">
+                    Sorted by verification status, then votes
+                </p>
+            )}
+
+            {total > 0 && (
+                <p className="-mt-3 text-xs text-zinc-600">
+                    Answers are scored for freshness based on their age, the technology&apos;s release cycle, and community reports.
+                </p>
+            )}
+
             {answerComposerOpen && (
                 <form
                     onSubmit={handleSubmit}
@@ -174,6 +205,13 @@ function AnswersTab({
                             }}
                         />
                     </div>
+
+                    <VersionContextEditor
+                        questionTags={questionTags}
+                        value={versionContext}
+                        onChange={setVersionContext}
+                        disabled={isSubmitting || isDeletingQuestion}
+                    />
                     <div className="mt-3 flex items-center justify-end gap-2">
                         <button
                             type="button"
@@ -197,9 +235,41 @@ function AnswersTab({
 
             <div className="space-y-6">
                 {bestAnswer && <AnswerCard answer={bestAnswer} variant="best" />}
-                {communityAnswers.map((answer) => (
+                {activeCommunityAnswers.map((answer) => (
                     <AnswerCard key={answer.$id} answer={answer} />
                 ))}
+
+                {staleCommunityAnswers.length > 0 && (
+                    <div className="rounded-xl border border-white/[0.05] bg-white/[0.02]">
+                        {!staleExpanded ? (
+                            <button
+                                type="button"
+                                onClick={() => setStaleExpanded(true)}
+                                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-zinc-500 transition hover:text-zinc-300"
+                            >
+                                <span>
+                                    {staleCommunityAnswers.length} older answer
+                                    {staleCommunityAnswers.length === 1 ? "" : "s"} may no longer apply — show anyway
+                                </span>
+                                <span className="text-xs text-zinc-600">Expand</span>
+                            </button>
+                        ) : (
+                            <div className="space-y-6 p-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setStaleExpanded(false)}
+                                    className="text-xs font-medium text-zinc-500 transition hover:text-zinc-300"
+                                >
+                                    Hide older answers
+                                </button>
+                                {staleCommunityAnswers.map((answer) => (
+                                    <AnswerCard key={answer.$id} answer={answer} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {answerPagination.hasMore && (
                     <div className="flex justify-center pt-2">
                         <button

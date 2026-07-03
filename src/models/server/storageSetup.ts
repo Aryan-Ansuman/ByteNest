@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { questionAttachmentBucket } from "../name";
 import { storage } from "./config";
 

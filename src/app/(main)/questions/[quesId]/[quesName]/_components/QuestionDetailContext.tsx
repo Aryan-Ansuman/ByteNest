@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuthStore } from "@/store/Auth";
+import type { VersionContextValue } from "./VersionContextEditor";
 
 export type VoteStatus = "upvoted" | "downvoted";
-export type AnswerSort = "Oldest" | "Active" | "Votes";
+export type AnswerSort = "Oldest" | "Active" | "Votes" | "Freshness";
 export type CommentTargetType = "question" | "answer";
 
 export interface AppDocument {
@@ -49,7 +50,17 @@ export interface QuestionDocument extends AppDocument {
     totalAnswers?: number;
     acceptedAnswerId?: string | null;
     attachmentId?: string;
+    // ─── Test-Verified Answers ──────────────────────────────────────
+    hasTestSuite?: boolean;
 }
+
+export type VerificationStatus =
+    | "unverified"
+    | "pending"
+    | "processing"
+    | "passed"
+    | "failed"
+    | "error";
 
 export interface VoteDocument extends AppDocument {
     type: CommentTargetType;
@@ -81,6 +92,23 @@ export interface AnswerDoc extends AppDocument {
     downvotesDocuments: DocumentList<VoteDocument>;
     comments: DocumentList<CommentDoc>;
     optimistic?: boolean;
+    // ─── Test-Verified Answers ──────────────────────────────────────
+    solutionCode?: string | null;
+    verificationStatus?: VerificationStatus;
+    verificationScore?: number | null;
+    lastVerifiedAt?: string | null;
+    // ─── Temporal Answer Decay ────────────────────────────────────────
+    versionMin?: string | null;
+    versionMax?: string | null;
+    techPackage?: string | null;
+    techEcosystem?: import("@/models/name").TechEcosystem | null;
+    freshnessScore?: number;
+    freshnessLabel?: "fresh" | "aging" | "outdated" | "stale";
+    lastFreshnessCheck?: string | null;
+    stalenessVoteCount?: number;
+    verifiedByAuthorAt?: string | null;
+    /** Client-only, session-scoped — true once the current viewer has reported this answer as stale. */
+    viewerHasReportedStale?: boolean;
 }
 
 export interface AiSummaryContent {
@@ -158,6 +186,8 @@ interface QuestionDetailContextValue {
     /** The single explicitly-accepted answer, or null if none has been accepted yet. */
     bestAnswer: AnswerDoc | null;
     communityAnswers: AnswerDoc[];
+    activeCommunityAnswers: AnswerDoc[];
+    staleCommunityAnswers: AnswerDoc[];
     questionComments: DocumentList<CommentDoc>;
     totalComments: number;
     answerPagination: AnswerPaginationState;
@@ -174,8 +204,15 @@ interface QuestionDetailContextValue {
     getAnswerScore: (answer: AnswerDoc) => number;
     voteQuestion: (status: VoteStatus) => Promise<void>;
     voteAnswer: (answerId: string, status: VoteStatus) => Promise<void>;
-    acceptAnswer: (answerId: string) => Promise<void>;
-    submitAnswer: (content: string) => Promise<boolean>;
+    acceptAnswer: (answerId: string, options?: { override?: boolean }) => Promise<void>;
+    /** Set when accept was blocked by the test-suite guard — surfaces the "accept anyway?" prompt. */
+    pendingAcceptOverride: { answerId: string } | null;
+    confirmAcceptOverride: () => void;
+    cancelAcceptOverride: () => void;
+    submitAnswer: (content: string, versionContext?: VersionContextValue) => Promise<boolean>;
+    updateAnswerVersionContext: (answerId: string, patch: VersionContextValue) => Promise<boolean>;
+    /** Applies a local-only patch to one answer's freshness fields — used by the staleness-report and "still valid" UI to reflect server responses without a full refetch. */
+    patchAnswerFreshness: (answerId: string, patch: Partial<AnswerDoc>) => void;
     deleteAnswer: (answerId: string) => Promise<boolean>;
     addComment: (
         type: CommentTargetType,
@@ -281,6 +318,7 @@ export function QuestionDetailProvider({
     );
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
     const [acceptingAnswerId, setAcceptingAnswerId] = React.useState<string | null>(null);
+    const [pendingAcceptOverride, setPendingAcceptOverride] = React.useState<{ answerId: string } | null>(null);
 
     const pendingVoteLookups = React.useRef<Set<string>>(new Set());
     const pendingVoteMutations = React.useRef<Set<string>>(new Set());
@@ -337,10 +375,22 @@ export function QuestionDetailProvider({
     );
 
     const sortedAnswers = React.useMemo(() => {
+        // TVA — Phase 5: on a test-gated question, the default "Votes" sort
+        // becomes a composite — passed first, then failed, then everything
+        // else — instead of pure vote count. Oldest/Active are explicit user
+        // choices and stay untouched; only the default ordering changes.
+        const useVerificationSort = Boolean(question.hasTestSuite) && answerSort === "Votes";
+
         return [...displayAnswers].sort((a, b) => {
             // Accepted answer always floats to the top regardless of sort mode.
             if (a.isAccepted && !b.isAccepted) return -1;
             if (!a.isAccepted && b.isAccepted) return 1;
+
+            if (useVerificationSort) {
+                const tierDiff = verificationTier(a.verificationStatus) - verificationTier(b.verificationStatus);
+                if (tierDiff !== 0) return tierDiff;
+                return getAnswerScore(b) - getAnswerScore(a);
+            }
 
             if (answerSort === "Oldest") {
                 return new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime();
@@ -348,9 +398,19 @@ export function QuestionDetailProvider({
             if (answerSort === "Active") {
                 return new Date(b.$updatedAt).getTime() - new Date(a.$updatedAt).getTime();
             }
-            return getAnswerScore(b) - getAnswerScore(a);
+            if (answerSort === "Freshness") {
+                return (b.freshnessScore ?? 100) - (a.freshnessScore ?? 100);
+            }
+            // Default "Votes" sort. Tiebreaker (Phase 8): when two answers
+            // have identical vote scores, the fresher one ranks first —
+            // subtle, but it matters on questions with many equally-voted
+            // answers so a decayed old one doesn't sit above a newer,
+            // still-accurate one purely by alphabetical/insertion luck.
+            const scoreDiff = getAnswerScore(b) - getAnswerScore(a);
+            if (scoreDiff !== 0) return scoreDiff;
+            return (b.freshnessScore ?? 100) - (a.freshnessScore ?? 100);
         });
-    }, [displayAnswers, answerSort, getAnswerScore]);
+    }, [displayAnswers, answerSort, getAnswerScore, question.hasTestSuite]);
 
     // bestAnswer is the explicitly accepted one — NOT just the top vote-getter.
     const bestAnswer = React.useMemo(
@@ -364,6 +424,20 @@ export function QuestionDetailProvider({
                 ? sortedAnswers.filter((answer) => answer.$id !== bestAnswer.$id)
                 : sortedAnswers,
         [bestAnswer, sortedAnswers]
+    );
+
+    // Phase 8 — stale answers (0-19) render at the bottom regardless of
+    // vote count, behind a collapsed "may no longer apply" section, so a
+    // 2009-era top-voted answer can't sit above accurate current ones.
+    // Relative order within each bucket is preserved from `communityAnswers`
+    // (i.e. still respects whatever sort mode is active).
+    const activeCommunityAnswers = React.useMemo(
+        () => communityAnswers.filter((answer) => answer.freshnessLabel !== "stale"),
+        [communityAnswers]
+    );
+    const staleCommunityAnswers = React.useMemo(
+        () => communityAnswers.filter((answer) => answer.freshnessLabel === "stale"),
+        [communityAnswers]
     );
 
     const totalAnswerComments = React.useMemo(
@@ -671,7 +745,7 @@ export function QuestionDetailProvider({
     // ── Accept answer ─────────────────────────────────────────────────────
 
     const acceptAnswer = React.useCallback(
-        async (answerId: string) => {
+        async (answerId: string, options?: { override?: boolean }) => {
             if (isDeletingQuestion) {
                 toast("This question is being deleted");
                 return;
@@ -712,8 +786,10 @@ export function QuestionDetailProvider({
                         questionId: question.$id,
                         requesterId: currentUser.$id,
                         accept: willAccept,
+                        override: options?.override ?? false,
                     }),
                 });
+                setPendingAcceptOverride(null);
                 toast.success(willAccept ? "Answer accepted" : "Acceptance removed");
             } catch (error) {
                 // Roll back optimistic update.
@@ -725,6 +801,16 @@ export function QuestionDetailProvider({
                         isAccepted: previousAcceptedAnswerId === a.$id,
                     })),
                 }));
+
+                // TVA — Phase 5: a 409/VERIFICATION_REQUIRED isn't a hard failure,
+                // it's a soft block waiting on the author's explicit override —
+                // surface the confirm prompt instead of an error toast.
+                const code = (error as { code?: string } | null)?.code;
+                if (willAccept && code === "VERIFICATION_REQUIRED") {
+                    setPendingAcceptOverride({ answerId });
+                    return;
+                }
+
                 toast.error(getErrorMessage(error, "Failed to update accepted answer"));
             } finally {
                 setAcceptingAnswerId(null);
@@ -742,10 +828,21 @@ export function QuestionDetailProvider({
         ]
     );
 
+    const confirmAcceptOverride = React.useCallback(() => {
+        if (!pendingAcceptOverride) return;
+        const { answerId } = pendingAcceptOverride;
+        setPendingAcceptOverride(null);
+        acceptAnswer(answerId, { override: true });
+    }, [pendingAcceptOverride, acceptAnswer]);
+
+    const cancelAcceptOverride = React.useCallback(() => {
+        setPendingAcceptOverride(null);
+    }, []);
+
     // ── Answer CRUD ───────────────────────────────────────────────────────
 
     const submitAnswer = React.useCallback(
-        async (content: string) => {
+        async (content: string, versionContext?: VersionContextValue) => {
             if (isDeletingQuestion) {
                 toast("This question is being deleted");
                 return false;
@@ -763,7 +860,8 @@ export function QuestionDetailProvider({
                 trimmed,
                 question.$id,
                 currentUser,
-                optimisticId
+                optimisticId,
+                versionContext
             );
             setAnswers((prev) => ({
                 total: prev.total + 1,
@@ -812,6 +910,60 @@ export function QuestionDetailProvider({
         },
         [currentUser, isDeletingQuestion, promptSignIn, question.$id]
     );
+
+    const updateAnswerVersionContext = React.useCallback(
+        async (answerId: string, patch: VersionContextValue) => {
+            const previous = answers.documents.find((a) => a.$id === answerId);
+            if (!previous) return false;
+
+            // Optimistic update.
+            setAnswers((prev) => ({
+                ...prev,
+                documents: prev.documents.map((a) =>
+                    a.$id === answerId
+                        ? {
+                              ...a,
+                              versionMin: patch.versionMin ?? null,
+                              versionMax: patch.versionMax ?? null,
+                              techPackage: patch.techPackage ?? null,
+                              techEcosystem: patch.techEcosystem ?? null,
+                          }
+                        : a
+                ),
+            }));
+
+            try {
+                await apiFetch("/api/answer", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        answerId,
+                        versionMin: patch.versionMin ?? null,
+                        versionMax: patch.versionMax ?? null,
+                        techPackage: patch.techPackage ?? null,
+                        techEcosystem: patch.techEcosystem ?? null,
+                    }),
+                });
+                toast.success("Version context updated");
+                return true;
+            } catch (error) {
+                // Roll back.
+                setAnswers((prev) => ({
+                    ...prev,
+                    documents: prev.documents.map((a) => (a.$id === answerId ? previous : a)),
+                }));
+                toast.error(getErrorMessage(error, "Failed to update version context"));
+                return false;
+            }
+        },
+        [answers.documents]
+    );
+
+    const patchAnswerFreshness = React.useCallback((answerId: string, patch: Partial<AnswerDoc>) => {
+        setAnswers((prev) => ({
+            ...prev,
+            documents: prev.documents.map((a) => (a.$id === answerId ? { ...a, ...patch } : a)),
+        }));
+    }, []);
 
     const deleteAnswer = React.useCallback(
         async (answerId: string) => {
@@ -1083,6 +1235,8 @@ export function QuestionDetailProvider({
             sortedAnswers,
             bestAnswer,
             communityAnswers,
+            activeCommunityAnswers,
+            staleCommunityAnswers,
             questionComments,
             totalComments,
             answerPagination: normalizedAnswerPagination,
@@ -1100,7 +1254,12 @@ export function QuestionDetailProvider({
             voteQuestion,
             voteAnswer,
             acceptAnswer,
+            pendingAcceptOverride,
+            confirmAcceptOverride,
+            cancelAcceptOverride,
             submitAnswer,
+            updateAnswerVersionContext,
+            patchAnswerFreshness,
             deleteAnswer,
             addComment,
             deleteComment,
@@ -1125,6 +1284,8 @@ export function QuestionDetailProvider({
             sortedAnswers,
             bestAnswer,
             communityAnswers,
+            activeCommunityAnswers,
+            staleCommunityAnswers,
             questionComments,
             totalComments,
             normalizedAnswerPagination,
@@ -1142,7 +1303,12 @@ export function QuestionDetailProvider({
             voteQuestion,
             voteAnswer,
             acceptAnswer,
+            pendingAcceptOverride,
+            confirmAcceptOverride,
+            cancelAcceptOverride,
             submitAnswer,
+            updateAnswerVersionContext,
+            patchAnswerFreshness,
             deleteAnswer,
             addComment,
             deleteComment,
@@ -1235,7 +1401,7 @@ function targetKey(type: CommentTargetType, typeId: string) {
 
 
 function isAnswerSort(value: unknown): value is AnswerSort {
-    return value === "Votes" || value === "Active" || value === "Oldest";
+    return value === "Votes" || value === "Active" || value === "Oldest" || value === "Freshness";
 }
 
 function statusWeight(status: VoteStatus | null | undefined) {
@@ -1385,11 +1551,21 @@ function authorFromUser(user: CurrentUser): Author {
     };
 }
 
+// TVA — composite sort tiers for the default "Votes" mode on a test-gated
+// question. error/pending/processing are grouped with unverified since none
+// of them is an established correctness result — only passed/failed are.
+function verificationTier(status: VerificationStatus | undefined): number {
+    if (status === "passed") return 0;
+    if (status === "failed") return 1;
+    return 2; // unverified, pending, processing, error
+}
+
 function createOptimisticAnswer(
     content: string,
     questionId: string,
     user: CurrentUser,
-    id: string
+    id: string,
+    versionContext?: VersionContextValue
 ): AnswerDoc {
     const now = new Date().toISOString();
     return {
@@ -1406,6 +1582,14 @@ function createOptimisticAnswer(
         downvotesDocuments: { total: 0, documents: [] },
         comments: { total: 0, documents: [] },
         optimistic: true,
+        versionMin: versionContext?.versionMin || null,
+        versionMax: versionContext?.versionMax || null,
+        techPackage: versionContext?.techPackage || null,
+        techEcosystem: versionContext?.techEcosystem || null,
+        freshnessScore: 100,
+        freshnessLabel: "fresh",
+        stalenessVoteCount: 0,
+        verifiedByAuthorAt: null,
     };
 }
 
@@ -1418,6 +1602,10 @@ function hydrateAnswer(answer: AnswerDoc, user: CurrentUser): AnswerDoc {
         upvotesDocuments: answer.upvotesDocuments ?? { total: 0, documents: [] },
         downvotesDocuments: answer.downvotesDocuments ?? { total: 0, documents: [] },
         comments: answer.comments ?? { total: 0, documents: [] },
+        freshnessScore: answer.freshnessScore ?? 100,
+        freshnessLabel: answer.freshnessLabel ?? "fresh",
+        stalenessVoteCount: answer.stalenessVoteCount ?? 0,
+        verifiedByAuthorAt: answer.verifiedByAuthorAt ?? null,
     };
 }
 

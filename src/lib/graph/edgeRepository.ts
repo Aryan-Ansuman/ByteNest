@@ -153,7 +153,7 @@ export async function rejectSimilarityEdge(
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserializeEdge(doc: any): GraphEdge {
   return {
     $id: doc.$id,

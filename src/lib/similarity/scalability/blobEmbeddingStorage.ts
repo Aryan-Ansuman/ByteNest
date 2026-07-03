@@ -1,5 +1,5 @@
 import { storage } from "@/models/server/config";
-import { InputFile } from "node-appwrite";
+import { InputFile } from "node-appwrite/file";
 
 const BUCKET_ID = process.env.APPWRITE_BUCKET_EMBEDDINGS || "embeddings";
 

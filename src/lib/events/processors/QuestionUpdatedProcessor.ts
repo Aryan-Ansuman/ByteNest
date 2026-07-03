@@ -29,6 +29,7 @@ export async function processQuestionUpdated(payload: QuestionUpdatedPayload) {
       body,
       tags,
       authorId: "",
+      sessionId: null,
       embeddingAlreadyComplete: false,
       tagQuestionCounts: {}
     });
@@ -61,6 +62,8 @@ export async function processQuestionUpdated(payload: QuestionUpdatedPayload) {
 
   await publishEvent('EmbeddingRequested', {
     questionId,
-    priority: 'high',  // recently edited — prioritize
+    embeddingInput,
+    contentHash: newHash,
+    triggeredBy: 'content_changed',
   });
 }

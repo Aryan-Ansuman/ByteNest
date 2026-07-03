@@ -24,6 +24,7 @@ import {
     Sparkles,
     Info,
     Loader2,
+    FlaskConical,
 } from "lucide-react";
 import { ID, Permission, Role } from "appwrite";
 import { Button } from "@/components/ui/button";
@@ -44,14 +45,17 @@ import "@uiw/react-markdown-preview/markdown.css";
 // ─── Lazy-load the markdown editor (SSR incompatible) ─────────────────────────
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
 import MarkdownPreview from "@/components/MarkdownPreview";
+import TestSuiteEditor from "@/components/ask-question/TestSuiteEditor";
+import type { TestFramework } from "@/models/name";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Step = "title" | "body" | "tags" | "image" | "preview";
+type Step = "title" | "body" | "tags" | "tests" | "image" | "preview";
 
 const STEPS: { id: Step; label: string; icon: React.ReactNode }[] = [
     { id: "title", label: "Title", icon: <FileText className="size-4" /> },
     { id: "body", label: "Body", icon: <Sparkles className="size-4" /> },
     { id: "tags", label: "Tags", icon: <Tag className="size-4" /> },
+    { id: "tests", label: "Tests", icon: <FlaskConical className="size-4" /> },
     { id: "image", label: "Image", icon: <ImageIcon className="size-4" /> },
     { id: "preview", label: "Preview", icon: <Eye className="size-4" /> },
 ];
@@ -78,6 +82,10 @@ export default function AskQuestionPage() {
     const [tagInput, setTagInput] = React.useState("");
     const [attachment, setAttachment] = React.useState<File | null>(null);
     const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+    const [hasTestSuite, setHasTestSuite] = React.useState(false);
+    const [testFramework, setTestFramework] = React.useState<TestFramework | "">("");
+    const [testLanguage, setTestLanguage] = React.useState("");
+    const [testCode, setTestCode] = React.useState("");
     const sessionId = React.useRef(crypto.randomUUID());
 
     // ui state
@@ -197,6 +205,10 @@ export default function AskQuestionPage() {
         if (step === "title" && title.trim().length < 15) return "Title must be at least 15 characters";
         if (step === "body" && content.trim().length < 30) return "Body must be at least 30 characters";
         if (step === "tags" && tags.length === 0) return "Add at least one tag";
+        if (step === "tests" && hasTestSuite && testCode.trim().length === 0)
+            return "Add test code, or turn off the test suite toggle";
+        if (step === "tests" && hasTestSuite && !testFramework)
+            return "Pick a test framework";
         return "";
     };
 
@@ -220,6 +232,7 @@ export default function AskQuestionPage() {
         if (step === "title") return title.trim().length >= 15;
         if (step === "body") return content.trim().length >= 30;
         if (step === "tags") return tags.length > 0;
+        if (step === "tests") return !hasTestSuite || (testCode.trim().length > 0 && Boolean(testFramework));
         return true;
     };
 
@@ -228,8 +241,9 @@ export default function AskQuestionPage() {
         const titleErr = validateStep("title");
         const bodyErr = validateStep("body");
         const tagsErr = validateStep("tags");
-        if (titleErr || bodyErr || tagsErr) {
-            setError(titleErr || bodyErr || tagsErr);
+        const testsErr = validateStep("tests");
+        if (titleErr || bodyErr || tagsErr || testsErr) {
+            setError(titleErr || bodyErr || tagsErr || testsErr);
             return;
         }
 
@@ -251,6 +265,10 @@ export default function AskQuestionPage() {
                 content: content.trim(),
                 authorId: user.$id,
                 tags,
+                hasTestSuite,
+                ...(hasTestSuite
+                    ? { testCode: testCode.trim(), testLanguage, testFramework }
+                    : {}),
             };
 
             if (attachment) {
@@ -288,9 +306,9 @@ export default function AskQuestionPage() {
     return (
         <div className="w-full">
             <div className="mx-auto max-w-3xl">
-                        {/* ── Page Header ── */}
-                        <div className="mb-8">
-                            <Link
+                {/* Page Header */}
+                <div className="mb-8">
+                    <Link
                                 href="/questions"
                                 className="mb-4 inline-flex items-center gap-1.5 text-sm text-zinc-500 transition hover:text-zinc-300"
                             >
@@ -320,7 +338,7 @@ export default function AskQuestionPage() {
                                     initial={{ opacity: 0, y: -8 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -8 }}
-                                    className="mb-4 flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+                                    className="mb-4 flex items-center gap-3 rounded-xl border border-red-500/10 bg-red-400/5 px-4 py-3 text-sm text-red-200/80"
                                 >
                                     <AlertCircle className="size-4 shrink-0" />
                                     {error}
@@ -528,6 +546,28 @@ export default function AskQuestionPage() {
                                     </StepPanel>
                                 )}
 
+                                {activeStep === "tests" && (
+                                    <StepPanel key="tests">
+                                        <StepHeader
+                                            icon={<FlaskConical className="size-5" />}
+                                            title="Test-verified answers"
+                                            description="Optional — questions with a test suite let answers earn a machine-verified badge instead of relying on votes alone."
+                                        />
+                                        <div className="mt-5">
+                                            <TestSuiteEditor
+                                                enabled={hasTestSuite}
+                                                onEnabledChange={setHasTestSuite}
+                                                framework={testFramework}
+                                                onFrameworkChange={setTestFramework}
+                                                language={testLanguage}
+                                                onLanguageChange={setTestLanguage}
+                                                testCode={testCode}
+                                                onTestCodeChange={setTestCode}
+                                            />
+                                        </div>
+                                    </StepPanel>
+                                )}
+
                                 {activeStep === "image" && (
                                     <StepPanel key="image">
                                         <StepHeader
@@ -648,6 +688,10 @@ export default function AskQuestionPage() {
                                                         { label: "Title is descriptive (15+ chars)", ok: title.length >= 15 },
                                                         { label: "Body explains the problem (30+ chars)", ok: content.length >= 30 },
                                                         { label: "At least one tag added", ok: tags.length > 0 },
+                                                        {
+                                                            label: hasTestSuite ? "Test suite is valid" : "Test suite (optional) — none added",
+                                                            ok: !hasTestSuite || testCode.trim().length > 0,
+                                                        },
                                                     ].map((item) => (
                                                         <li key={item.label} className="flex items-center gap-2.5 text-sm">
                                                             {item.ok ? (

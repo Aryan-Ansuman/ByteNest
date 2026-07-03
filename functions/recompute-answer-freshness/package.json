@@ -1,0 +1,10 @@
+{
+  "name": "recompute-answer-freshness",
+  "version": "1.0.0",
+  "description": "Nightly recomputation of answer freshness scores from registry release data, staleness votes, and post age",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^13.0.0"
+  }
+}

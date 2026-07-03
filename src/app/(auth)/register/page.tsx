@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "@/store/Auth";
 import {
@@ -26,8 +26,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export default function Register() {
+    return (
+        <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-[#080808]"><div className="size-8 animate-spin rounded-full border-2 border-[#a7c8b3] border-t-transparent" /></div>}>
+            <RegisterForm />
+        </React.Suspense>
+    );
+}
+
+function RegisterForm() {
     const { login, createAccount } = useAuthStore();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isLoading, setIsLoading] = React.useState(false);
     const [error, setError] = React.useState("");
     const [showPassword, setShowPassword] = React.useState(false);
@@ -60,7 +69,8 @@ export default function Register() {
             if (loginResponse.error) {
                 setError(loginResponse.error.message);
             } else {
-                router.push("/");
+                const next = searchParams.get("next");
+                router.push(next?.startsWith("/") && !next.startsWith("//") ? next : "/");
             }
         }
 

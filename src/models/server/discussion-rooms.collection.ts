@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, discussionRoomsCollection } from "../name";
 import { databases } from "./config";
 
@@ -24,6 +24,7 @@ export default async function createDiscussionRoomsCollection() {
         databases.createStringAttribute(db, discussionRoomsCollection, "activeCodeSessionId", 36, false),
         databases.createStringAttribute(db, discussionRoomsCollection, "inviteToken", 64, false),
         databases.createEnumAttribute(db, discussionRoomsCollection, "slowMode", ["off", "5s", "30s", "60s"], true),
+        databases.createStringAttribute(db, discussionRoomsCollection, "pinnedMessageId", 36, false),
     ]);
     console.log("Discussion Rooms Attributes created");
 
@@ -40,9 +41,9 @@ export default async function createDiscussionRoomsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, discussionRoomsCollection, "status_visibility", "key", ["status", "visibility"]),
-        databases.createIndex(db, discussionRoomsCollection, "last_activity", "key", ["lastActivityAt"], ["DESC"]),
-        databases.createIndex(db, discussionRoomsCollection, "member_count", "key", ["memberCount"], ["DESC"]),
+        databases.createIndex(db, discussionRoomsCollection, "status_visibility", IndexType.Key, ["status", "visibility"]),
+        databases.createIndex(db, discussionRoomsCollection, "last_activity", IndexType.Key, ["lastActivityAt"], ["DESC"]),
+        databases.createIndex(db, discussionRoomsCollection, "member_count", IndexType.Key, ["memberCount"], ["DESC"]),
     ]);
     console.log("Discussion Rooms indexes created");
 }

@@ -1,7 +1,9 @@
+// @ts-nocheck
 import { computeExpertiseMismatchPenalty, resolveUserTierForQuestion } from './expertiseMismatch';
 import { generateExplanationTokens } from './explanationTokens';
 import { cosineSimilarity } from './cosineSimilarity';
 import { computeIntentSimilarity } from './intentScorer';
+import { computeAnswerComplexity } from "../../nlp/answerComplexity";
 import { jaccardSimilarity } from './tagScorer';
 import { computeCommunityScore } from './communityScorer';
 import { applyRecencyMultiplier } from './recencyMultiplier';

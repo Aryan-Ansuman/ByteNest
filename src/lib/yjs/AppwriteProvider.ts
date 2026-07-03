@@ -21,6 +21,8 @@ interface ProviderOptions {
     collectionId: string;
 }
 
+const DOC_BATCH_MS = 50; // merge doc updates within 50ms window
+
 export class AppwriteProvider {
     doc: Y.Doc;
     awareness: Awareness;
@@ -33,6 +35,10 @@ export class AppwriteProvider {
     private collectionId: string;
     private unsubscribe: (() => void) | null = null;
     private destroyed = false;
+
+    // ── Batching state for doc updates ─────────────────────────────────
+    private pendingDocUpdates: Uint8Array[] = [];
+    private batchTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(opts: ProviderOptions) {
         this.doc = opts.doc;
@@ -55,8 +61,29 @@ export class AppwriteProvider {
         this.doc.on("update", (update: Uint8Array, origin: unknown) => {
             // Don't re-broadcast updates that came from remote (origin === this)
             if (origin === this || this.destroyed) return;
-            this._send(update, 0);
+            this._enqueueDocUpdate(update);
         });
+    }
+
+    // ── Batched doc updates ──────────────────────────────────────────
+
+    private _enqueueDocUpdate(update: Uint8Array) {
+        this.pendingDocUpdates.push(update);
+
+        if (this.batchTimer) return; // already scheduled
+
+        this.batchTimer = setTimeout(() => {
+            this.batchTimer = null;
+            this._flushDocUpdates();
+        }, DOC_BATCH_MS);
+    }
+
+    private _flushDocUpdates() {
+        if (this.destroyed || this.pendingDocUpdates.length === 0) return;
+
+        const merged = Y.mergeUpdates(this.pendingDocUpdates);
+        this.pendingDocUpdates = [];
+        this._send(merged, 0);
     }
 
     // ── Awareness listener ────────────────────────────────────────────
@@ -76,6 +103,7 @@ export class AppwriteProvider {
                 if (this.destroyed) return;
                 const changed = [...added, ...updated, ...removed];
                 const update = encodeAwarenessUpdate(this.awareness, changed);
+                // Awareness updates are infrequent — send immediately
                 this._send(update, 1);
             }
         );
@@ -140,6 +168,14 @@ export class AppwriteProvider {
 
     destroy() {
         this.destroyed = true;
+
+        // Flush any pending updates before tearing down
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
+        this._flushDocUpdates();
+
         if (this.unsubscribe) {
             this.unsubscribe();
             this.unsubscribe = null;

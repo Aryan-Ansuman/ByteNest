@@ -37,8 +37,10 @@ interface ChatSlice {
     prependMessages: (msgs: RoomMessage[], hasMore: boolean) => void;
     updateMessage: (msg: RoomMessage) => void;
     deleteMessage: (id: string) => void;
+    restoreMessage: (msg: RoomMessage) => void;
     replaceTempMessage: (tempId: string, real: RoomMessage) => void;
     setLoadingMore: (v: boolean) => void;
+    setHasMore: (v: boolean) => void;
     setTypingUsers: (names: string[]) => void;
 }
 
@@ -115,11 +117,25 @@ export const useRoomStore = create<RoomStore>()(
             set((s) => ({
                 messages: s.messages.filter((m) => m.$id !== id),
             })),
+        restoreMessage: (msg) =>
+            set((s) => {
+                if (s.messages.some((m) => m.$id === msg.$id)) return s;
+                const messages = [...s.messages, msg].sort(
+                    (a, b) =>
+                        new Date(a.$createdAt).getTime() -
+                        new Date(b.$createdAt).getTime()
+                );
+                return {
+                    messages,
+                    oldestTimestamp: messages[0]?.$createdAt ?? s.oldestTimestamp,
+                };
+            }),
         replaceTempMessage: (tempId, real) =>
             set((s) => ({
                 messages: s.messages.map((m) => (m.$id === tempId ? real : m)),
             })),
         setLoadingMore: (isLoadingMore) => set({ isLoadingMore }),
+        setHasMore: (hasMore) => set({ hasMore }),
         setTypingUsers: (typingUserNames) => set({ typingUserNames }),
 
         // ── Presence slice ────────────────────────────────────

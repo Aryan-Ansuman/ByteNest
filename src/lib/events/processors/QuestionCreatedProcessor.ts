@@ -89,6 +89,8 @@ export async function processQuestionCreated(
 
   await publishEvent("EmbeddingRequested", {
     questionId,
-    priority: 'normal',
+    embeddingInput,
+    contentHash,
+    triggeredBy: 'question_created',
   });
 }

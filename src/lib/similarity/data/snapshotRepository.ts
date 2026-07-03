@@ -57,7 +57,7 @@ export async function getTrailingSnapshots(
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserialize(doc: any): EvaluationSnapshot {
   return {
     $id: doc.$id,

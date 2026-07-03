@@ -181,3 +181,29 @@ body:has(.find-widget:hover) .workbench-hover-container,
 .monaco-editor:has(.find-widget:hover) .monaco-editor-hover {
     pointer-events: none !important;
 }
+
+/* ── Remote collaborator cursor labels ───────────────────────────────────
+   Per-client color and the name text itself are injected dynamically (see
+   CodePanelInner.tsx's renderCursorLabels) since they're data-driven. These
+   rules just provide the shared positioning/animation behavior so each
+   per-client rule only needs to set `background`/`border-left` color and
+   the `content` string. */
+.monaco-editor [class^="remote-cursor-caret-"],
+.monaco-editor [class*=" remote-cursor-caret-"] {
+    animation: remote-cursor-blink 1s steps(1) infinite;
+}
+
+@keyframes remote-cursor-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.35; }
+}
+
+[class^="remote-cursor-label-"]::after,
+[class*=" remote-cursor-label-"]::after {
+    animation: remote-cursor-label-in 0.12s ease-out;
+}
+
+@keyframes remote-cursor-label-in {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+}

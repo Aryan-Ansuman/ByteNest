@@ -19,9 +19,6 @@ export {
 
 export {
   recordFeedback,
-  getFeedbackSince,
-  getFeedbackBySession,
-  FEEDBACK_SIGNAL_WEIGHTS,
 } from "./feedbackRepository";
 
 export {

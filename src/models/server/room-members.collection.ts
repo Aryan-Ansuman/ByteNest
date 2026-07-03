@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, roomMembersCollection } from "../name";
 import { databases } from "./config";
 
@@ -36,10 +36,10 @@ export default async function createRoomMembersCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, roomMembersCollection, "room_user_unique", "unique", ["roomId", "userId"]),
-        databases.createIndex(db, roomMembersCollection, "room_status", "key", ["roomId", "status"]),
-        databases.createIndex(db, roomMembersCollection, "room_joined", "key", ["roomId", "joinedAt"]),
-        databases.createIndex(db, roomMembersCollection, "status_lastseen", "key", ["status", "lastSeenAt"]),
+        databases.createIndex(db, roomMembersCollection, "room_user_unique", IndexType.Unique, ["roomId", "userId"]),
+        databases.createIndex(db, roomMembersCollection, "room_status", IndexType.Key, ["roomId", "status"]),
+        databases.createIndex(db, roomMembersCollection, "room_joined", IndexType.Key, ["roomId", "joinedAt"]),
+        databases.createIndex(db, roomMembersCollection, "status_lastseen", IndexType.Key, ["status", "lastSeenAt"]),
     ]);
     console.log("Room Members indexes created");
 }

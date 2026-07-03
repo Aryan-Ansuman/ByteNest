@@ -60,5 +60,6 @@ export async function processDuplicateConfirmed(
     action: "clicked",
     timeToActionMs,
     intentLabel: "",
+    scores: { semantic: 0, intent: 0, tag: 0, community: 0, hybrid: 0 },
   });
 }

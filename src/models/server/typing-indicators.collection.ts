@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, typingIndicatorsCollection } from "../name";
 import { databases } from "./config";
 
@@ -31,9 +31,9 @@ export default async function createTypingIndicatorsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, typingIndicatorsCollection, "room_user_typing", "unique", ["roomId", "userId"]),
-        databases.createIndex(db, typingIndicatorsCollection, "room_typing", "key", ["roomId"]),
-        databases.createIndex(db, typingIndicatorsCollection, "updated_at", "key", ["$updatedAt"]),
+        databases.createIndex(db, typingIndicatorsCollection, "room_user_typing", IndexType.Unique, ["roomId", "userId"]),
+        databases.createIndex(db, typingIndicatorsCollection, "room_typing", IndexType.Key, ["roomId"]),
+        databases.createIndex(db, typingIndicatorsCollection, "updated_at", IndexType.Key, ["$updatedAt"]),
     ]);
     console.log("Typing Indicators indexes created");
 }

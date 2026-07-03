@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useRoomStore } from "@/store/roomStore";
 import type { DiscussionRoom } from "@/types/rooms";
 import {
     X, Globe, Lock, Users, Hash, Timer, Calendar, Code2,
     MessageSquare, Clock, Copy, UserPlus, Share2, Shield,
-    BarChart2, Info, Crown,
+    BarChart2, Info, Crown, Pencil, Check, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -31,6 +32,29 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
     const currentMember = useRoomStore((s) => s.currentMember);
 
     const isHost         = currentMember?.userId === room.hostId;
+
+    // ── Inline name/description editing (host only) ──────────────
+    const [editingName, setEditingName]   = useState(false);
+    const [editingDesc, setEditingDesc]   = useState(false);
+    const [nameVal, setNameVal]           = useState(room.name);
+    const [descVal, setDescVal]           = useState(room.description ?? "");
+    const [savingMeta, setSavingMeta]     = useState(false);
+
+    async function saveMeta(key: "name" | "description", value: string) {
+        setSavingMeta(true);
+        try {
+            await apiFetch(`/api/rooms/${room.$id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ [key]: value }),
+            });
+            if (key === "name") setEditingName(false);
+            else setEditingDesc(false);
+        } catch (err: any) {
+            toast.error(err.message || "Failed to update");
+        } finally {
+            setSavingMeta(false);
+        }
+    }
     const onlineCount    = members.filter((m) => m.status === "online" || m.status === "muted").length;
     const hostMember     = members.find((m) => m.userId === room.hostId);
     const capacity       = room.maxMembers > 0 ? onlineCount / room.maxMembers : 0;
@@ -47,6 +71,23 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
     async function copyRoomUrl() {
         await navigator.clipboard.writeText(window.location.href);
         toast.success("Room link copied");
+    }
+
+    const [regenerating, setRegenerating] = useState(false);
+
+    async function regenerateInvite() {
+        setRegenerating(true);
+        try {
+            const res = await apiFetch<{ inviteUrl: string }>(`/api/rooms/${room.$id}/invite`, {
+                method: "PATCH",
+            });
+            await navigator.clipboard.writeText(res.inviteUrl);
+            toast.success("New invite link generated and copied — old link no longer works");
+        } catch (err: any) {
+            toast.error(err.message || "Failed to regenerate invite link");
+        } finally {
+            setRegenerating(false);
+        }
     }
 
     async function updateSetting(key: string, val: string | number) {
@@ -98,7 +139,37 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
                             {room.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                            <h3 className="text-[14px] font-semibold text-tx mb-0.5">{room.name}</h3>
+                            {/* Editable name */}
+                            {isHost && editingName ? (
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <input
+                                        autoFocus
+                                        value={nameVal}
+                                        onChange={(e) => setNameVal(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") saveMeta("name", nameVal.trim() || room.name);
+                                            if (e.key === "Escape") { setEditingName(false); setNameVal(room.name); }
+                                        }}
+                                        maxLength={60}
+                                        className="bg-[#1a1a20] border border-[#a7c8b3]/30 rounded-lg px-2 py-0.5 text-[13px] text-zinc-100 outline-none focus:border-[#a7c8b3]/60 font-semibold w-full"
+                                    />
+                                    <button onClick={() => saveMeta("name", nameVal.trim() || room.name)} disabled={savingMeta} className="p-1 rounded text-[#a7c8b3] hover:bg-[#a7c8b3]/10 transition-colors">
+                                        <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => { setEditingName(false); setNameVal(room.name); }} className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition-colors">
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1.5 mb-0.5 group/name">
+                                    <h3 className="text-[14px] font-semibold text-tx">{room.name}</h3>
+                                    {isHost && (
+                                        <button onClick={() => setEditingName(true)} className="opacity-0 group-hover/name:opacity-100 p-0.5 rounded text-zinc-600 hover:text-[#a7c8b3] transition-all">
+                                            <Pencil className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                             <p className="text-[12px] text-tx-secondary max-w-[200px] truncate">{room.$id}</p>
                             <div className="flex items-center gap-1.5 mt-1">
                                 {room.visibility === "private"
@@ -110,10 +181,44 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
                         </div>
                     </div>
 
-                    {room.description && (
-                        <p className="mt-3 text-[12px] text-tx-muted leading-relaxed">
-                            {room.description}
-                        </p>
+                    {/* Editable description */}
+                    {isHost ? (
+                        editingDesc ? (
+                            <div className="mt-3 space-y-1.5">
+                                <textarea
+                                    autoFocus
+                                    value={descVal}
+                                    onChange={(e) => setDescVal(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Escape") { setEditingDesc(false); setDescVal(room.description ?? ""); }
+                                    }}
+                                    maxLength={300}
+                                    rows={3}
+                                    placeholder="Add a description…"
+                                    className="w-full bg-[#1a1a20] border border-[#a7c8b3]/30 rounded-lg px-2.5 py-2 text-[12px] text-zinc-300 outline-none focus:border-[#a7c8b3]/60 resize-none leading-relaxed caret-[#a7c8b3]"
+                                />
+                                <div className="flex items-center gap-1.5">
+                                    <button onClick={() => saveMeta("description", descVal)} disabled={savingMeta} className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] bg-[#a7c8b3]/20 text-[#a7c8b3] hover:bg-[#a7c8b3]/30 transition-colors font-medium">
+                                        <Check className="w-3 h-3" />Save
+                                    </button>
+                                    <button onClick={() => { setEditingDesc(false); setDescVal(room.description ?? ""); }} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-3 group/desc relative">
+                                {room.description
+                                    ? <p className="text-[12px] text-tx-muted leading-relaxed pr-6">{room.description}</p>
+                                    : <p className="text-[12px] text-zinc-700 italic">No description — click to add one.</p>
+                                }
+                                <button onClick={() => setEditingDesc(true)} className="absolute top-0 right-0 p-0.5 rounded text-zinc-700 hover:text-[#a7c8b3] transition-all opacity-0 group-hover/desc:opacity-100">
+                                    <Pencil className="w-3 h-3" />
+                                </button>
+                            </div>
+                        )
+                    ) : (
+                        room.description && (
+                            <p className="mt-3 text-[12px] text-tx-muted leading-relaxed">{room.description}</p>
+                        )
                     )}
 
                     {room.tags && room.tags.length > 0 && (
@@ -279,6 +384,20 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
                             <span className="text-[11px] font-medium text-tx-secondary">Copy Link</span>
                         </button>
                     </div>
+
+                    {/* Regenerate invite — host only, private rooms only */}
+                    {isHost && room.visibility === "private" && (
+                        <button
+                            onClick={regenerateInvite}
+                            disabled={regenerating}
+                            className="mt-2 w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw className={cn("w-3.5 h-3.5 text-amber-400", regenerating && "animate-spin")} />
+                            <span className="text-[11px] font-medium text-amber-400">
+                                {regenerating ? "Regenerating…" : "Regenerate invite link"}
+                            </span>
+                        </button>
+                    )}
                 </section>
 
             </div>

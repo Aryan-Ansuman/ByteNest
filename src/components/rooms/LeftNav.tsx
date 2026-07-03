@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { useRoomStore } from "@/store/roomStore";
 import {
-    ChevronDown, File, Plus
+    ChevronDown, File, Plus, X
 } from "lucide-react";
 import { SiJavascript, SiTypescript, SiPython, SiRust, SiGo, SiHtml5, SiCss } from "@icons-pack/react-simple-icons";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { validateSessionFilename } from "@/lib/rooms/files";
+import { apiFetch } from "@/lib/api-fetch";
 
 const FILE_ICONS: Record<string, React.ElementType> = {
     js:   SiJavascript,
@@ -46,16 +49,14 @@ function getExt(name: string) {
 
 interface Props {
     roomId: string;
-    /** Called when user clicks a file — wired to CodePanelInner.handleSwitchFile */
-    onSwitchFile?: (filename: string) => void;
-    /** Called when user adds a new file — wired to CodePanelInner.handleAddFile */
-    onAddFile?: (name: string, language: string) => void;
-    /** Whether the current user is the host (controls add-file button visibility) */
-    isHost?: boolean;
 }
 
-export default function LeftNav({ roomId, onSwitchFile, onAddFile, isHost }: Props) {
+export default function LeftNav({ roomId }: Props) {
     const codeSession = useRoomStore((s) => s.codeSession);
+    const room = useRoomStore((s) => s.room);
+    const currentMember = useRoomStore((s) => s.currentMember);
+
+    const isHost = currentMember?.userId === room?.hostId;
 
     // Fix 6: read activeFile from live session store — stays in sync with all clients
     const activeFile = codeSession?.activeFile ?? null;
@@ -66,29 +67,66 @@ export default function LeftNav({ roomId, onSwitchFile, onAddFile, isHost }: Pro
     const [adding,  setAdding]  = useState(false);
     const [newName, setNewName] = useState("");
     const [newLang, setNewLang] = useState("javascript");
+    const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
     const parsedFiles: Array<{ name: string; language: string }> = (() => {
         try { return JSON.parse(codeSession?.files ?? "[]"); }
         catch { return []; }
     })();
 
-    function handleAdd() {
-        const name = newName.trim();
-        if (!name) return;
-        onAddFile?.(name, newLang);
-        setNewName("");
-        setNewLang("javascript");
-        setAdding(false);
+    async function handleAdd() {
+        const result = validateSessionFilename(newName, parsedFiles);
+        if (result.error) {
+            toast.error(result.error);
+            return;
+        }
+
+        try {
+            await apiFetch(`/api/rooms/${roomId}/session/${codeSession?.$id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ action: "add_file", name: result.name, language: newLang }),
+            });
+            setNewName("");
+            setNewLang("javascript");
+            setAdding(false);
+        } catch (error: any) {
+            toast.error(error?.message ?? "Failed to add file");
+        }
     }
 
-    // Fix 6: file click delegates to the prop — CodePanelInner drives the editor
-    function handleFileClick(filename: string) {
-        onSwitchFile?.(filename);
+    async function handleFileClick(filename: string) {
+        if (!codeSession) return;
+        try {
+            await apiFetch(`/api/rooms/${roomId}/session/${codeSession.$id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ action: "switch_file", filename }),
+            });
+        } catch (error: any) {
+            toast.error(error?.message ?? "Failed to switch file");
+        }
+    }
+
+    function handleDeleteClick(e: React.MouseEvent, filename: string) {
+        e.stopPropagation();
+        setConfirmDel(filename);
+    }
+
+    async function confirmDelete(filename: string) {
+        if (!codeSession) return;
+        try {
+            await apiFetch(
+                `/api/rooms/${roomId}/session/${codeSession.$id}`,
+                { method: "PATCH", body: JSON.stringify({ action: "delete_file", name: filename }) }
+            );
+        } catch (error: any) {
+            toast.error(error?.message ?? "Failed to delete file");
+        }
+        setConfirmDel(null);
     }
 
     return (
         <aside className="w-full h-full shrink-0 bg-[#111113] flex flex-col overflow-hidden select-none">
-            <div className="px-4 py-4 flex-1 min-h-0 flex flex-col">
+            <div className="px-4 py-4 flex-1 min-h-0 flex flex-col relative">
                 {/* Files header */}
                 <div className="flex items-center justify-between w-full mb-3 px-1">
                     <button
@@ -172,18 +210,41 @@ export default function LeftNav({ roomId, onSwitchFile, onAddFile, isHost }: Pro
                                 <FolderRow label="src" defaultOpen={true}>
                                     <div className="mt-1 space-y-1">
                                         {parsedFiles.map((f) => (
-                                            // Fix 6: onClick calls onSwitchFile
                                             <FileRow
                                                 key={f.name}
                                                 name={f.name}
                                                 active={activeFile === f.name}
                                                 onClick={() => handleFileClick(f.name)}
+                                                onDelete={isHost && parsedFiles.length > 1 ? (e) => handleDeleteClick(e, f.name) : undefined}
                                             />
                                         ))}
                                     </div>
                                 </FolderRow>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Delete confirmation */}
+                {confirmDel && (
+                    <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[12px] shadow-lg backdrop-blur-sm z-50">
+                        <span className="text-rose-300">
+                            Delete <span className="font-mono font-semibold">{confirmDel}</span>?
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => confirmDelete(confirmDel)}
+                                className="flex-1 px-2.5 py-1.5 rounded bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 font-semibold transition-colors"
+                            >
+                                Delete
+                            </button>
+                            <button
+                                onClick={() => setConfirmDel(null)}
+                                className="flex-1 px-2.5 py-1.5 rounded text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -216,11 +277,12 @@ function FolderRow({
 }
 
 function FileRow({
-    name, active = false, onClick,
+    name, active = false, onClick, onDelete
 }: {
     name: string;
     active?: boolean;
     onClick?: () => void;
+    onDelete?: (e: React.MouseEvent) => void;
 }) {
     const ext   = getExt(name);
     const color = FILE_LANG_COLOR[ext] ?? "text-zinc-500";
@@ -240,7 +302,18 @@ function FileRow({
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[18px] bg-[#a7c8b3] rounded-r-full shadow-[0_0_8px_rgba(167,200,179,0.4)]" />
             )}
             <Icon className={cn("w-3.5 h-3.5 shrink-0", active ? "text-[#a7c8b3]" : color)} />
-            <span className="truncate font-mono tracking-tight">{name}</span>
+            <span className="truncate font-mono tracking-tight flex-1">{name}</span>
+            
+            {onDelete && (
+                <span
+                    role="button"
+                    onClick={onDelete}
+                    className="opacity-0 group-hover:opacity-100 flex items-center justify-center w-4 h-4 rounded hover:bg-rose-500/20 hover:text-rose-400 text-zinc-500 transition-all ml-1 shrink-0"
+                    aria-label={`Delete ${name}`}
+                >
+                    <X className="w-3 h-3" />
+                </span>
+            )}
         </button>
     );
 }

@@ -46,7 +46,7 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
 
                 // 2. Parallel fetch: room data, messages, members
                 const [roomData, messagesData, membersData] = await Promise.all([
-                    apiFetch<{ room: DiscussionRoom }>(`/api/rooms/${roomId}/details`),
+                    apiFetch<{ room: DiscussionRoom; messageCount?: number }>(`/api/rooms/${roomId}/details`),
                     apiFetch<{ messages: RoomMessage[]; hasMore: boolean }>(
                         `/api/rooms/${roomId}/messages`
                     ),
@@ -55,8 +55,12 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
 
                 if (aborted) return;
 
-                store.setRoom(roomData.room);
+                store.setRoom({
+                    ...roomData.room,
+                    messageCount: roomData.messageCount ?? roomData.room.messageCount,
+                });
                 store.setMessages(messagesData.messages);
+                useRoomStore.getState().setHasMore(messagesData.hasMore);
                 store.setMembers(membersData.members);
 
                 // 3. Fetch code session if active

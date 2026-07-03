@@ -49,7 +49,7 @@ export async function extractTechTerms(text: string): Promise<Set<string>> {
   const lower = text.toLowerCase();
   const found = new Set<string>();
 
-  for (const term of terms) {
+  for (const term of Array.from(terms)) {
     // Whole-word boundary check using a simple regex
     const pattern = new RegExp(`(?<![a-z0-9])${escapeRegex(term)}(?![a-z0-9])`, "i");
     if (pattern.test(lower)) {

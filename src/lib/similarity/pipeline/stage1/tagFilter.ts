@@ -9,6 +9,7 @@ export type TagFilterCandidate = {
   tags: string[];
   voteCount: number;
   hasAcceptedAnswer: boolean;
+  hasVerifiedAnswer: boolean; // ← new
   createdAt: string;
 };
 
@@ -63,6 +64,7 @@ export async function filterByTagOverlap(
           tags: doc.tags ?? [],
           voteCount: doc.voteCount ?? 0,
           hasAcceptedAnswer: !!doc.acceptedAnswerId,
+          hasVerifiedAnswer: !!doc.hasVerifiedAnswer, // ← new
           createdAt: doc.$createdAt,
         });
       }

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { SlowMode } from "@/types/rooms";
 import SessionStartModal from "./SessionStartModal";
+import { getRoomInviteUrl } from "@/lib/rooms/invite";
 
 type PanelId = "chat" | "code" | "members" | "info";
 
@@ -132,8 +133,8 @@ export default function CommandPalette({
             icon: <UserPlus className="w-4 h-4" />,
             keywords: ["invite", "share", "link", "copy"],
             action: async () => {
-                const link = room?.inviteToken
-                    ? `${window.location.origin}/rooms/join/${room.inviteToken}`
+                const link = room
+                    ? getRoomInviteUrl(room, window.location.origin)
                     : window.location.href;
                 await navigator.clipboard.writeText(link);
                 toast.success("Invite link copied");
@@ -301,7 +302,7 @@ export default function CommandPalette({
                 >
                     {filtered.length === 0 ? (
                         <li className="px-4 py-8 text-center text-sm text-tx-disabled">
-                            No commands match "{query}"
+                            No commands match &quot;{query}&quot;
                         </li>
                     ) : (
                         groups.map((group) => {

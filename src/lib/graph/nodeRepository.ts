@@ -92,7 +92,7 @@ export function deriveQualityScore(voteCount: number, answerCount: number): numb
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserializeNode(doc: any): GraphNode {
   return {
     nodeKey: doc.$id,

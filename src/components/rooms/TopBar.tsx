@@ -8,7 +8,7 @@ import {
     Globe, Lock, UserPlus, Copy, Check, Command,
     MessageSquare, Code2, Users, Settings, Maximize2, Minimize2,
     MoreHorizontal, Hash, Timer, ChevronRight, ChevronLeft, Radio,
-    XCircle, Zap, Hexagon,
+    XCircle, Zap, Hexagon, History, Search, Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
@@ -18,9 +18,9 @@ import { motion } from "framer-motion";
 const AVATAR_BG: Record<string, string> = {
     indigo:  "bg-indigo-500",
     violet:  "bg-violet-500",
-    emerald: "bg-status-success",
+    emerald: "bg-emerald-500",
     amber:   "bg-amber-500",
-    rose:    "bg-status-danger",
+    rose:    "bg-rose-500",
     cyan:    "bg-cyan-500",
 };
 
@@ -35,11 +35,13 @@ interface Props {
     onToggleInfo: () => void;
     focusMode: boolean;
     onToggleFocus: () => void;
+    onToggleHistory: () => void;
+    onToggleActivityLog: () => void;
 }
 
 export default function TopBar({
     room, roomId, hiddenPanels, onTogglePanel,
-    onOpenCommand, onToggleInfo, focusMode, onToggleFocus,
+    onOpenCommand, onToggleInfo, focusMode, onToggleFocus, onToggleHistory, onToggleActivityLog,
 }: Props) {
     const members       = useRoomStore((s) => s.members);
     const currentMember = useRoomStore((s) => s.currentMember);
@@ -158,6 +160,26 @@ export default function TopBar({
                 {(slowModeActive || onlineAvatars.length > 0) && (
                     <div className="hidden lg:block h-4 w-px bg-white/5 mr-1" />
                 )}
+
+                {/* Session history */}
+                <button
+                    onClick={onToggleHistory}
+                    className="p-1.5 rounded-md text-tx-disabled hover:text-tx-secondary hover:bg-surface-hover transition-colors border border-transparent"
+                    title="Session history"
+                    aria-label="Session history"
+                >
+                    <History className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Activity log */}
+                <button
+                    onClick={onToggleActivityLog}
+                    className="hidden sm:flex p-1.5 rounded-md text-tx-disabled hover:text-tx-secondary hover:bg-surface-hover transition-colors border border-transparent"
+                    title="Activity log"
+                    aria-label="Activity log"
+                >
+                    <Activity className="w-3.5 h-3.5" />
+                </button>
 
                 {/* Command palette trigger */}
                 <button

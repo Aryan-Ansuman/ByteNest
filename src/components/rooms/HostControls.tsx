@@ -101,13 +101,27 @@ function MemberActions({
     onAction: (action: string) => void;
 }) {
     const isMuted = member.status === "muted";
+    const [confirmAction, setConfirmAction] = useState<"kick" | "transfer" | null>(null);
+
+    function requestAction(action: string) {
+        if ((action === "kick" || action === "transfer") && confirmAction !== action) {
+            setConfirmAction(action);
+            window.setTimeout(() => {
+                setConfirmAction((current) => (current === action ? null : current));
+            }, 4000);
+            return;
+        }
+
+        setConfirmAction(null);
+        onAction(action);
+    }
 
     return (
         <li className="flex items-center gap-1.5 text-xs">
             <span className="flex-1 truncate text-tx-secondary text-[11px]">{member.displayName}</span>
             <button
                 disabled={busy}
-                onClick={() => onAction(isMuted ? "unmute" : "mute")}
+                onClick={() => requestAction(isMuted ? "unmute" : "mute")}
                 className={[
                     "px-2 py-0.5 rounded border text-[10px] transition-colors font-medium",
                     isMuted
@@ -119,17 +133,17 @@ function MemberActions({
             </button>
             <button
                 disabled={busy}
-                onClick={() => onAction("kick")}
+                onClick={() => requestAction("kick")}
                 className="px-2 py-0.5 rounded border border-[#ef4444]/30 text-status-danger hover:bg-status-danger/10 text-[10px] transition-colors font-medium"
             >
-                Kick
+                {confirmAction === "kick" ? "Confirm" : "Kick"}
             </button>
             <button
                 disabled={busy}
-                onClick={() => onAction("transfer")}
+                onClick={() => requestAction("transfer")}
                 className="px-2 py-0.5 rounded border border-zinc-700 text-tx-secondary hover:bg-surface-hover text-[10px] transition-colors font-medium"
             >
-                Make host
+                {confirmAction === "transfer" ? "Confirm" : "Make host"}
             </button>
         </li>
     );

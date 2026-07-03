@@ -1,4 +1,4 @@
-import { Permission } from "node-appwrite";
+import { Permission, IndexType } from "node-appwrite";
 import { db, collabMessagesCollection } from "../name";
 import { databases } from "./config";
 
@@ -33,8 +33,8 @@ export default async function createCollabMessagesCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, collabMessagesCollection, "session_id", "key", ["sessionId"]),
-        databases.createIndex(db, collabMessagesCollection, "created_at", "key", ["$createdAt"]),
+        databases.createIndex(db, collabMessagesCollection, "session_id", IndexType.Key, ["sessionId"]),
+        databases.createIndex(db, collabMessagesCollection, "created_at", IndexType.Key, ["$createdAt"]),
     ]);
     console.log("Collab Messages indexes created");
 }

@@ -36,5 +36,6 @@ export async function processDuplicateRejected(
     action: "reported_not_duplicate",
     timeToActionMs,
     intentLabel: "",
+    scores: { semantic: 0, intent: 0, tag: 0, community: 0, hybrid: 0 },
   });
 }

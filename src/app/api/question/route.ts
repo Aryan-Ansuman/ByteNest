@@ -19,6 +19,8 @@ import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 
 // Phase 3 — Step 3.5: import the skill trigger
 import { triggerSkillRecalculation } from "@/lib/skills/trigger-skill-recalculation";
+import { triggerRetroactiveVerification } from "@/lib/tva/trigger-retroactive-verification";
+import type { TestFramework } from "@/models/name";
 
 // Rate limit: 3 questions per user per 10 minutes
 const QUESTION_RATE_LIMIT = 3;
@@ -128,7 +130,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { title, content, authorId, tags, attachmentId } = await request.json();
+        const { title, content, authorId, tags, attachmentId, hasTestSuite, testCode, testLanguage, testFramework } = await request.json();
 
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
@@ -158,6 +160,10 @@ export async function POST(request: NextRequest) {
             tags,
             totalAnswers: 0,
             activityAt: new Date().toISOString(),
+            hasTestSuite: Boolean(hasTestSuite),
+            ...(hasTestSuite && testCode && testLanguage && testFramework
+                ? { testCode, testLanguage, testFramework }
+                : {}),
         };
         if (attachmentId) docData.attachmentId = attachmentId;
 
@@ -196,8 +202,18 @@ export async function PATCH(request: NextRequest) {
     try {
         const requesterId = await getAuthenticatedUserId();
 
-        const { questionId, title, content, tags, attachmentId, oldAttachmentId } =
-            await request.json();
+        const {
+            questionId,
+            title,
+            content,
+            tags,
+            attachmentId,
+            oldAttachmentId,
+            hasTestSuite,
+            testCode,
+            testLanguage,
+            testFramework,
+        } = await request.json();
 
         if (!questionId) {
             return NextResponse.json({ error: "questionId is required" }, { status: 400 });
@@ -225,6 +241,31 @@ export async function PATCH(request: NextRequest) {
             docData.attachmentId = attachmentId === "none" ? null : attachmentId;
         }
 
+        // ── TVA — Phase 6: test suite is editable after publish. Only
+        // touched if the client actually sent a hasTestSuite value — this
+        // keeps the route safe for callers that don't know about TVA at all.
+        const testSuiteFieldsProvided = typeof hasTestSuite === "boolean";
+        const previousTestCode = (question.testCode as string | null) ?? "";
+        let testCodeChanged = false;
+
+        if (testSuiteFieldsProvided) {
+            docData.hasTestSuite = hasTestSuite;
+            if (hasTestSuite) {
+                const nextTestCode = (testCode ?? "").trim();
+                docData.testCode = nextTestCode;
+                docData.testLanguage = testLanguage ?? null;
+                docData.testFramework = (testFramework as TestFramework) ?? null;
+                testCodeChanged = nextTestCode !== previousTestCode.trim();
+            } else {
+                // Turning the toggle off clears the test suite outright —
+                // existing answers keep their last verification result
+                // (it stays visible as history) but nothing new will run.
+                docData.testCode = null;
+                docData.testLanguage = null;
+                docData.testFramework = null;
+            }
+        }
+
         const response = await databases.updateDocument(
             db,
             questionCollection,
@@ -245,8 +286,6 @@ export async function PATCH(request: NextRequest) {
         }
 
         // ── Step 3.5: Trigger skill recalculation on question edited ──
-        // Tags may have changed; use the new tag set so scores reflect the
-        // updated categorisation.
         const updatedTags = (tags as string[]) ?? [];
         if (updatedTags.length > 0) {
             triggerSkillRecalculation({
@@ -258,7 +297,24 @@ export async function PATCH(request: NextRequest) {
             });
         }
 
-        return NextResponse.json(response, { status: 200 });
+        // ── TVA — Phase 6: testCode actually changed → re-verify every
+        // existing answer that has solutionCode. Fire-and-forget-ish: awaited
+        // so we can report the count, but a failure here doesn't roll back
+        // the question edit that already succeeded.
+        let retroactive: { answersRequeued: number } | null = null;
+        if (testSuiteFieldsProvided && hasTestSuite && testCodeChanged) {
+            try {
+                const summary = await triggerRetroactiveVerification(questionId, requesterId);
+                retroactive = { answersRequeued: summary.answersRequeued };
+            } catch (retroErr) {
+                console.error("[question/PATCH] Failed to trigger retroactive verification:", retroErr);
+            }
+        }
+
+        return NextResponse.json(
+            { ...response, ...(retroactive ? { retroactiveVerification: retroactive } : {}) },
+            { status: 200 }
+        );
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;

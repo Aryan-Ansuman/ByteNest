@@ -28,7 +28,7 @@ export default async function createTechnologyTermsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, technologyTermsCollection, "term_unique", "unique", ["term"]),
+        databases.createIndex(db, technologyTermsCollection, "term_unique", IndexType.Unique, ["term"]),
     ]);
     console.log("Technology Terms indexes created");
 }

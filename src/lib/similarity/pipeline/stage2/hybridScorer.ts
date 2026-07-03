@@ -38,6 +38,7 @@ export type RankedCandidate = {
   recencyMultiplier: number;
   tags: string[];
   hasAcceptedAnswer: boolean;
+  hasVerifiedAnswer: boolean; // ← new
   createdAt: string;
 };
 
@@ -101,6 +102,7 @@ export async function runStage2(params: {
     candidatesWithVectors.map((c) => ({
       voteCount: c.voteCount,
       hasAcceptedAnswer: c.hasAcceptedAnswer,
+      hasVerifiedAnswer: c.hasVerifiedAnswer, // ← new
     }))
   );
 
@@ -123,7 +125,11 @@ export async function runStage2(params: {
 
     // Step 6.11 — Community engagement
     const communityScore = scoreCommunity(
-      { voteCount: candidate.voteCount, hasAcceptedAnswer: candidate.hasAcceptedAnswer },
+      {
+        voteCount: candidate.voteCount,
+        hasAcceptedAnswer: candidate.hasAcceptedAnswer,
+        hasVerifiedAnswer: candidate.hasVerifiedAnswer, // ← new
+      },
       maxVotes
     );
 
@@ -163,6 +169,7 @@ export async function runStage2(params: {
       recencyMultiplier,
       tags: candidate.tags,
       hasAcceptedAnswer: candidate.hasAcceptedAnswer,
+      hasVerifiedAnswer: candidate.hasVerifiedAnswer, // ← new
       createdAt: candidate.createdAt,
     });
   }

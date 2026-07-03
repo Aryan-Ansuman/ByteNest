@@ -11,7 +11,7 @@ export function jaccardSimilarity(tagsA: string[], tagsB: string[]): number {
   const setB = new Set(tagsB.map((t) => t.toLowerCase()));
 
   let intersectionSize = 0;
-  for (const tag of setA) {
+  for (const tag of Array.from(setA)) {
     if (setB.has(tag)) intersectionSize++;
   }
 

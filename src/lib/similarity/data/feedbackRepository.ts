@@ -38,7 +38,7 @@ export async function recordFeedback({
 }: FeedbackParams & { explanationTokens?: string[] }) {
   // Step 13.3: record which weight configuration was active for this session
   const activeWeights     = await getActiveWeights();
-  const scoringExperiment = `weights_v${activeWeights.version || '1'}`;
+  const scoringExperiment = `weights_v${(activeWeights as any).version || '1'}`;
 
   await databases.createDocument(
     DB,

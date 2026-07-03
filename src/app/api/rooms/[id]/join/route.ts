@@ -9,6 +9,7 @@ import {
 } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { getAvatarColor } from "@/lib/getAvatarColor";
+import { countActiveRoomMembers, syncRoomMemberCount } from "@/lib/rooms/server";
 
 export async function POST(
     req: NextRequest,
@@ -36,10 +37,6 @@ export async function POST(
             return NextResponse.json({ error: "Invalid invite token" }, { status: 403 });
         }
 
-        if (room.memberCount >= room.maxMembers) {
-            return NextResponse.json({ error: "Room is full" }, { status: 403 });
-        }
-
         // 3. Check for existing membership (rejoin path)
         const existing = await databases.listDocuments(
             db,
@@ -63,17 +60,31 @@ export async function POST(
                     lastSeenAt: new Date().toISOString(),
                 }
             );
+            await syncRoomMemberCount(roomId).catch(() => {});
             return NextResponse.json({ member: updated, rejoined: true });
         }
 
-        // 4. Fresh join — atomic multi-document write
+        const activeCount = await countActiveRoomMembers(roomId);
+        if (activeCount >= room.maxMembers) {
+            if (room.memberCount !== activeCount) {
+                databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                    memberCount: activeCount,
+                }).catch(() => {});
+            }
+            return NextResponse.json({ error: "Room is full" }, { status: 403 });
+        }
+
+        // 4. Fresh join
         const user = await users.get(userId);
         const now = new Date().toISOString();
         const avatarColor = getAvatarColor(userId);
         const displayName = user.name || "Anonymous";
 
-        const [member] = await Promise.all([
-            databases.createDocument(db, roomMembersCollection, ID.unique(), {
+        const member = await databases.createDocument(
+            db,
+            roomMembersCollection,
+            ID.unique(),
+            {
                 roomId,
                 userId,
                 displayName,
@@ -82,10 +93,35 @@ export async function POST(
                 status: "online",
                 joinedAt: now,
                 lastSeenAt: now,
-            }),
-            databases.updateDocument(db, discussionRoomsCollection, roomId, {
-                memberCount: room.memberCount + 1,
-            }),
+            }
+        );
+
+        const reconciledCount = await countActiveRoomMembers(roomId);
+        if (reconciledCount > room.maxMembers) {
+            const allowed = await databases.listDocuments(
+                db,
+                roomMembersCollection,
+                [
+                    Query.equal("roomId", roomId),
+                    Query.notEqual("status", "offline"),
+                    Query.orderAsc("joinedAt"),
+                    Query.limit(room.maxMembers),
+                ]
+            );
+            const currentUserAllowed = allowed.documents.some(
+                (doc) => doc.$id === member.$id
+            );
+
+            if (!currentUserAllowed) {
+                await databases.deleteDocument(db, roomMembersCollection, member.$id);
+                await syncRoomMemberCount(roomId).catch(() => {});
+                return NextResponse.json({ error: "Room is full" }, { status: 403 });
+            }
+        }
+
+        const finalCount = await syncRoomMemberCount(roomId);
+
+        await Promise.all([
             databases.createDocument(db, roomMessagesCollection, ID.unique(), {
                 roomId,
                 authorId: userId,
@@ -94,6 +130,10 @@ export async function POST(
                 body: `${displayName} joined the room`,
                 type: "system",
                 reactions: JSON.stringify({}),
+            }),
+            databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                memberCount: finalCount,
+                lastActivityAt: now,
             }),
         ]);
 

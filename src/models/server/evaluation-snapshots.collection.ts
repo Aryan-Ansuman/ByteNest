@@ -53,7 +53,7 @@ export default async function createEvaluationSnapshotsCollection() {
     );
 
     await Promise.all([
-        databases.createIndex(db, evaluationSnapshotsCollection, "week_unique", "unique", ["weekStartDate"]),
+        databases.createIndex(db, evaluationSnapshotsCollection, "week_unique", IndexType.Unique, ["weekStartDate"]),
     ]);
     console.log("Evaluation Snapshots indexes created");
 }

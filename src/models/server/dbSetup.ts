@@ -23,7 +23,16 @@ import createRoomMembersCollection from "./room-members.collection";
 import createCodeSessionsCollection from "./code-sessions.collection";
 import createCollabMessagesCollection from "./collab-messages.collection";
 import createTypingIndicatorsCollection from "./typing-indicators.collection";
+import createCodeCommentsCollection from "./code-comments.collection";
+import createTestRunsCollection from "./test-runs.collection";
+import createStalenessVotesCollection from "./staleness-votes.collection";
+import createPackageReleaseCacheCollection from "./package-release-cache.collection";
+import createTechPackageMapCollection from "./tech-package-map.collection";
+import createFreshnessNotificationsCollection from "./freshness-notifications.collection";
+import createFreshnessSnapshotsCollection from "./freshness-snapshots.collection";
+import createNotificationsCollection from "./notifications.collection";
 import { databases } from "./config";
+import { freshnessNotificationsCollection, freshnessSnapshotsCollection, notificationsCollection } from "../name";
 
 export default async function getOrCreateDB(){
   try {
@@ -43,6 +52,51 @@ export default async function getOrCreateDB(){
     } catch (error) {
       console.log(`Creating collection ${systemConfigCollection}`);
       await databases.createCollection(db, systemConfigCollection, systemConfigCollection);
+    }
+
+    // 9. Test Runs (TVA) — added after initial DB creation, so it needs its
+    // own existence check on the "DB already exists" path.
+    try {
+      await databases.getCollection(db, "test_runs");
+    } catch (error) {
+      console.log("Creating collection test_runs");
+      await createTestRunsCollection();
+    }
+
+    // 10. Temporal Answer Decay (Phase 4)
+    try {
+      await databases.getCollection(db, "staleness_votes");
+    } catch (error) {
+      console.log("Creating Temporal Decay collections");
+      await Promise.all([
+        createStalenessVotesCollection(),
+        createPackageReleaseCacheCollection(),
+        createTechPackageMapCollection(),
+      ]);
+    }
+
+    // 12. Temporal Answer Decay — freshness_notifications
+    try {
+      await databases.getCollection(db, freshnessNotificationsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${freshnessNotificationsCollection}`);
+      await createFreshnessNotificationsCollection();
+    }
+
+    // 13. Temporal Answer Decay — freshness_snapshots
+    try {
+      await databases.getCollection(db, freshnessSnapshotsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${freshnessSnapshotsCollection}`);
+      await createFreshnessSnapshotsCollection();
+    }
+
+    // 14. Temporal Answer Decay — notifications (Phase 7)
+    try {
+      await databases.getCollection(db, notificationsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${notificationsCollection}`);
+      await createNotificationsCollection();
     }
   } catch (error) {
     try {
@@ -78,6 +132,15 @@ export default async function getOrCreateDB(){
         createCodeSessionsCollection(),
         createCollabMessagesCollection(),
         createTypingIndicatorsCollection(),
+        // Test-Verified Answers (TVA) — Phase 1
+        createTestRunsCollection(),
+        // Temporal Answer Decay — Phase 1
+        createStalenessVotesCollection(),
+        createPackageReleaseCacheCollection(),
+        createTechPackageMapCollection(),
+        createFreshnessNotificationsCollection(),
+        createFreshnessSnapshotsCollection(),
+        createNotificationsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

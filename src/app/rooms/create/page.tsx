@@ -707,7 +707,7 @@ export default function CreateRoomPage() {
                             </div>
 
                             <p className="text-center text-[11px] text-zinc-700">
-                                You'll be added as host automatically.
+                                You&apos;ll be added as host automatically.
                             </p>
                         </div>
                     )}

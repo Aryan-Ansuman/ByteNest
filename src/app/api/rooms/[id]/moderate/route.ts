@@ -10,7 +10,7 @@ import {
 } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
 
-type Action = "kick" | "mute" | "unmute" | "transfer" | "slow_mode" | "view_only";
+type Action = "kick" | "mute" | "unmute" | "transfer" | "slow_mode" | "view_only" | "pin" | "unpin";
 
 export async function PATCH(
     req: NextRequest,
@@ -20,11 +20,12 @@ export async function PATCH(
         const userId = await getAuthenticatedUserId();
         const { id: roomId } = params;
         const body = await req.json();
-        const { action, targetUserId, slowMode, viewOnly } = body as {
+        const { action, targetUserId, slowMode, viewOnly, messageId } = body as {
             action: Action;
             targetUserId?: string;
             slowMode?: string;
             viewOnly?: boolean;
+            messageId?: string;
         };
 
         // Verify requester is the host
@@ -143,6 +144,31 @@ export async function PATCH(
                         { viewOnly: viewOnly ?? false }
                     );
                 }
+                return NextResponse.json({ ok: true });
+            }
+
+            case "pin": {
+                if (!messageId) return NextResponse.json({ error: "No message specified" }, { status: 400 });
+
+                // Verify the message belongs to this room and isn't deleted
+                const message = await databases.getDocument(db, roomMessagesCollection, messageId).catch(() => null);
+                if (!message || message.roomId !== roomId) {
+                    return NextResponse.json({ error: "Message not found" }, { status: 404 });
+                }
+                if (message.deletedAt) {
+                    return NextResponse.json({ error: "Cannot pin a deleted message" }, { status: 400 });
+                }
+
+                await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                    pinnedMessageId: messageId,
+                });
+                return NextResponse.json({ ok: true });
+            }
+
+            case "unpin": {
+                await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                    pinnedMessageId: null,
+                });
                 return NextResponse.json({ ok: true });
             }
 

@@ -58,6 +58,7 @@ export async function assembleStage1Candidates(params: {
         tags: doc.tags ?? [],
         voteCount: doc.totalVotes ?? doc.voteCount ?? 0,
         hasAcceptedAnswer: !!doc.acceptedAnswerId,
+        hasVerifiedAnswer: !!doc.hasVerifiedAnswer,
         createdAt: doc.$createdAt,
       }));
     }

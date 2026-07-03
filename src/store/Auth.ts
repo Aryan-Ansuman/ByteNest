@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 
 import {AppwriteException, ID, Models} from "appwrite"
 import { account } from "@/models/client/config";
+import { clearAuthPresenceCookie, setAuthPresenceCookie } from "@/lib/auth-cookie";
 
 
 export interface UserPrefs {
@@ -84,9 +85,11 @@ export const useAuthStore = create<IAuthStore>()(
              user.prefs = updatedUser.prefs;
           }
 
+          setAuthPresenceCookie();
           set({session, user, jwt: null})
 
         } catch {
+          clearAuthPresenceCookie();
           set({session: null, jwt: null, user: null})
         }
       },
@@ -115,6 +118,7 @@ export const useAuthStore = create<IAuthStore>()(
              user.prefs = updatedUser.prefs;
           }
 
+          setAuthPresenceCookie();
           set({session, user, jwt: null})
           
           return { success: true}
@@ -158,9 +162,11 @@ export const useAuthStore = create<IAuthStore>()(
       async logout() {
         try {
           await account.deleteSessions()
+          clearAuthPresenceCookie();
           set({session: null, jwt: null, user: null})
           
         } catch (error) {
+          clearAuthPresenceCookie();
           console.log(error)
         }
       },

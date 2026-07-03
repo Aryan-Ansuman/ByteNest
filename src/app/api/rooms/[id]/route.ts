@@ -21,6 +21,21 @@ export async function PATCH(
 
         const updateData: Record<string, any> = {};
 
+        if (body.name !== undefined) {
+            const name = body.name?.trim();
+            if (!name || name.length > 60) {
+                return NextResponse.json({ error: "Name must be 1–60 characters" }, { status: 400 });
+            }
+            updateData.name = name;
+        }
+
+        if (body.description !== undefined) {
+            if (body.description.length > 300) {
+                return NextResponse.json({ error: "Description too long (max 300)" }, { status: 400 });
+            }
+            updateData.description = body.description;
+        }
+
         if (body.visibility) {
             updateData.visibility = body.visibility;
         }

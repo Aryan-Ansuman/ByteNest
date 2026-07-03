@@ -127,7 +127,7 @@ export async function getCandidatesForRecalibration(
 
 // ─── Serialization ────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function deserialize(doc: any): SimilarityCandidate {
   return {
     $id: doc.$id,
