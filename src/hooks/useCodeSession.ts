@@ -119,7 +119,15 @@ export function useCodeSession(
             setYdoc(null);
             setAwareness(null);
         };
-    }, [session?.$id, currentMember?.userId]);
+    }, [
+        session?.$id,
+        currentMember?.userId,
+        session,
+        currentMember,
+        initialActiveFile,
+        roomId,
+        setCodeSession,
+    ]);
 
     return { ydoc, awareness };
 }

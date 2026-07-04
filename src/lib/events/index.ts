@@ -15,4 +15,7 @@ export type {
   DuplicateConfirmedPayload,
   DuplicateRejectedPayload,
   RecomputeFreshnessPayload,
+  VerifyAnswerPayload,
+  AnalyzeCodeSmellsPayload,
+  LlmSmellValidationPayload,
 } from "./types";

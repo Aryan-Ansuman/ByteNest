@@ -4,6 +4,7 @@ import { Query } from "node-appwrite";
 import QuestionsClient from "./QuestionsClient";
 import type { Question } from "./QuestionsClient";
 import { deletedAuthor, getAuthorsById } from "@/lib/authors";
+import { getTopSystemTags } from "@/lib/smells/top-tags-cache";
 export const dynamic = "force-dynamic";
 
 const FILTERS = ["Newest", "Active", "Most Voted", "Unanswered"] as const;
@@ -14,6 +15,7 @@ type QuestionsSearchParams = {
     cursor?: string;
     direction?: string;
     tag?: string | string[];
+    systemTag?: string;
     search?: string;
     filter?: string;
 };
@@ -35,6 +37,7 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
     const direction = searchParams.direction === "before" ? "before" : "after";
     const requestedPage = Math.max(1, Number.parseInt(searchParams.page ?? "1", 10) || 1);
     const currentPage = cursor ? requestedPage : 1;
+    const systemTag = searchParams.systemTag?.trim() || undefined;
 
     const queries: string[] = [Query.limit(limit)];
 
@@ -46,6 +49,7 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
     // Separate contains clauses are ANDed by Appwrite. Passing the whole array
     // to one contains query matches any tag, which is not a true multi-tag filter.
     tags.forEach((tag) => queries.push(Query.contains("tags", tag)));
+    if (systemTag) queries.push(Query.contains("systemTags", systemTag));
     if (search) {
         queries.push(
             Query.or([Query.search("title", search), Query.search("content", search)])
@@ -58,8 +62,9 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
     const questions = await databases.listDocuments(db, questionCollection, queries);
     const questionIds = questions.documents.map((question) => question.$id);
 
-    const [authorById] = await Promise.all([
+    const [authorById, topSystemTags] = await Promise.all([
         getAuthorsById(questions.documents.map((question) => question.authorId as string)),
+        getTopSystemTags(),
     ]);
 
     const enriched: Question[] = questions.documents.map((question) => {
@@ -70,6 +75,7 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
             title: String(question.title),
             content: String(question.content),
             tags: ((question.tags as string[]) ?? []).filter(Boolean),
+            systemTags: ((question.systemTags as string[]) ?? []).filter(Boolean),
             $createdAt: question.$createdAt,
             $updatedAt: question.$updatedAt,
             activityAt: String(question.activityAt || question.$updatedAt),
@@ -97,6 +103,8 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
             rangeEnd={Math.max(0, rangeEnd)}
             previousCursor={currentPage > 1 ? firstQuestionId : undefined}
             nextCursor={rangeEnd < questions.total ? lastQuestionId : undefined}
+            topSystemTags={topSystemTags}
+            activeSystemTag={systemTag}
         />
     );
 }

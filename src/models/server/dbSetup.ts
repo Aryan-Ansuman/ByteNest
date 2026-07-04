@@ -32,7 +32,9 @@ import createFreshnessNotificationsCollection from "./freshness-notifications.co
 import createFreshnessSnapshotsCollection from "./freshness-snapshots.collection";
 import createNotificationsCollection from "./notifications.collection";
 import { databases } from "./config";
-import { freshnessNotificationsCollection, freshnessSnapshotsCollection, notificationsCollection } from "../name";
+import { freshnessNotificationsCollection, freshnessSnapshotsCollection, notificationsCollection, smellFeedbackCollection, smellAccuracySnapshotsCollection } from "../name";
+import createSmellFeedbackCollection from "./smell-feedback.collection";
+import createSmellAccuracySnapshotsCollection from "./smell-accuracy-snapshots.collection";
 
 export default async function getOrCreateDB(){
   try {
@@ -98,6 +100,22 @@ export default async function getOrCreateDB(){
       console.log(`Creating collection ${notificationsCollection}`);
       await createNotificationsCollection();
     }
+
+    // N+1. Code Smell Auto-Tagger — smell_feedback
+    try {
+      await databases.getCollection(db, smellFeedbackCollection);
+    } catch (error) {
+      console.log(`Creating collection ${smellFeedbackCollection}`);
+      await createSmellFeedbackCollection();
+    }
+
+    // N+2. Code Smell Auto-Tagger — smell_accuracy_snapshots
+    try {
+      await databases.getCollection(db, smellAccuracySnapshotsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${smellAccuracySnapshotsCollection}`);
+      await createSmellAccuracySnapshotsCollection();
+    }
   } catch (error) {
     try {
       await databases.create(db, db)
@@ -141,6 +159,8 @@ export default async function getOrCreateDB(){
         createFreshnessNotificationsCollection(),
         createFreshnessSnapshotsCollection(),
         createNotificationsCollection(),
+        createSmellFeedbackCollection(),
+        createSmellAccuracySnapshotsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

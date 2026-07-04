@@ -13,36 +13,22 @@ export function useTypingIndicator(roomId: string) {
     const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentMember = useRoomStore.getState().currentMember;
 
-    const startTyping = useCallback(async () => {
-        if (!currentMember) return;
-
-        // Reset the clear timer
+    const stopTyping = useCallback(async () => {
         if (clearTimer.current) clearTimeout(clearTimer.current);
-
-        clearTimer.current = setTimeout(async () => {
-            await stopTyping();
-        }, CLEAR_DELAY);
-
-        // If doc exists, just update it (touch $updatedAt)
-        if (typingDocId.current) {
-            try {
-                await databases.updateDocument(
-                    db,
-                    typingIndicatorsCollection,
-                    typingDocId.current,
-                    { displayName: currentMember.displayName }
-                );
-            } catch {
-                typingDocId.current = null;
-                await createTypingDoc();
-            }
-            return;
+        if (!typingDocId.current) return;
+        try {
+            await databases.deleteDocument(
+                db,
+                typingIndicatorsCollection,
+                typingDocId.current
+            );
+            typingDocId.current = null;
+        } catch {
+            // best effort
         }
+    }, []);
 
-        await createTypingDoc();
-    }, [roomId, currentMember]);
-
-    async function createTypingDoc() {
+    const createTypingDoc = useCallback(async () => {
         if (!currentMember) return;
         try {
             // Try to find existing doc first (unique index: roomId + userId)
@@ -80,22 +66,36 @@ export function useTypingIndicator(roomId: string) {
         } catch {
             // best effort
         }
-    }
+    }, [roomId, currentMember]);
 
-    const stopTyping = useCallback(async () => {
+    const startTyping = useCallback(async () => {
+        if (!currentMember) return;
+
+        // Reset the clear timer
         if (clearTimer.current) clearTimeout(clearTimer.current);
-        if (!typingDocId.current) return;
-        try {
-            await databases.deleteDocument(
-                db,
-                typingIndicatorsCollection,
-                typingDocId.current
-            );
-            typingDocId.current = null;
-        } catch {
-            // best effort
+
+        clearTimer.current = setTimeout(async () => {
+            await stopTyping();
+        }, CLEAR_DELAY);
+
+        // If doc exists, just update it (touch $updatedAt)
+        if (typingDocId.current) {
+            try {
+                await databases.updateDocument(
+                    db,
+                    typingIndicatorsCollection,
+                    typingDocId.current,
+                    { displayName: currentMember.displayName }
+                );
+            } catch {
+                typingDocId.current = null;
+                await createTypingDoc();
+            }
+            return;
         }
-    }, []);
+
+        await createTypingDoc();
+    }, [currentMember, stopTyping, createTypingDoc]);
 
     return { startTyping, stopTyping };
 }

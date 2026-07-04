@@ -42,7 +42,16 @@ export async function publishEvent<T extends EventType>(
     processedAt: null,
   });
 
-  return deserialize(doc);
+  const queuedEvent = deserialize(doc);
+
+  // Auto-process locally without needing to poll
+  if (process.env.NODE_ENV === "development") {
+    import("./dispatcher")
+      .then(({ dispatchEvent }) => dispatchEvent(queuedEvent))
+      .catch((err) => console.error("[eventQueue] Local dispatch failed:", err));
+  }
+
+  return queuedEvent;
 }
 
 // ─── Poll ─────────────────────────────────────────────────────────────────────

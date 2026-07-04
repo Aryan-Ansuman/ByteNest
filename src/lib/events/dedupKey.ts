@@ -40,6 +40,13 @@ function extractPrimaryFields<T extends EventType>(
     // must NOT coalesce across separate triggers the way other events do.
     RecomputeFreshness:    ["answerId", "triggeredAtMs"],
     VerifyAnswer:          ["answerId"],
+    // contentHash included deliberately — same reasoning as
+    // EmbeddingRequested directly above. Two edits to the same question
+    // within the 1-hour dedup window that each genuinely change the code
+    // must each get their own analysis; only a truly duplicate trigger for
+    // the SAME content should coalesce.
+    AnalyzeCodeSmells:     ["questionId", "contentHash"],
+    LlmSmellValidation:    ["questionId", "contentHash"],
   };
 
   const fields = fieldMap[eventType];

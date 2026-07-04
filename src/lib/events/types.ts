@@ -1,5 +1,16 @@
 // ─── Event payloads ───────────────────────────────────────────────────────────
 
+export type AnalyzeCodeSmellsPayload = {
+  questionId: string;
+  contentHash: string; // mirrors EmbeddingRequestedPayload's own pattern — dedup key input
+};
+
+export type LlmSmellValidationPayload = {
+  questionId: string;
+  contentHash: string;
+  pendingSmells: Array<{ smell: string; confidence: "medium" | "low"; triggeredBy: string; lineNumbers: number[]; snippet: string }>;
+  titleContext: string;
+};
 export type QuestionDraftUpdatedPayload = {
   sessionId: string;
   draftTitle: string;
@@ -103,7 +114,9 @@ export type EventType =
   | "DuplicateConfirmed"
   | "DuplicateRejected"
   | "RecomputeFreshness"
-  | "VerifyAnswer";
+  | "VerifyAnswer"
+  | "AnalyzeCodeSmells"
+  | "LlmSmellValidation";
 
 export type EventPayloadMap = {
   QuestionDraftUpdated: QuestionDraftUpdatedPayload;
@@ -116,6 +129,8 @@ export type EventPayloadMap = {
   DuplicateRejected: DuplicateRejectedPayload;
   RecomputeFreshness: RecomputeFreshnessPayload;
   VerifyAnswer: VerifyAnswerPayload;
+  AnalyzeCodeSmells: AnalyzeCodeSmellsPayload;
+  LlmSmellValidation: LlmSmellValidationPayload;
 };
 
 export type TypedEvent<T extends EventType = EventType> = {

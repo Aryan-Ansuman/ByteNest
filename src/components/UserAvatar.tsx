@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 interface UserAvatarProps {
     name: string;
@@ -51,14 +52,17 @@ export default function UserAvatar({ name, size = "md", className, src }: UserAv
 
     if (src) {
         return (
-            <img
+            <Image
                 src={src}
                 alt={name}
+                width={64}
+                height={64}
                 className={cn(
                     "shrink-0 rounded-xl border border-white/5 object-cover",
                     sizeClass,
                     className
                 )}
+                unoptimized
                 onError={(e) => {
                     // If image fails, show initials fallback by hiding img
                     (e.currentTarget as HTMLImageElement).style.display = "none";

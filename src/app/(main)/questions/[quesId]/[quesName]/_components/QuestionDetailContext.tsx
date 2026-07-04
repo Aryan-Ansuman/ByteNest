@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuthStore } from "@/store/Auth";
-import type { VersionContextValue } from "./VersionContextEditor";
+import { client } from "@/models/client/config";
+import { db, questionCollection } from "@/models/name";
+import type { VersionContextValue as SubmitAnswerVersionContext } from "./VersionContextEditor";
 
 export type VoteStatus = "upvoted" | "downvoted";
 export type AnswerSort = "Oldest" | "Active" | "Votes" | "Freshness";
@@ -52,6 +54,10 @@ export interface QuestionDocument extends AppDocument {
     attachmentId?: string;
     // ─── Test-Verified Answers ──────────────────────────────────────
     hasTestSuite?: boolean;
+    // ─── Code Smell Auto-Tagger — Phase 6 ────────────────────────────
+    systemTags?: string[] | null;
+    smellAnalysisStatus?: "pending" | "processing" | "complete" | "failed" | "skipped" | null;
+    smellEvidence?: string | null;
 }
 
 export type VerificationStatus =
@@ -209,8 +215,8 @@ interface QuestionDetailContextValue {
     pendingAcceptOverride: { answerId: string } | null;
     confirmAcceptOverride: () => void;
     cancelAcceptOverride: () => void;
-    submitAnswer: (content: string, versionContext?: VersionContextValue) => Promise<boolean>;
-    updateAnswerVersionContext: (answerId: string, patch: VersionContextValue) => Promise<boolean>;
+    submitAnswer: (content: string, versionContext?: SubmitAnswerVersionContext) => Promise<boolean>;
+    updateAnswerVersionContext: (answerId: string, patch: SubmitAnswerVersionContext) => Promise<boolean>;
     /** Applies a local-only patch to one answer's freshness fields — used by the staleness-report and "still valid" UI to reflect server responses without a full refetch. */
     patchAnswerFreshness: (answerId: string, patch: Partial<AnswerDoc>) => void;
     deleteAnswer: (answerId: string) => Promise<boolean>;
@@ -269,7 +275,7 @@ interface CommentMutationResponse {
 const QuestionDetailContext = React.createContext<QuestionDetailContextValue | null>(null);
 
 export function QuestionDetailProvider({
-    question,
+    question: initialQuestion,
     author,
     currentUser,
     answers: initialAnswers,
@@ -295,6 +301,8 @@ export function QuestionDetailProvider({
     const userPrefs = useAuthStore((s) => s.user?.prefs);
     const updateAnswerSortStore = useAuthStore((s) => s.updateAnswerSort);
     
+    const [question, setQuestion] = React.useState<QuestionDocument>(initialQuestion);
+    
     const [answerSort, setAnswerSortState] = React.useState<AnswerSort>("Votes");
     const [paginationOverride, setPaginationOverride] =
         React.useState<Partial<AnswerPaginationState> | null>(answerPagination ?? null);
@@ -319,6 +327,16 @@ export function QuestionDetailProvider({
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
     const [acceptingAnswerId, setAcceptingAnswerId] = React.useState<string | null>(null);
     const [pendingAcceptOverride, setPendingAcceptOverride] = React.useState<{ answerId: string } | null>(null);
+
+    React.useEffect(() => {
+        const channel = `databases.${db}.collections.${questionCollection}.documents.${question.$id}`;
+        const unsubscribe = client.subscribe(channel, (response) => {
+            if (response.events.some((e) => e.includes(".update"))) {
+                setQuestion(response.payload as QuestionDocument);
+            }
+        });
+        return () => unsubscribe();
+    }, [question.$id]);
 
     const pendingVoteLookups = React.useRef<Set<string>>(new Set());
     const pendingVoteMutations = React.useRef<Set<string>>(new Set());
@@ -842,7 +860,7 @@ export function QuestionDetailProvider({
     // ── Answer CRUD ───────────────────────────────────────────────────────
 
     const submitAnswer = React.useCallback(
-        async (content: string, versionContext?: VersionContextValue) => {
+        async (content: string, versionContext?: SubmitAnswerVersionContext) => {
             if (isDeletingQuestion) {
                 toast("This question is being deleted");
                 return false;
@@ -912,7 +930,7 @@ export function QuestionDetailProvider({
     );
 
     const updateAnswerVersionContext = React.useCallback(
-        async (answerId: string, patch: VersionContextValue) => {
+        async (answerId: string, patch: SubmitAnswerVersionContext) => {
             const previous = answers.documents.find((a) => a.$id === answerId);
             if (!previous) return false;
 
@@ -1565,7 +1583,7 @@ function createOptimisticAnswer(
     questionId: string,
     user: CurrentUser,
     id: string,
-    versionContext?: VersionContextValue
+    versionContext?: SubmitAnswerVersionContext
 ): AnswerDoc {
     const now = new Date().toISOString();
     return {

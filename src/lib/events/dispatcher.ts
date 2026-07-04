@@ -7,6 +7,16 @@ import { processDuplicateConfirmed } from "./processors/DuplicateConfirmedProces
 import { processDuplicateRejected } from "./processors/DuplicateRejectedProcessor";
 import { processRecomputeFreshness } from "./processors/RecomputeFreshnessProcessor";
 import { processVerifyAnswer } from "./processors/VerifyAnswerProcessor";
+import { processAnalyzeCodeSmells } from "./processors/AnalyzeCodeSmellsProcessor";
+import { processLlmSmellValidation } from "./processors/LlmSmellValidationProcessor";
+import { db, questionCollection } from "@/models/name";
+import { databases } from "@/models/server/config";
+
+// Must match eventQueue.ts's own markFailed() threshold — that function
+// decides "pending" (retry) vs "failed" (terminal) at retryCount >= 5.
+// Duplicated here, not imported, because eventQueue.ts doesn't export it as
+// a named constant; if that threshold ever changes, this needs to change too.
+const MAX_RETRIES = 5;
 
 /**
  * Dispatches a queued event to its processor.
@@ -24,7 +34,32 @@ export async function dispatchEvent(event: QueuedEvent): Promise<void> {
     await markComplete(event.$id);
   } catch (err) {
     console.error(`[dispatcher] failed to process ${event.eventType}:`, err);
-    await markFailed(event.$id, event.retryCount + 1);
+    const nextRetryCount = event.retryCount + 1;
+
+    // Code Smell Auto-Tagger's exhausted-retry side effect: the generic
+    // event_queue infra only tracks the EVENT's terminal state, not any
+    // application-level consequence of giving up. AnalyzeCodeSmells is the
+    // one event type here where "we gave up" needs to be visible on the
+    // question document itself (smellAnalysisStatus: "failed"), not just
+    // buried in a terminally-failed queue row nobody's looking at.
+    if (event.eventType === "AnalyzeCodeSmells" && nextRetryCount >= MAX_RETRIES) {
+      await markQuestionSmellAnalysisFailed(event.payload);
+    }
+
+    await markFailed(event.$id, nextRetryCount);
+  }
+}
+
+async function markQuestionSmellAnalysisFailed(rawPayload: string): Promise<void> {
+  try {
+    const { questionId } = JSON.parse(rawPayload) as { questionId?: string };
+    if (!questionId) return;
+    await databases.updateDocument(db, questionCollection, questionId, {
+      smellAnalysisStatus: "failed",
+      smellAnalysisAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("[dispatcher] Failed to mark question smellAnalysisStatus as failed:", err);
   }
 }
 
@@ -75,6 +110,16 @@ async function route(eventType: EventType, payload: unknown): Promise<void> {
     case "VerifyAnswer":
       return processVerifyAnswer(
         payload as EventPayloadMap["VerifyAnswer"]
+      );
+
+    case "AnalyzeCodeSmells":
+      return processAnalyzeCodeSmells(
+        payload as EventPayloadMap["AnalyzeCodeSmells"]
+      );
+
+    case "LlmSmellValidation":
+      return processLlmSmellValidation(
+        payload as EventPayloadMap["LlmSmellValidation"]
       );
 
     default: {

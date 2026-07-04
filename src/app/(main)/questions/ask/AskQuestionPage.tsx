@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -578,9 +579,11 @@ export default function AskQuestionPage() {
                                         <div className="mt-5">
                                             {imagePreview ? (
                                                 <div className="relative overflow-hidden rounded-xl border border-white/5">
-                                                    <img
+                                                    <Image
                                                         src={imagePreview}
                                                         alt="Preview"
+                                                        width={500}
+                                                        height={256}
                                                         className="max-h-64 w-full object-contain bg-black/40"
                                                     />
                                                     <button
@@ -670,9 +673,11 @@ export default function AskQuestionPage() {
                                             {/* Image preview */}
                                             {imagePreview && (
                                                 <PreviewBlock label="Attachment">
-                                                    <img
+                                                    <Image
                                                         src={imagePreview}
                                                         alt="Attachment"
+                                                        width={300}
+                                                        height={160}
                                                         className="max-h-40 rounded-lg object-contain"
                                                     />
                                                 </PreviewBlock>

@@ -177,5 +177,17 @@ export function useRoomRealtime(roomId: string) {
             typingUsersRef.current.clear();
             setTypingUsers([]);
         };
-    }, [roomId, router]);
+    }, [
+        roomId,
+        router,
+        addMessage,
+        updateMessage,
+        deleteMessage,
+        replaceTempMessage,
+        upsertMember,
+        removeMember,
+        updateRoom,
+        setCodeSession,
+        setTypingUsers,
+    ]);
 }

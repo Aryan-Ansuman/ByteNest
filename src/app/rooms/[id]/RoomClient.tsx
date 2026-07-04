@@ -131,7 +131,7 @@ export default function RoomClient({ roomId, inviteToken }: Props) {
             window.addEventListener("mousemove", onMove);
             window.addEventListener("mouseup", onUp);
         },
-        [chatWidth, membersWidth]
+        [chatWidth, membersWidth, filesWidth]
     );
 
     function togglePanel(id: PanelId) {

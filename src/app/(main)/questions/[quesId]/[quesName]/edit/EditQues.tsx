@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -567,9 +568,11 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                             <div className="absolute left-2 top-2 z-10 rounded-lg border border-[#a7c8b3]/30 bg-[#a7c8b3]/20 px-2 py-1 text-[10px] font-medium text-[#a7c8b3]">
                                                 New image
                                             </div>
-                                            <img
+                                            <Image
                                                 src={newImagePreview}
                                                 alt="New attachment"
+                                                width={500}
+                                                height={256}
                                                 className="max-h-56 w-full bg-black/40 object-contain"
                                             />
                                             <button
@@ -597,9 +600,11 @@ export default function EditQues({ question, existingAttachmentUrl }: Props) {
                                             <div className="absolute left-2 top-2 z-10 rounded-lg border border-white/20 bg-black/60 px-2 py-1 text-[10px] font-medium text-zinc-400 backdrop-blur-sm">
                                                 {removeExistingImage ? "Will be removed" : "Current image"}
                                             </div>
-                                            <img
+                                            <Image
                                                 src={existingAttachmentUrl}
                                                 alt="Current attachment"
+                                                width={500}
+                                                height={256}
                                                 className="max-h-56 w-full bg-black/40 object-contain"
                                             />
                                             <div className="flex items-center gap-2 border-t border-white/5 bg-black/30 px-3 py-2">

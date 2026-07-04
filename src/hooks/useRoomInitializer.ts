@@ -111,5 +111,5 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
             useRoomStore.getState().resetStore();
             initializedRef.current = false;
         };
-    }, [roomId, inviteToken]);
+    }, [roomId, inviteToken, store]);
 }

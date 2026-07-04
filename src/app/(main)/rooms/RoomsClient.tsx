@@ -5,6 +5,7 @@ import { DiscussionRoom, RoomMessage, RoomMember } from "@/types/rooms";
 import { client } from "@/models/client/config";
 import { db, discussionRoomsCollection, roomMembersCollection } from "@/models/name";
 import Link from "next/link";
+import Image from "next/image";
 import { RelativeTime } from "@/components/RelativeTime";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -653,17 +654,18 @@ function getRoomIcon(tags: string[] | undefined, name: string) {
     if (skill) {
         return (
             <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                    src={`https://skillicons.dev/icons?i=${skill}&theme=dark`} 
-                    alt={primary} 
-                    className="size-6 rounded-sm"
-                    onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        if (e.currentTarget.nextElementSibling) {
-                            (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
-                        }
-                    }}
+                <Image
+                  src={`https://skillicons.dev/icons?i=${skill}&theme=dark`}
+                  alt={primary}
+                  width={24}
+                  height={24}
+                  className="size-6 rounded-sm"
+                  onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      if (e.currentTarget.nextElementSibling) {
+                          (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'block';
+                      }
+                  }}
                 />
                 <div style={{ display: 'none' }}>
                     <Terminal size={20} strokeWidth={1.5} />

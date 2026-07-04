@@ -95,6 +95,17 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             // Pass the denormalized total so the client shows a number immediately
             // without waiting for the vote API response.
             totalVotes: Number(question.totalVotes ?? 0),
+            // ─── Code Smell Auto-Tagger — Phase 6 ────────────────────────
+            systemTags: Array.isArray(question.systemTags) ? (question.systemTags as string[]) : null,
+            smellAnalysisStatus:
+                (question.smellAnalysisStatus as
+                    | "pending"
+                    | "processing"
+                    | "complete"
+                    | "failed"
+                    | "skipped"
+                    | undefined) ?? null,
+            smellEvidence: (question.smellEvidence as string | undefined) ?? null,
         },
         author: {
             $id: author.$id,

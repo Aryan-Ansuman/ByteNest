@@ -1,3 +1,5 @@
+import { publishEvent } from "@/lib/events";
+import { hashContent } from "@/lib/smells/hash-content";
 import {
     questionCollection,
     db,
@@ -160,6 +162,11 @@ export async function POST(request: NextRequest) {
             tags,
             totalAnswers: 0,
             activityAt: new Date().toISOString(),
+            // Code Smell Auto-Tagger — set unconditionally; the worker
+            // decides "skipped" vs. an actual analysis once it looks at the
+            // content. Doing it in the same create call rather than a
+            // follow-up updateDocument avoids a second write.
+            smellAnalysisStatus: "pending",
             hasTestSuite: Boolean(hasTestSuite),
             ...(hasTestSuite && testCode && testLanguage && testFramework
                 ? { testCode, testLanguage, testFramework }
@@ -186,6 +193,14 @@ export async function POST(request: NextRequest) {
                 sourceDocumentId: response.$id,
             });
         }
+
+        // ── Code Smell Auto-Tagger — fire-and-forget, same style as
+        // triggerSkillRecalculation above. Route returns immediately;
+        // analysis happens out of band via the event queue worker.
+        const contentHash = hashContent(sanitizedContent);
+        publishEvent("AnalyzeCodeSmells", { questionId: response.$id, contentHash }).catch((err) => {
+            console.error(`[question/POST] Failed to publish AnalyzeCodeSmells event for ${response.$id}:`, err);
+        });
 
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {
@@ -266,6 +281,17 @@ export async function PATCH(request: NextRequest) {
             }
         }
 
+        // ── Code Smell Auto-Tagger — Decision 5: only requeue analysis if
+        // the content actually changed. Compared before the write below so
+        // docData can carry the reset status in the SAME updateDocument call.
+        const newContentHash = hashContent(sanitizedContent);
+        const previousHash = (question.smellContentHash as string | null) ?? null;
+        const contentChanged = newContentHash !== previousHash;
+
+        if (contentChanged) {
+            docData.smellAnalysisStatus = "pending";
+        }
+
         const response = await databases.updateDocument(
             db,
             questionCollection,
@@ -294,6 +320,13 @@ export async function PATCH(request: NextRequest) {
                 triggerType:      "question_posted",
                 priority:         "normal",
                 sourceDocumentId: questionId,
+            });
+        }
+
+        // ── Code Smell Auto-Tagger — requeue only on real content change.
+        if (contentChanged) {
+            publishEvent("AnalyzeCodeSmells", { questionId, contentHash: newContentHash }).catch((err) => {
+                console.error(`[question/PATCH] Failed to publish AnalyzeCodeSmells event for ${questionId}:`, err);
             });
         }
 

@@ -7,6 +7,7 @@ import {
     ArrowDown,
     ArrowUp,
     Bookmark,
+    Bot,
     Flag,
     MoreHorizontal,
     Trash2,
@@ -15,6 +16,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
+import { getSmellDefinition } from "@/lib/smells/catalog";
 import {
     formatCount,
     useQuestionDetail,
@@ -24,6 +26,7 @@ import MarkdownPreview from "@/components/MarkdownPreview";
 import { Avatar, ConfirmDialog } from "./shared";
 import { useAuthStore } from "@/store/Auth";
 import ShareMenu from "./ShareMenu";
+import SmellDetailPanel from "./SmellDetailPanel";
 
 
 
@@ -155,6 +158,21 @@ export default function QuestionHero() {
     const votedStatus = getVoteStatus("question", question.$id);
     const questionVotePending = isVotePending("question", question.$id);
 
+    const [smellPanelOpen, setSmellPanelOpen] = React.useState(false);
+    const [focusedSmellId, setFocusedSmellId] = React.useState<string | null>(null);
+
+    const systemTags = React.useMemo(
+        () => (Array.isArray(question.systemTags) ? question.systemTags.filter(Boolean) : []),
+        [question.systemTags]
+    );
+    const smellStatus = question.smellAnalysisStatus ?? null;
+    const isAnalyzing = smellStatus === "pending" || smellStatus === "processing";
+
+    function openSmellPanel(smellId: string) {
+        setFocusedSmellId(smellId);
+        setSmellPanelOpen(true);
+    }
+
     const handleReport = () => {
         toast("Report submitted. Thanks for keeping ByteNest safe.");
     };
@@ -265,7 +283,7 @@ export default function QuestionHero() {
                         </div>
 
                         <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                                 {questionTags.map((tag) => (
                                     <Link
                                         key={tag}
@@ -275,6 +293,21 @@ export default function QuestionHero() {
                                         {tag}
                                     </Link>
                                 ))}
+
+                                {(systemTags.length > 0 || isAnalyzing) && questionTags.length > 0 && (
+                                    <span className="mx-0.5 h-4 w-px bg-white/[0.08]" aria-hidden="true" />
+                                )}
+
+                                {systemTags.map((tag) => (
+                                    <SystemTagBadge key={tag} smellId={tag} onClick={() => openSmellPanel(tag)} />
+                                ))}
+
+                                {isAnalyzing && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[13px] font-medium text-zinc-500">
+                                        <span className="size-1.5 animate-pulse rounded-full bg-zinc-400" />
+                                        Analyzing…
+                                    </span>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -302,6 +335,16 @@ export default function QuestionHero() {
                     >
                         <MarkdownPreview source={String(question.content ?? "")} />
                     </div>
+
+                    {systemTags.length > 0 && (
+                        <SmellDetailPanel
+                            systemTags={systemTags}
+                            smellEvidence={question.smellEvidence}
+                            open={smellPanelOpen}
+                            onOpenChange={setSmellPanelOpen}
+                            focusedSmellId={focusedSmellId}
+                        />
+                    )}
 
                     {attachmentUrl ? (
                         <div className="relative mt-6 h-[400px] max-h-[400px] overflow-hidden rounded-xl border border-white/[0.08] bg-black/30 p-2">
@@ -361,4 +404,25 @@ function formatQuestionVoteStatusForLabel(status: string | null | undefined) {
     if (status === "upvoted") return "You have upvoted this question";
     if (status === "downvoted") return "You have downvoted this question";
     return "You have not voted on this question";
+}
+
+function SystemTagBadge({ smellId, onClick }: { smellId: string; onClick: () => void }) {
+    const catalogEntry = getSmellDefinition(smellId);
+    const displayName =
+        catalogEntry?.displayName ??
+        smellId
+            .split("-")
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+
+    return (
+        <button
+            onClick={onClick}
+            title="System Detected — click for details"
+            className="group inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-3 py-1.5 text-[13px] font-medium text-amber-300/90 transition-colors hover:bg-amber-500/[0.14] hover:text-amber-200"
+        >
+            <Bot className="size-3.5 shrink-0" />
+            {displayName}
+        </button>
+    );
 }

@@ -17,7 +17,9 @@ import {
     Tag,
     ThumbsUp,
     X,
+    Bug,
 } from "lucide-react";
+import { getSmellDefinition } from "@/lib/smells/catalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ export interface Question {
     title: string;
     content: string;
     tags: string[];
+    systemTags: string[];
     $createdAt: string;
     $updatedAt: string;
     activityAt: string;
@@ -55,6 +58,8 @@ interface Props {
     rangeEnd: number;
     previousCursor?: string;
     nextCursor?: string;
+    topSystemTags: Array<{ smellId: string; count: number }>;
+    activeSystemTag?: string;
 }
 
 const filters = [
@@ -107,6 +112,8 @@ export default function QuestionsClient({
     rangeEnd,
     previousCursor,
     nextCursor,
+    topSystemTags,
+    activeSystemTag,
 }: Props) {
     const router = useRouter();
     const pathname = usePathname();
@@ -168,6 +175,13 @@ export default function QuestionsClient({
                 filter: filter === "Newest" ? undefined : filter,
                 ...RESET_PAGINATION,
             });
+        },
+        [updateParams]
+    );
+
+    const setSystemTagFilter = React.useCallback(
+        (smellId: string | undefined) => {
+            updateParams({ systemTag: smellId, ...RESET_PAGINATION });
         },
         [updateParams]
     );
@@ -311,6 +325,36 @@ export default function QuestionsClient({
                         )}
                     </div>
                 </div>
+
+                {topSystemTags.length > 0 && (
+                    <div className="flex flex-col gap-2 border-t border-white/5 pt-3 xl:flex-row xl:items-center">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                            <Bug className="size-3.5 text-amber-400/70" />
+                            Code Smells
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {topSystemTags.map(({ smellId, count }) => {
+                                const isActive = activeSystemTag === smellId;
+                                const displayName = getSmellDefinition(smellId)?.displayName ?? smellId;
+                                return (
+                                    <button
+                                        key={smellId}
+                                        onClick={() => setSystemTagFilter(isActive ? undefined : smellId)}
+                                        className={cn(
+                                            "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                                            isActive
+                                                ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                                                : "border-white/5 bg-black/15 text-zinc-500 hover:border-amber-400/20 hover:text-amber-300/80"
+                                        )}
+                                    >
+                                        {displayName}
+                                        <span className="opacity-60">{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </section>
 
             <section className="relative">
@@ -449,6 +493,15 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                     {hiddenTagCount > 0 && (
                         <span className="rounded-md border border-white/5 px-2 py-0.5 text-[11px] text-zinc-500" title={`${hiddenTagCount} more tags`}>
                             +{hiddenTagCount}
+                        </span>
+                    )}
+                    {question.systemTags.length > 0 && (
+                        <span
+                            title={`System detected: ${question.systemTags.join(", ")}`}
+                            className="inline-flex items-center gap-1 text-xs text-amber-400/80 ml-2"
+                        >
+                            <span className="size-1.5 rounded-full bg-amber-400" />
+                            {question.systemTags.length}
                         </span>
                     )}
                 </div>

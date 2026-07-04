@@ -118,3 +118,11 @@ export const NOTIFICATION_TYPES = ["answer_outdated"] as const;
 
 export { TECH_ECOSYSTEMS, FRESHNESS_LABELS } from "@/lib/decay/types";
 export type { TechEcosystem, FreshnessLabel } from "@/lib/decay/types";
+
+// Phase 5 — Code Smell Auto-Tagger
+export { SMELL_ANALYSIS_STATUSES, SMELL_CATALOG, SMELL_IDS } from "@/lib/smells/catalog";
+export type { SmellAnalysisStatus, SmellId } from "@/lib/smells/catalog";
+
+// Phase 7 - Community Feedback Loop
+export const smellFeedbackCollection = "smell_feedback";
+export const smellAccuracySnapshotsCollection = "smell_accuracy_snapshots";
