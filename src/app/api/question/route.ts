@@ -7,6 +7,7 @@ import {
     answerCollection,
     voteCollection,
     commentCollection,
+    prQuestionMetadataCollection,
 } from "@/models/name";
 import { databases, storage, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
@@ -132,11 +133,34 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { title, content, authorId, tags, attachmentId, hasTestSuite, testCode, testLanguage, testFramework } = await request.json();
+        const {
+            title,
+            content,
+            authorId,
+            tags,
+            attachmentId,
+            hasTestSuite,
+            testCode,
+            testLanguage,
+            testFramework,
+            // ─── PR-Linked Q&A (Phase 3) ──────────────────────────────
+            questionType,
+            prUrl,
+            prRepoOwner,
+            prRepoName,
+            prNumber,
+            prTitle,
+            prStatus,
+            prBaseRef,
+            prHeadRef,
+            prAuthorGithubHandle,
+        } = await request.json();
 
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
         }
+
+        const isPrLinked = questionType === "pr_linked";
 
         // Sanitize user-supplied markdown content before persisting
         const sanitizedTitle   = sanitizeTitleSource(title ?? "").slice(0, 100);
@@ -148,11 +172,23 @@ export async function POST(request: NextRequest) {
                 { status: 400, headers: rlHeaders }
             );
         }
-        if (sanitizedContent.length < 30) {
+        // Phase 3 — relaxed for PR questions: the diff is the main content,
+        // not the user's markdown, so 10 chars is enough for "what are you asking".
+        const MIN_BODY_LENGTH = isPrLinked ? 10 : 30;
+        if (sanitizedContent.length < MIN_BODY_LENGTH) {
             return NextResponse.json(
-                { error: "Body must be at least 30 characters" },
+                { error: `Body must be at least ${MIN_BODY_LENGTH} characters` },
                 { status: 400, headers: rlHeaders }
             );
+        }
+
+        if (isPrLinked) {
+            if (!prUrl || !prRepoOwner || !prRepoName || !prNumber) {
+                return NextResponse.json(
+                    { error: "Missing PR metadata — re-fetch the PR and try again" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
         }
 
         const docData: Record<string, unknown> = {
@@ -171,6 +207,7 @@ export async function POST(request: NextRequest) {
             ...(hasTestSuite && testCode && testLanguage && testFramework
                 ? { testCode, testLanguage, testFramework }
                 : {}),
+            isPr: isPrLinked,
         };
         if (attachmentId) docData.attachmentId = attachmentId;
 
@@ -180,6 +217,35 @@ export async function POST(request: NextRequest) {
             ID.unique(),
             docData
         );
+
+        if (isPrLinked) {
+            // Write PR metadata to sidecar collection (Phase 1 Pivot)
+            try {
+                await databases.createDocument(
+                    db,
+                    prQuestionMetadataCollection,
+                    response.$id,
+                    {
+                        questionId: response.$id,
+                        prUrl,
+                        prRepoOwner,
+                        prRepoName,
+                        prNumber,
+                        prTitle: prTitle ?? null,
+                        prStatus: prStatus ?? "open",
+                        prBaseRef: prBaseRef ?? null,
+                        prHeadRef: prHeadRef ?? null,
+                        prAuthorGithubHandle: prAuthorGithubHandle ?? null,
+                        diffFileId: null, // Fetched asynchronously by FetchPrDiffProcessor
+                    }
+                );
+            } catch (err) {
+                console.error(`[question/POST] Failed to create sidecar metadata for PR question ${response.$id}:`, err);
+                // The main question is already created, so we shouldn't throw 500.
+                // It will be broken/orphaned but the UI will show it gracefully if fields are missing.
+            }
+        }
+
         await revalidateQuestionCaches(response.$id, [sanitizedTitle]);
 
         // ── Step 3.5: Trigger skill recalculation on question posted ──
@@ -201,6 +267,20 @@ export async function POST(request: NextRequest) {
         publishEvent("AnalyzeCodeSmells", { questionId: response.$id, contentHash }).catch((err) => {
             console.error(`[question/POST] Failed to publish AnalyzeCodeSmells event for ${response.$id}:`, err);
         });
+
+        // ── PR-Linked Q&A (Phase 3) — fire-and-forget diff fetch. The
+        // question is already created and returned to the client; the diff
+        // fills in asynchronously via FetchPrDiffProcessor.
+        if (isPrLinked) {
+            publishEvent("FetchPrDiff", {
+                questionId: response.$id,
+                owner: prRepoOwner,
+                repoName: prRepoName,
+                prNumber,
+            }).catch((err) => {
+                console.error(`[question/POST] Failed to publish FetchPrDiff event for ${response.$id}:`, err);
+            });
+        }
 
         return NextResponse.json(response, { status: 201, headers: rlHeaders });
     } catch (error: unknown) {

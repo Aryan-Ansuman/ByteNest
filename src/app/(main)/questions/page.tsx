@@ -7,7 +7,7 @@ import { deletedAuthor, getAuthorsById } from "@/lib/authors";
 import { getTopSystemTags } from "@/lib/smells/top-tags-cache";
 export const dynamic = "force-dynamic";
 
-const FILTERS = ["Newest", "Active", "Most Voted", "Unanswered"] as const;
+const FILTERS = ["Newest", "Active", "Most Voted", "Unanswered", "PR Questions"] as const;
 type QuestionFilter = (typeof FILTERS)[number];
 
 type QuestionsSearchParams = {
@@ -46,6 +46,8 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
     else queries.push(Query.orderDesc("$createdAt"));
 
     if (activeFilter === "Unanswered") queries.push(Query.equal("totalAnswers", 0));
+    // Uses the `isPr` boolean index added in Phase 4 Pivot
+    if (activeFilter === "PR Questions") queries.push(Query.equal("isPr", true));
     // Separate contains clauses are ANDed by Appwrite. Passing the whole array
     // to one contains query matches any tag, which is not a true multi-tag filter.
     tags.forEach((tag) => queries.push(Query.contains("tags", tag)));
@@ -62,13 +64,25 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
     const questions = await databases.listDocuments(db, questionCollection, queries);
     const questionIds = questions.documents.map((question) => question.$id);
 
-    const [authorById, topSystemTags] = await Promise.all([
+    // Fetch authors, system tags, and sidecar PR metadata for the current page
+    const [authorById, topSystemTags, prMetadataList] = await Promise.all([
         getAuthorsById(questions.documents.map((question) => question.authorId as string)),
         getTopSystemTags(),
+        questionIds.length > 0 
+            ? databases.listDocuments(db, "pr_question_metadata", [
+                Query.equal("questionId", questionIds),
+                Query.limit(questionIds.length)
+              ]).catch(() => ({ documents: [] }))
+            : Promise.resolve({ documents: [] })
     ]);
+
+    const prMetaByQuestionId = new Map(
+        prMetadataList.documents.map((meta) => [meta.questionId as string, meta])
+    );
 
     const enriched: Question[] = questions.documents.map((question) => {
         const author = authorById.get(question.authorId as string) ?? deletedAuthor;
+        const prMeta = prMetaByQuestionId.get(question.$id);
         
         return {
             $id: question.$id,
@@ -85,6 +99,9 @@ export default async function Page({ searchParams }: { searchParams: QuestionsSe
             hasAcceptedAnswer: Boolean(question.acceptedAnswerId),
             answerFreshnessIndicator:
                 (question.answerFreshnessIndicator as "fresh" | "outdated" | "none" | undefined) ?? "none",
+            // Map the boolean attribute and sidecar data into the UI expectations
+            questionType: question.isPr ? "pr_linked" : "standard",
+            prStatus: prMeta ? (prMeta.prStatus as "open" | "merged" | "closed") : undefined,
             author,
         };
     });

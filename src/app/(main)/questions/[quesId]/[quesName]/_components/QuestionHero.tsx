@@ -32,7 +32,7 @@ import SmellDetailPanel from "./SmellDetailPanel";
 
 // ─── MoreMenu ─────────────────────────────────────────────────────────────────
 
-function MoreMenu({
+export function MoreMenu({
     isOwner,
     onDelete,
     onReport,
@@ -400,7 +400,7 @@ export default function QuestionHero() {
     );
 }
 
-function formatQuestionVoteStatusForLabel(status: string | null | undefined) {
+export function formatQuestionVoteStatusForLabel(status: string | null | undefined) {
     if (status === "upvoted") return "You have upvoted this question";
     if (status === "downvoted") return "You have downvoted this question";
     return "You have not voted on this question";

@@ -32,6 +32,12 @@ export async function GET(request: NextRequest) {
 
         const hydrated = await Promise.all(
             comments.documents.map(async (comment) => {
+                if (comment.authorId === "system") {
+                    return {
+                        ...comment,
+                        author: { $id: "system", name: "ByteNest", reputation: 0 },
+                    };
+                }
                 const author = await users
                     .get<UserPrefs>(comment.authorId as string)
                     .catch(() => null);

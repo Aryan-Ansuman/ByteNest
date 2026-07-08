@@ -114,7 +114,14 @@ export const techPackageMapCollection = "tech_package_map";
 export const freshnessNotificationsCollection = "freshness_notifications";
 export const freshnessSnapshotsCollection = "freshness_snapshots";
 export const notificationsCollection = "notifications";
-export const NOTIFICATION_TYPES = ["answer_outdated"] as const;
+export const NOTIFICATION_TYPES = [
+    "answer_outdated",
+    // PR-Linked Q&A — Phase 9: fired when a PR question's tracked GitHub PR
+    // changes status (merged/closed/reopened) via the webhook, or when a
+    // general (non-line-anchored) answer is posted on a PR question.
+    "pr_status_changed",
+    "pr_answer_posted",
+] as const;
 
 export { TECH_ECOSYSTEMS, FRESHNESS_LABELS } from "@/lib/decay/types";
 export type { TechEcosystem, FreshnessLabel } from "@/lib/decay/types";
@@ -126,3 +133,29 @@ export type { SmellAnalysisStatus, SmellId } from "@/lib/smells/catalog";
 // Phase 7 - Community Feedback Loop
 export const smellFeedbackCollection = "smell_feedback";
 export const smellAccuracySnapshotsCollection = "smell_accuracy_snapshots";
+
+// ─── Phase 4 — PR-Linked Q&A ────────────────────────────────────────────────
+// question.collection.ts and answer.collection.ts are extended in place
+// (Decision 2 / Decision 3) — no new collection constants needed for those.
+export const githubWebhookRegistrationsCollection = "github_webhook_registrations";
+export const webhookSecretStateCollection = "webhook_secret_state";
+export const WEBHOOK_SECRET_STATE_DOC_ID = "singleton_secret_state";
+export const processedWebhookEventsCollection = "processed_webhook_events";
+export const prQuestionMetadataCollection = "pr_question_metadata";
+export const prDiffsBucket = "pr_diffs_bucket";
+
+export const QUESTION_TYPES = ["standard", "pr_linked"] as const;
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+export const PR_STATUSES = ["open", "merged", "closed"] as const;
+export type PrStatus = (typeof PR_STATUSES)[number];
+
+export const DIFF_LINE_SIDES = ["left", "right"] as const;
+export type DiffLineSide = (typeof DIFF_LINE_SIDES)[number];
+
+export const WEBHOOK_REGISTRATION_STATUSES = [
+    "registered",
+    "failed_no_permission",
+    "failed_other",
+] as const;
+export type WebhookRegistrationStatus = (typeof WEBHOOK_REGISTRATION_STATUSES)[number];

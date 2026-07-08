@@ -18,6 +18,8 @@ import {
     ThumbsUp,
     X,
     Bug,
+    Github,
+    GitPullRequest,
 } from "lucide-react";
 import { getSmellDefinition } from "@/lib/smells/catalog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,10 @@ export interface Question {
     hasAcceptedAnswer: boolean;
     /** Phase 8 — "fresh" (has fresh/aging answers), "outdated" (all answers decayed), "none" (no answers yet). */
     answerFreshnessIndicator?: "fresh" | "outdated" | "none";
+    // PR-Linked Q&A — Phase 9: undefined/"standard" renders exactly as
+    // before. Only "pr_linked" questions carry a prStatus.
+    questionType?: "standard" | "pr_linked";
+    prStatus?: "open" | "merged" | "closed";
     author: {
         $id: string;
         name: string;
@@ -60,6 +66,8 @@ interface Props {
     nextCursor?: string;
     topSystemTags: Array<{ smellId: string; count: number }>;
     activeSystemTag?: string;
+    // PR-Linked Q&A — Phase 9.
+    prOnly?: boolean;
 }
 
 const filters = [
@@ -67,6 +75,7 @@ const filters = [
     { label: "Active", icon: Activity, description: "recent activity first" },
     { label: "Most Voted", icon: ThumbsUp, description: "highest votes first" },
     { label: "Unanswered", icon: MessageSquareOff, description: "newest unanswered first" },
+    { label: "PR Questions", icon: GitPullRequest, description: "pull requests only" },
 ] as const;
 
 const tagSuggestions = [
@@ -473,6 +482,7 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                     >
                         {question.title}
                     </Link>
+                    {question.questionType === "pr_linked" && <PrBadge prStatus={question.prStatus} />}
                 </div>
 
                 {excerpt && <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">{excerpt}</p>}
@@ -532,6 +542,22 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                 </div>
             </div>
         </article>
+    );
+}
+
+// PR-Linked Q&A — Phase 9: small identifier so PR questions are
+// distinguishable from standard questions at a glance in the list.
+function PrBadge({ prStatus }: { prStatus?: "open" | "merged" | "closed" }) {
+    const statusLabel = prStatus === "merged" ? "Merged" : prStatus === "closed" ? "Closed" : "Open";
+
+    return (
+        <span
+            title={`GitHub PR question — ${statusLabel}`}
+            className="mt-[3px] inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-zinc-400"
+        >
+            <GitPullRequest className="size-3" />
+            {statusLabel}
+        </span>
     );
 }
 
@@ -671,6 +697,8 @@ function EmptyState({
                     ? `No results for “${search}”. Try another search or clear the filters.`
                     : tags.length
                       ? `No questions match ${tagLabel}. You can broaden the filters or start the topic.`
+                      : filter === "PR Questions"
+                        ? "No PR-linked questions yet. Clear the filter to see all questions."
                       : filter === "Unanswered"
                         ? "Every matching question has an answer. Clear the filter to see them all."
                       : "Start the conversation by asking the first question."}
@@ -685,6 +713,12 @@ function EmptyState({
                     <Link href="/questions/ask">
                         <Plus className="size-4" />
                         {tags.length === 1 ? `Ask about ${tags[0]}` : "Ask question"}
+                    </Link>
+                </Button>
+                <Button asChild variant="outline" className="h-11 rounded-xl border-white/5 bg-white/[0.04] px-5 text-zinc-200 hover:bg-white/[0.08]">
+                    <Link href="/questions/ask-pr">
+                        <Github className="size-4" />
+                        Ask PR Question
                     </Link>
                 </Button>
             </div>

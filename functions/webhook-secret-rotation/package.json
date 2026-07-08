@@ -1,0 +1,10 @@
+{
+  "name": "webhook-secret-rotation",
+  "version": "1.0.0",
+  "description": "Monthly rotation of the GitHub webhook secret, pushed to every registered webhook with a 24h dual-secret overlap window",
+  "main": "src/main.js",
+  "type": "module",
+  "dependencies": {
+    "node-appwrite": "^13.0.0"
+  }
+}

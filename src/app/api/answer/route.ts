@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { questionId, answer, authorId, solutionCode, solutionLanguage } = await request.json();
+        const { questionId, answer, authorId, solutionCode, solutionLanguage, diffLineRef, diffLineContext } = await request.json();
 
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
@@ -109,6 +109,13 @@ export async function POST(request: NextRequest) {
             // `content`. Both nullable: most answers won't carry one.
             ...(typeof solutionCode === "string" && solutionCode.trim().length > 0
                 ? { solutionCode, solutionLanguage: solutionLanguage ?? null, verificationStatus: "unverified" }
+                : {}),
+            // ─── PR-Linked Q&A (Phase 6) ────────────────────────────────
+            // Both nullable — non-null only when the answerer clicked a
+            // specific diff line (Phase 0, Decision 3). diffLineRef is
+            // already JSON-encoded by the client (PrQuestionView).
+            ...(typeof diffLineRef === "string" && diffLineRef.length > 0
+                ? { diffLineRef, diffLineContext: typeof diffLineContext === "string" ? diffLineContext : null }
                 : {}),
         });
 

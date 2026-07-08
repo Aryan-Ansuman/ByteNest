@@ -35,6 +35,11 @@ import { databases } from "./config";
 import { freshnessNotificationsCollection, freshnessSnapshotsCollection, notificationsCollection, smellFeedbackCollection, smellAccuracySnapshotsCollection } from "../name";
 import createSmellFeedbackCollection from "./smell-feedback.collection";
 import createSmellAccuracySnapshotsCollection from "./smell-accuracy-snapshots.collection";
+import createWebhookSecretStateCollection from "./webhook-secret-state.collection";
+import { githubWebhookRegistrationsCollection, prQuestionMetadataCollection, processedWebhookEventsCollection, webhookSecretStateCollection } from "../name";
+import createGithubWebhookRegistrationsCollection from "./github-webhook-registrations.collection";
+import createPrQuestionMetadataCollection from "./pr-question-metadata.collection";
+import createProcessedWebhookEventsCollection from "./processed-webhook-events.collection";
 
 export default async function getOrCreateDB(){
   try {
@@ -116,6 +121,39 @@ export default async function getOrCreateDB(){
       console.log(`Creating collection ${smellAccuracySnapshotsCollection}`);
       await createSmellAccuracySnapshotsCollection();
     }
+
+
+    // Phase 4 — PR-Linked Q&A — pr_question_metadata
+    try {
+      await databases.getCollection(db, prQuestionMetadataCollection);
+    } catch (error) {
+      console.log(`Creating collection ${prQuestionMetadataCollection}`);
+      await createPrQuestionMetadataCollection();
+    }
+
+    // N+3. PR-Linked Q&A — processed_webhook_events (Phase 4 idempotency guard)
+    try {
+      await databases.getCollection(db, processedWebhookEventsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${processedWebhookEventsCollection}`);
+      await createProcessedWebhookEventsCollection();
+    }
+
+    // N+4. PR-Linked Q&A — github_webhook_registrations (Phase 7)
+    try {
+      await databases.getCollection(db, githubWebhookRegistrationsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${githubWebhookRegistrationsCollection}`);
+      await createGithubWebhookRegistrationsCollection();
+    }
+
+    // N+5. PR-Linked Q&A — webhook_secret_state (Phase 7 secret rotation)
+    try {
+      await databases.getCollection(db, webhookSecretStateCollection);
+    } catch (error) {
+      console.log(`Creating collection ${webhookSecretStateCollection}`);
+      await createWebhookSecretStateCollection();
+    }
   } catch (error) {
     try {
       await databases.create(db, db)
@@ -161,6 +199,11 @@ export default async function getOrCreateDB(){
         createNotificationsCollection(),
         createSmellFeedbackCollection(),
         createSmellAccuracySnapshotsCollection(),
+
+        createPrQuestionMetadataCollection(),
+        createProcessedWebhookEventsCollection(),
+        createGithubWebhookRegistrationsCollection(),
+        createWebhookSecretStateCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

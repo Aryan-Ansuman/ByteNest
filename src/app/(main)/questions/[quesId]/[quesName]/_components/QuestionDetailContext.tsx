@@ -58,6 +58,22 @@ export interface QuestionDocument extends AppDocument {
     systemTags?: string[] | null;
     smellAnalysisStatus?: "pending" | "processing" | "complete" | "failed" | "skipped" | null;
     smellEvidence?: string | null;
+    // ─── PR-Linked Q&A (Phase 4) ──────────────────────────────────────
+    questionType?: "standard" | "pr_linked";
+    prUrl?: string | null;
+    prRepoOwner?: string | null;
+    prRepoName?: string | null;
+    prNumber?: number | null;
+    prTitle?: string | null;
+    prStatus?: "open" | "merged" | "closed" | null;
+    prBaseRef?: string | null;
+    prHeadRef?: string | null;
+    prAuthorGithubHandle?: string | null;
+    diffFileId?: string | null;
+    diffFetchedAt?: string | null;
+    prMergedAt?: string | null;
+    prClosedAt?: string | null;
+    activityAt?: string | null;
 }
 
 export type VerificationStatus =
@@ -115,6 +131,11 @@ export interface AnswerDoc extends AppDocument {
     verifiedByAuthorAt?: string | null;
     /** Client-only, session-scoped — true once the current viewer has reported this answer as stale. */
     viewerHasReportedStale?: boolean;
+    // ─── PR-Linked Q&A (Phase 6) ──────────────────────────────────────
+    /** JSON-encoded { filePath, lineNumber, side }. Null/undefined = general (non-line-anchored) answer. */
+    diffLineRef?: string | null;
+    /** Snapshot of the diff content around the anchor at answer-creation time. */
+    diffLineContext?: string | null;
 }
 
 export interface AiSummaryContent {
@@ -194,6 +215,8 @@ interface QuestionDetailContextValue {
     communityAnswers: AnswerDoc[];
     activeCommunityAnswers: AnswerDoc[];
     staleCommunityAnswers: AnswerDoc[];
+    /** PR-Linked Q&A (Phase 6) — answers anchored to a specific diff line, excluded from the general lists above. */
+    lineAnchoredAnswers: AnswerDoc[];
     questionComments: DocumentList<CommentDoc>;
     totalComments: number;
     answerPagination: AnswerPaginationState;
@@ -216,6 +239,12 @@ interface QuestionDetailContextValue {
     confirmAcceptOverride: () => void;
     cancelAcceptOverride: () => void;
     submitAnswer: (content: string, versionContext?: SubmitAnswerVersionContext) => Promise<boolean>;
+    /** PR-Linked Q&A (Phase 6) — posts an answer anchored to a specific diff line rather than general. */
+    submitLineAnswer: (
+        content: string,
+        diffLineRef: { filePath: string; lineNumber: number; side: "left" | "right" },
+        diffLineContext: string
+    ) => Promise<boolean>;
     updateAnswerVersionContext: (answerId: string, patch: SubmitAnswerVersionContext) => Promise<boolean>;
     /** Applies a local-only patch to one answer's freshness fields — used by the staleness-report and "still valid" UI to reflect server responses without a full refetch. */
     patchAnswerFreshness: (answerId: string, patch: Partial<AnswerDoc>) => void;
@@ -432,16 +461,28 @@ export function QuestionDetailProvider({
 
     // bestAnswer is the explicitly accepted one — NOT just the top vote-getter.
     const bestAnswer = React.useMemo(
-        () => (acceptedAnswerId ? displayAnswers.find((a) => a.$id === acceptedAnswerId) ?? null : null),
+        () =>
+            acceptedAnswerId
+                ? displayAnswers.find((a) => a.$id === acceptedAnswerId && !a.diffLineRef) ?? null
+                : null,
         [acceptedAnswerId, displayAnswers]
     );
 
     const communityAnswers = React.useMemo(
         () =>
-            bestAnswer
+            (bestAnswer
                 ? sortedAnswers.filter((answer) => answer.$id !== bestAnswer.$id)
-                : sortedAnswers,
+                : sortedAnswers
+            // PR-Linked Q&A (Phase 6): line-anchored answers render as widgets
+            // inside the diff (see PrDiffViewer), not in the general list —
+            // otherwise they'd show up twice.
+            ).filter((answer) => !answer.diffLineRef),
         [bestAnswer, sortedAnswers]
+    );
+
+    const lineAnchoredAnswers = React.useMemo(
+        () => displayAnswers.filter((answer) => Boolean(answer.diffLineRef)),
+        [displayAnswers]
     );
 
     // Phase 8 — stale answers (0-19) render at the bottom regardless of
@@ -929,6 +970,85 @@ export function QuestionDetailProvider({
         [currentUser, isDeletingQuestion, promptSignIn, question.$id]
     );
 
+    // ─── PR-Linked Q&A (Phase 6) ────────────────────────────────────────
+    // Mirrors submitAnswer's optimistic-update shape but posts diffLineRef/
+    // diffLineContext so the answer renders as a widget inside the diff
+    // (PrDiffViewer) instead of the general answer list.
+    const submitLineAnswer = React.useCallback(
+        async (
+            content: string,
+            diffLineRef: { filePath: string; lineNumber: number; side: "left" | "right" },
+            diffLineContext: string
+        ) => {
+            if (isDeletingQuestion) {
+                toast("This question is being deleted");
+                return false;
+            }
+            if (!currentUser) {
+                promptSignIn("Sign in to post an answer");
+                return false;
+            }
+
+            const trimmed = content.trim();
+            if (!trimmed) return false;
+
+            const encodedRef = JSON.stringify(diffLineRef);
+            const optimisticId = `optimistic-answer-${crypto.randomUUID()}`;
+            const optimisticAnswer: AnswerDoc = {
+                ...createOptimisticAnswer(trimmed, question.$id, currentUser, optimisticId),
+                diffLineRef: encodedRef,
+                diffLineContext,
+            };
+            setAnswers((prev) => ({
+                total: prev.total + 1,
+                documents: [optimisticAnswer, ...prev.documents],
+            }));
+            setAnswerVoteScores((prev) => ({ ...prev, [optimisticId]: 0 }));
+
+            try {
+                const createdAnswer = await apiFetch<AnswerDoc>("/api/answer", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        questionId: question.$id,
+                        answer: trimmed,
+                        authorId: currentUser.$id,
+                        diffLineRef: encodedRef,
+                        diffLineContext,
+                    }),
+                });
+
+                const hydratedAnswer = hydrateAnswer(createdAnswer, currentUser);
+                setAnswers((prev) => ({
+                    total: prev.total,
+                    documents: prev.documents.map((answer) =>
+                        answer.$id === optimisticId ? hydratedAnswer : answer
+                    ),
+                }));
+                setAnswerVoteScores((prev) => {
+                    const next = { ...prev };
+                    delete next[optimisticId];
+                    next[hydratedAnswer.$id] = 0;
+                    return next;
+                });
+                toast.success("Answer posted");
+                return true;
+            } catch (error) {
+                setAnswers((prev) => ({
+                    total: Math.max(prev.total - 1, 0),
+                    documents: prev.documents.filter((answer) => answer.$id !== optimisticId),
+                }));
+                setAnswerVoteScores((prev) => {
+                    const next = { ...prev };
+                    delete next[optimisticId];
+                    return next;
+                });
+                toast.error(getErrorMessage(error, "Failed to post answer"));
+                return false;
+            }
+        },
+        [currentUser, isDeletingQuestion, promptSignIn, question.$id]
+    );
+
     const updateAnswerVersionContext = React.useCallback(
         async (answerId: string, patch: SubmitAnswerVersionContext) => {
             const previous = answers.documents.find((a) => a.$id === answerId);
@@ -1255,6 +1375,7 @@ export function QuestionDetailProvider({
             communityAnswers,
             activeCommunityAnswers,
             staleCommunityAnswers,
+            lineAnchoredAnswers,
             questionComments,
             totalComments,
             answerPagination: normalizedAnswerPagination,
@@ -1276,6 +1397,7 @@ export function QuestionDetailProvider({
             confirmAcceptOverride,
             cancelAcceptOverride,
             submitAnswer,
+            submitLineAnswer,
             updateAnswerVersionContext,
             patchAnswerFreshness,
             deleteAnswer,
@@ -1304,6 +1426,7 @@ export function QuestionDetailProvider({
             communityAnswers,
             activeCommunityAnswers,
             staleCommunityAnswers,
+            lineAnchoredAnswers,
             questionComments,
             totalComments,
             normalizedAnswerPagination,
@@ -1325,6 +1448,7 @@ export function QuestionDetailProvider({
             confirmAcceptOverride,
             cancelAcceptOverride,
             submitAnswer,
+            submitLineAnswer,
             updateAnswerVersionContext,
             patchAnswerFreshness,
             deleteAnswer,

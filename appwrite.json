@@ -4,163 +4,258 @@
     "projectName": "QnA",
     "endpoint": "https://sgp.cloud.appwrite.io/v1",
     "functions": [
-      {
-        "$id": "6a3658e0002b89aca597",
-        "name": "Calculate Reputation",
-        "enabled": true,
-        "logging": true,
-        "deploymentRetention": 0,
-        "runtime": "node-25",
-        "execute": ["any"],
-        "scopes": ["users.read"],
-        "events": [
-          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.create",
-          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.update",
-          "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.delete",
-          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.create",
-          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.delete",
-          "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.update"
-        ],
-        "schedule": "",
-        "timeout": 15,
-        "entrypoint": "src/main.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/calculate-reputation"
-      },
-      {
-        "$id": "rebuild-tag-expert-registry",
-        "name": "Rebuild Tag Expert Registry",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 * * * *",
-        "timeout": 300,
-        "entrypoint": "src/main.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/rebuild-tag-expert-registry"
-      },
-      {
-        "$id": "embedding-job",
-        "name": "Embedding Background Job",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "",
-        "timeout": 300,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/embedding-job"
-      },
-      {
-        "$id": "model-upgrade",
-        "name": "Embedding Model Upgrade",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "",
-        "timeout": 900,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/model-upgrade"
-      },
-      {
-        "$id": "stale-reembedding",
-        "name": "Stale Re-embedding Worker",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "*/10 * * * *",
-        "timeout": 300,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/stale-reembedding"
-      },
-      {
-        "$id": "embedding-monitor",
-        "name": "Embedding Monitor",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 8 * * *",
-        "timeout": 60,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/embedding-monitor"
-      },
-      {
-        "$id": "weekly-recalibration",
-        "name": "Weekly Recalibration",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 3 * * 1",
-        "timeout": 300,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/weekly-recalibration"
-      },
-      {
-        "$id": "weekly-evaluation",
-        "name": "Weekly Evaluation",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 4 * * 1",
-        "timeout": 300,
-        "entrypoint": "src/index.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/weekly-evaluation"
-      },
-      {
-        "$id": "room-cleanup",
-        "name": "Room Cleanup",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 * * * *",
-        "timeout": 30,
-        "entrypoint": "src/main.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/room-cleanup"
-      },
-      {
-        "$id": "tva-drift-check",
-        "name": "TVA Drift Check",
-        "enabled": true,
-        "logging": true,
-        "deploymentRetention": 0,
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "scopes": ["users.read"],
-        "events": [],
-        "schedule": "0 5 */3 * *",
-        "timeout": 300,
-        "entrypoint": "src/main.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/tva-drift-check"
-      },
-      {
-        "$id": "recompute-answer-freshness",
-        "name": "Recompute Answer Freshness",
-        "runtime": "node-18.0",
-        "execute": ["any"],
-        "events": [],
-        "schedule": "0 2 * * *",
-        "timeout": 900,
-        "entrypoint": "src/main.js",
-        "commands": "npm install",
-        "ignore": ["node_modules", ".npm"],
-        "path": "functions/recompute-answer-freshness"
-      }
+        {
+            "$id": "6a3658e0002b89aca597",
+            "name": "Calculate Reputation",
+            "enabled": true,
+            "logging": true,
+            "deploymentRetention": 0,
+            "runtime": "node-25",
+            "execute": [
+                "any"
+            ],
+            "scopes": [
+                "users.read"
+            ],
+            "events": [
+                "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.create",
+                "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.update",
+                "databases.6a2bbffd00190eccf0b8.collections.votes.documents.*.delete",
+                "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.create",
+                "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.delete",
+                "databases.6a2bbffd00190eccf0b8.collections.answers.documents.*.update"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/calculate-reputation"
+        },
+        {
+            "$id": "rebuild-tag-expert-registry",
+            "name": "Rebuild Tag Expert Registry",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 * * * *",
+            "timeout": 300,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/rebuild-tag-expert-registry"
+        },
+        {
+            "$id": "embedding-job",
+            "name": "Embedding Background Job",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 300,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/embedding-job"
+        },
+        {
+            "$id": "model-upgrade",
+            "name": "Embedding Model Upgrade",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "",
+            "timeout": 900,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/model-upgrade"
+        },
+        {
+            "$id": "stale-reembedding",
+            "name": "Stale Re-embedding Worker",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "*/10 * * * *",
+            "timeout": 300,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/stale-reembedding"
+        },
+        {
+            "$id": "embedding-monitor",
+            "name": "Embedding Monitor",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 8 * * *",
+            "timeout": 60,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/embedding-monitor"
+        },
+        {
+            "$id": "weekly-recalibration",
+            "name": "Weekly Recalibration",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 3 * * 1",
+            "timeout": 300,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/weekly-recalibration"
+        },
+        {
+            "$id": "weekly-evaluation",
+            "name": "Weekly Evaluation",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 4 * * 1",
+            "timeout": 300,
+            "entrypoint": "src/index.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/weekly-evaluation"
+        },
+        {
+            "$id": "room-cleanup",
+            "name": "Room Cleanup",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 * * * *",
+            "timeout": 30,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/room-cleanup"
+        },
+        {
+            "$id": "tva-drift-check",
+            "name": "TVA Drift Check",
+            "enabled": true,
+            "logging": true,
+            "deploymentRetention": 0,
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "scopes": [
+                "users.read"
+            ],
+            "events": [],
+            "schedule": "0 5 */3 * *",
+            "timeout": 300,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/tva-drift-check"
+        },
+        {
+            "$id": "recompute-answer-freshness",
+            "name": "Recompute Answer Freshness",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 2 * * *",
+            "timeout": 900,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/recompute-answer-freshness"
+        },
+        {
+            "$id": "webhook-deregistration-sweep",
+            "name": "Webhook Deregistration Sweep",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "30 2 * * *",
+            "timeout": 300,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/webhook-deregistration-sweep"
+        },
+        {
+            "$id": "webhook-secret-rotation",
+            "name": "Webhook Secret Rotation",
+            "runtime": "node-18.0",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "schedule": "0 4 1 * *",
+            "timeout": 300,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/webhook-secret-rotation"
+        }
     ]
 }

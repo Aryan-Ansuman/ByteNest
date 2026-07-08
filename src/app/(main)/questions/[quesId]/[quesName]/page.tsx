@@ -18,7 +18,7 @@
  *   confirm the vote count they already saw.
  */
 
-import { db, questionCollection } from "@/models/name";
+import { db, questionCollection, prQuestionMetadataCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
@@ -42,6 +42,21 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
         question = await databases.getDocument(db, questionCollection, params.quesId);
     } catch {
         notFound();
+    }
+
+    let prMetadata = null;
+    if (question.isPr) {
+        try {
+            const sidecarDocs = await databases.listDocuments(db, prQuestionMetadataCollection, [
+                Query.equal("questionId", question.$id),
+                Query.limit(1)
+            ]);
+            if (sidecarDocs.total > 0) {
+                prMetadata = sidecarDocs.documents[0];
+            }
+        } catch {
+            // ignore
+        }
     }
 
     const tags = ((question.tags as string[]) ?? []).filter(Boolean);
@@ -106,6 +121,22 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                     | "skipped"
                     | undefined) ?? null,
             smellEvidence: (question.smellEvidence as string | undefined) ?? null,
+            // ─── PR-Linked Q&A (Phase 4/5) ────────────────────────────────
+            questionType: (question.isPr ? "pr_linked" : "standard") as "standard" | "pr_linked",
+            prUrl: (prMetadata?.prUrl as string | null | undefined) ?? null,
+            prRepoOwner: (prMetadata?.prRepoOwner as string | null | undefined) ?? null,
+            prRepoName: (prMetadata?.prRepoName as string | null | undefined) ?? null,
+            prNumber: (prMetadata?.prNumber as number | null | undefined) ?? null,
+            prTitle: (prMetadata?.prTitle as string | null | undefined) ?? null,
+            prStatus: (prMetadata?.prStatus as "open" | "merged" | "closed" | null | undefined) ?? null,
+            prBaseRef: (prMetadata?.prBaseRef as string | null | undefined) ?? null,
+            prHeadRef: (prMetadata?.prHeadRef as string | null | undefined) ?? null,
+            prAuthorGithubHandle: (prMetadata?.prAuthorGithubHandle as string | null | undefined) ?? null,
+            diffFileId: (prMetadata?.diffFileId as string | null | undefined) ?? null,
+            diffFetchedAt: (prMetadata?.diffFetchedAt as string | null | undefined) ?? null,
+            prMergedAt: (prMetadata?.prMergedAt as string | null | undefined) ?? null,
+            prClosedAt: (prMetadata?.prClosedAt as string | null | undefined) ?? null,
+            activityAt: (question.activityAt as string | null | undefined) ?? null,
         },
         author: {
             $id: author.$id,

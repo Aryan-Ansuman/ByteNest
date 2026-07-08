@@ -9,6 +9,8 @@ import { processRecomputeFreshness } from "./processors/RecomputeFreshnessProces
 import { processVerifyAnswer } from "./processors/VerifyAnswerProcessor";
 import { processAnalyzeCodeSmells } from "./processors/AnalyzeCodeSmellsProcessor";
 import { processLlmSmellValidation } from "./processors/LlmSmellValidationProcessor";
+import { processFetchPrDiff } from "./processors/FetchPrDiffProcessor";
+import { processRefreshPrDiff } from "./processors/RefreshPrDiffProcessor";
 import { db, questionCollection } from "@/models/name";
 import { databases } from "@/models/server/config";
 
@@ -120,6 +122,16 @@ async function route(eventType: EventType, payload: unknown): Promise<void> {
     case "LlmSmellValidation":
       return processLlmSmellValidation(
         payload as EventPayloadMap["LlmSmellValidation"]
+      );
+
+    case "FetchPrDiff":
+      return processFetchPrDiff(
+        payload as EventPayloadMap["FetchPrDiff"]
+      );
+
+    case "RefreshPrDiff":
+      return processRefreshPrDiff(
+        payload as EventPayloadMap["RefreshPrDiff"]
       );
 
     default: {

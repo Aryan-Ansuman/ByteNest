@@ -26,6 +26,7 @@ import {
     Info,
     Loader2,
     FlaskConical,
+    GitPullRequest,
 } from "lucide-react";
 import { ID, Permission, Role } from "appwrite";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ const TAG_SUGGESTIONS = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AskQuestionPage() {
-    const { user } = useAuthStore();
+    const { user, hydrated } = useAuthStore();
     const router = useRouter();
 
     // form state
@@ -132,8 +133,8 @@ export default function AskQuestionPage() {
 
     // Redirect if not logged in
     React.useEffect(() => {
-        if (!user) router.push("/login");
-    }, [user, router]);
+        if (hydrated && !user) router.push("/login");
+    }, [user, hydrated, router]);
 
     // Title character count progress
     const titleProgress = Math.min((title.length / 100) * 100, 100);
@@ -374,6 +375,24 @@ export default function AskQuestionPage() {
                                             title="Write a clear title"
                                             description="Imagine you're asking a colleague — be specific about the problem."
                                         />
+
+                                        {/* PR question switch — surfaced at the very first step since this
+                                            is the page most users land on; ask-pr stays a separate route
+                                            (different flow shape per Phase 3), this is just the doorway to it. */}
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push("/questions/ask-pr")}
+                                            className="mt-4 flex w-full items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-left transition hover:border-[#a7c8b3]/30 hover:bg-white/[0.04]"
+                                        >
+                                            <span className="flex items-center gap-2.5 text-sm text-zinc-300">
+                                                <GitPullRequest className="size-4 shrink-0 text-[#a7c8b3]" />
+                                                Asking about a GitHub pull request instead?
+                                            </span>
+                                            <span className="flex items-center gap-1 text-xs font-medium text-[#a7c8b3]">
+                                                Link a PR
+                                                <ChevronRight className="size-3.5" />
+                                            </span>
+                                        </button>
                                         <div className="mt-5">
                                             <Input
                                                 autoFocus

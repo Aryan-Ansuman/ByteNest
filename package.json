@@ -33,6 +33,7 @@
     "next": "14.2.35",
     "node-appwrite": "^13.0.0",
     "react": "^18",
+    "react-diff-view": "^3.3.3",
     "react-dom": "^18",
     "react-icon-cloud": "^4.1.7",
     "sonner": "^2.0.7",

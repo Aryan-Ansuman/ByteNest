@@ -364,18 +364,25 @@ export default function AnswerCard({
             className="relative flex w-full gap-2 transition-all duration-200 sm:gap-4"
         >
             {/* Vote rail - Outside on the left */}
-            <VoteRail
-                score={voteScore}
-                votedStatus={votedStatus}
-                onUpvote={() => voteAnswer(answer.$id, "upvoted")}
-                onDownvote={() => voteAnswer(answer.$id, "downvoted")}
-                isAccepted={answer.isAccepted}
-                isQuestionAuthor={isQuestionAuthor}
-                onAccept={() => acceptAnswer(answer.$id)}
-                isAccepting={isAccepting}
-                votePending={answerVotePending}
-                disabled={interactionsDisabled}
-            />
+            <div className="flex flex-col items-center gap-2">
+                {question.questionType === "pr_linked" && (
+                    <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+                        General
+                    </span>
+                )}
+                <VoteRail
+                    score={voteScore}
+                    votedStatus={votedStatus}
+                    onUpvote={() => voteAnswer(answer.$id, "upvoted")}
+                    onDownvote={() => voteAnswer(answer.$id, "downvoted")}
+                    isAccepted={answer.isAccepted}
+                    isQuestionAuthor={isQuestionAuthor}
+                    onAccept={() => acceptAnswer(answer.$id)}
+                    isAccepting={isAccepting}
+                    votePending={answerVotePending}
+                    disabled={interactionsDisabled}
+                />
+            </div>
 
             {/* Content Container - Bordered box */}
             <div

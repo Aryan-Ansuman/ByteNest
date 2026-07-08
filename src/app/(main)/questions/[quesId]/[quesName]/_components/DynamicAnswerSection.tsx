@@ -32,6 +32,9 @@ interface AnswerDoc {
     upvotesDocuments: { total: number; documents: any[] };
     downvotesDocuments: { total: number; documents: any[] };
     comments: { total: number; documents: any[] };
+    // ─── PR-Linked Q&A (Phase 6) ──────────────────────────────────────
+    diffLineRef?: string | null;
+    diffLineContext?: string | null;
 }
 
 interface CommentDoc {

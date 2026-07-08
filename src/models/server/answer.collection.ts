@@ -59,6 +59,18 @@ export default async function createAnswerCollection() {
         // Tracks the last outdated/stale notification sent to the author —
         // prevents re-notifying inside NOTIFICATION_RETHROTTLE_DAYS.
         databases.createDatetimeAttribute(db, answerCollection, "freshnessNotifiedAt", false),
+
+        // ─── PR-Linked Q&A (Phase 4) ─────────────────────────────────────
+        // Decision 3: extends this collection rather than a separate table
+        // so votes/comments/reputation/skill-scoring keep pointing at this
+        // same answer $id. Both nullable — non-null only when the answerer
+        // clicked a specific diff line; null means a general PR answer.
+        // JSON-encoded { filePath: string, lineNumber: number, side: "left" | "right" }.
+        databases.createStringAttribute(db, answerCollection, "diffLineRef", 500, false),
+        // Snapshot of the 3–5 lines around the anchor at answer-creation
+        // time, so the answer still displays correctly if the diff is
+        // later refreshed (Phase 8) and the original line shifts/vanishes.
+        databases.createStringAttribute(db, answerCollection, "diffLineContext", 2000, false),
     ]);
     console.log("Answer Attributes Created");
 

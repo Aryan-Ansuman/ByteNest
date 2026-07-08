@@ -58,6 +58,13 @@ export default async function createQuestionCollection() {
         // JSON-encoded SmellFeedbackSummary — denormalized from smell_feedback
         // (Phase 7) so the UI never aggregates on render.
         databases.createStringAttribute(db, questionCollection, "smellFeedbackSummary", 2000, false),
+
+        // ─── PR-Linked Q&A (Phase 4) ─────────────────────────────────────
+        // Pivot: We cannot add large string attributes to the `questions` collection
+        // due to Appwrite limits. Instead, we use a 1-byte boolean `isPr` to 
+        // distinguish PR questions for list filtering, and all other metadata
+        // lives in `pr_question_metadata` sidecar collection.
+        databases.createBooleanAttribute(db, questionCollection, "isPr", false, false),
     ]);
     console.log("Question Attributes created");
 
@@ -101,6 +108,9 @@ export default async function createQuestionCollection() {
             IndexType.Key,
             ["smellAnalysisStatus", "smellAnalysisAt"]
         ),
+
+        // ─── PR-Linked Q&A (Phase 4) ─────────────────────────────────────
+        databases.createIndex(db, questionCollection, "isPr_filter", IndexType.Key, ["isPr"]),
     ]);
     console.log("Question indexes created");
 }

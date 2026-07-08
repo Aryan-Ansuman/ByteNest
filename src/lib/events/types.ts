@@ -102,6 +102,15 @@ export type VerifyAnswerPayload = {
   testRunId?: string;
 };
 
+export type FetchPrDiffPayload = {
+  questionId: string;
+  owner: string;
+  repoName: string;
+  prNumber: number;
+};
+
+export type RefreshPrDiffPayload = FetchPrDiffPayload;
+
 // ─── Discriminated union ──────────────────────────────────────────────────────
 
 export type EventType =
@@ -116,7 +125,9 @@ export type EventType =
   | "RecomputeFreshness"
   | "VerifyAnswer"
   | "AnalyzeCodeSmells"
-  | "LlmSmellValidation";
+  | "LlmSmellValidation"
+  | "FetchPrDiff"
+  | "RefreshPrDiff";
 
 export type EventPayloadMap = {
   QuestionDraftUpdated: QuestionDraftUpdatedPayload;
@@ -131,6 +142,8 @@ export type EventPayloadMap = {
   VerifyAnswer: VerifyAnswerPayload;
   AnalyzeCodeSmells: AnalyzeCodeSmellsPayload;
   LlmSmellValidation: LlmSmellValidationPayload;
+  FetchPrDiff: FetchPrDiffPayload;
+  RefreshPrDiff: RefreshPrDiffPayload;
 };
 
 export type TypedEvent<T extends EventType = EventType> = {

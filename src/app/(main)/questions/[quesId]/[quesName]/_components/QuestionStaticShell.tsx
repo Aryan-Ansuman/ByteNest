@@ -30,6 +30,7 @@ import { ChevronRight } from "lucide-react";
 import { useAuthStore } from "@/store/Auth";
 import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailContext";
 import QuestionHero from "./QuestionHero";
+import PrQuestionView from "./PrQuestionView";
 import QuestionSidebar from "./QuestionSidebar";
 import DynamicAnswerSection from "./DynamicAnswerSection";
 import { AnswersSkeleton } from "./ContentTabs";
@@ -47,6 +48,26 @@ interface StaticQuestion {
     acceptedAnswerId: string | null;
     views: number;
     totalVotes: number;
+    // ─── Code Smell Auto-Tagger (Phase 6) ────────────────────────
+    systemTags?: string[] | null;
+    smellAnalysisStatus?: "pending" | "processing" | "complete" | "failed" | "skipped" | null;
+    smellEvidence?: string | null;
+    // ─── PR-Linked Q&A (Phase 4/5) ────────────────────────────────────
+    questionType?: "standard" | "pr_linked";
+    prUrl?: string | null;
+    prRepoOwner?: string | null;
+    prRepoName?: string | null;
+    prNumber?: number | null;
+    prTitle?: string | null;
+    prStatus?: "open" | "merged" | "closed" | null;
+    prBaseRef?: string | null;
+    prHeadRef?: string | null;
+    prAuthorGithubHandle?: string | null;
+    diffFileId?: string | null;
+    diffFetchedAt?: string | null;
+    prMergedAt?: string | null;
+    prClosedAt?: string | null;
+    activityAt?: string | null;
 }
 
 interface StaticAuthor {
@@ -122,7 +143,11 @@ export default function QuestionStaticShell({
                 <div className="grid gap-7 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
                     <main className="min-w-0 space-y-5">
                         {/* Static: question body, tags, author block, attachment */}
-                        <QuestionHero />
+                        {question.questionType === "pr_linked" ? (
+                            <PrQuestionView />
+                        ) : (
+                            <QuestionHero />
+                        )}
 
                         {/*
                          * Dynamic island: answers + answer composer.

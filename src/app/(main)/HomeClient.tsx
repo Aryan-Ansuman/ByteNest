@@ -599,10 +599,16 @@ function HeroBanner({
                         Ask a Question
                     </Link>
                     <Link
+                        href="/questions/ask-pr"
+                        className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-transparent px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.04] hover:border-white/20"
+                    >
+                        Ask PR Question
+                    </Link>
+                    <Link
                         href="/questions"
                         className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-transparent px-6 text-sm font-semibold text-zinc-100 backdrop-blur-md transition hover:bg-white/[0.04] hover:border-white/20"
                     >
-                        Explore Questions
+                        Explore
                     </Link>
                 </div>
             </div>

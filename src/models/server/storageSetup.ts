@@ -22,7 +22,8 @@ export default async function getOrCreateStorage() {
                 false,
                 undefined,
                 undefined,
-                ["jpg", "png", "gif", "jpeg", "webp", "heic"]
+                // Added "diff" and "txt" for PR-Linked Q&A (Phase 1 Pivot)
+                ["jpg", "png", "gif", "jpeg", "webp", "heic", "diff", "txt"]
             );
 
             console.log("Storage Created");

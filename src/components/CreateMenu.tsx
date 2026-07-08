@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, ChevronDown, MessageSquare, MessagesSquare, BarChart3, FileEdit } from "lucide-react";
+import { Plus, ChevronDown, MessageSquare, MessagesSquare, BarChart3, FileEdit, GitPullRequest } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -12,6 +12,12 @@ const items = [
         description: "Ask the community something",
         icon: <MessageSquare className="size-4" />,
         href: "/questions/ask",
+    },
+    {
+        label: "PR Question",
+        description: "Get help with a Pull Request",
+        icon: <GitPullRequest className="size-4" />,
+        href: "/questions/ask-pr",
     },
     {
         label: "Discussion",
