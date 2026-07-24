@@ -32,9 +32,13 @@ export type ReputationEventType =
     | "answer_deleted"
     | "manual_adjustment"
     | "historical_baseline"
-    | "answer_verified";
+    | "answer_verified"
+    | "adr_score_submitted"
+    | "adr_consensus_reached"
+    | "socratic_question_asked"
+    | "socratic_session_completed";
 
-export type ReputationSourceType = "vote" | "answer" | "question" | "system" | "test_run";
+export type ReputationSourceType = "vote" | "answer" | "question" | "system" | "test_run" | "room" | "adr_submission";
 
 export interface WriteReputationEventOptions {
     userId:           string;

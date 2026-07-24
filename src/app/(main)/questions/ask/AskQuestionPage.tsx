@@ -323,6 +323,18 @@ export default function AskQuestionPage() {
                             <p className="mt-1.5 text-sm text-zinc-500">
                                 Get answers from the ByteNest community. Be specific and clear.
                             </p>
+                            <div className="mt-4 flex items-center gap-2 rounded-lg border border-orange-500/20 bg-orange-500/10 px-4 py-3 text-sm text-orange-200">
+                                <GitPullRequest className="size-4 text-orange-400" />
+                                <span>
+                                    Comparing two technologies or approaches?{" "}
+                                    <Link
+                                        href="/questions/ask-adr"
+                                        className="font-medium text-orange-400 hover:underline"
+                                    >
+                                        Use our Architecture Decision Record (ADR) format &rarr;
+                                    </Link>
+                                </span>
+                            </div>
                         </div>
 
                         {/* ── Step Progress ── */}

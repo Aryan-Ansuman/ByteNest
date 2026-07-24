@@ -32,6 +32,23 @@ const COLOR_MAP: Record<string, { bg: string; text: string }> = {
 
 const QUICK_EMOJI = ["👍", "❤️", "😂", "🔥", "✅", "👀", "🎉", "💯"];
 
+/**
+ * System messages are plain neutral text by default. Socratic Debugging
+ * Mode messages get a content-based style override: in-session
+ * (start/end) messages read amber, conclusion (root cause) messages read
+ * the brand green. Matched by prefix/substring rather than a dedicated
+ * message subtype, since system messages don't carry structured metadata.
+ */
+function getSystemMessageStyle(body: string): "amber" | "green" | "default" {
+    if (body.startsWith("💡") || body.startsWith("✅ Root cause") || body.includes("Root cause recorded")) {
+        return "green";
+    }
+    if (body.startsWith("🔍") || body.includes("Socratic Debugging Mode")) {
+        return "amber";
+    }
+    return "default";
+}
+
 interface Props {
     message: RoomMessage;
     currentUserId: string;
@@ -71,6 +88,7 @@ export default function MessageBubble({
     const isMe     = message.authorId === currentUserId;
     const isTemp   = message.$id.startsWith("temp-");
     const isSystem = message.type === "system";
+    const isQuestion = message.type === "question";
 
     const reactions = (() => {
         try { return JSON.parse(message.reactions ?? "{}") as Record<string, string[]>; }
@@ -141,9 +159,19 @@ export default function MessageBubble({
     })();
 
     if (isSystem) {
+        const style = getSystemMessageStyle(message.body);
         return (
             <div className="flex justify-center py-3">
-                <span className="flex items-center gap-1.5 text-[11px] font-[500] tracking-wide text-zinc-500 bg-white/5 rounded-full px-3 py-1">
+                <span
+                    className={cn(
+                        "flex items-center gap-1.5 text-[11px] font-[500] tracking-wide rounded-full px-3 py-1",
+                        style === "amber"
+                            ? "text-amber-300 bg-amber-500/10 border border-amber-500/20"
+                            : style === "green"
+                                ? "text-[#a7c8b3] bg-[#a7c8b3]/10 border border-[#a7c8b3]/20"
+                                : "text-zinc-500 bg-white/5"
+                    )}
+                >
                     {message.body}
                 </span>
             </div>
@@ -178,6 +206,24 @@ export default function MessageBubble({
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
         >
+            {/* Left accent stripe — amber for Socratic questions, subtle grey otherwise */}
+            <span
+                className={cn(
+                    "absolute left-0 top-0.5 bottom-0.5 w-[3px] rounded-full transition-colors",
+                    isQuestion ? "bg-amber-500/60" : "bg-zinc-700/40"
+                )}
+            />
+
+            {/* Socratic question badge */}
+            {isQuestion && (
+                <span
+                    title={`Socratic question — ${message.authorName} is helping without giving the answer.`}
+                    className="absolute right-3 top-1 z-[1] pointer-events-none flex items-center justify-center w-4 h-4 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold select-none"
+                >
+                    ?
+                </span>
+            )}
+
             {/* Timestamp on hover for compact */}
             {compact && hovering && (
                 <span className="absolute left-2 top-1 text-[10px] text-zinc-600 w-9 text-right tabular-nums select-none">

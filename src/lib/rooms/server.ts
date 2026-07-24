@@ -1,4 +1,4 @@
-import { Query } from "node-appwrite";
+import { Query, ID } from "node-appwrite";
 import { databases } from "@/models/server/config";
 import {
     db,
@@ -54,4 +54,21 @@ export async function countRoomMessages(roomId: string) {
     ]);
 
     return result.total;
+}
+
+/**
+ * Posts a server-authored system message to a room. Shared so every
+ * call site (moderation actions, Socratic mode transitions, root-cause
+ * teardown, etc.) writes the same document shape.
+ */
+export async function postSystemMessage(roomId: string, body: string) {
+    return databases.createDocument(db, roomMessagesCollection, ID.unique(), {
+        roomId,
+        authorId: "system",
+        authorName: "System",
+        authorColor: "indigo",
+        body,
+        type: "system",
+        reactions: JSON.stringify({}),
+    });
 }

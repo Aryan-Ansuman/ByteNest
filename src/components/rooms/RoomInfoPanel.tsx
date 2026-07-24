@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
+import HostControls from "./HostControls";
 
 interface Props {
     room: DiscussionRoom;
@@ -131,6 +132,11 @@ export default function RoomInfoPanel({ room, onClose }: Props) {
             </div>
 
             <div className="flex-1 px-4 py-4 space-y-5">
+                
+                {/* Host Controls */}
+                {isHost && (
+                    <HostControls roomId={room.$id} />
+                )}
 
                 {/* Room identity */}
                 <section>

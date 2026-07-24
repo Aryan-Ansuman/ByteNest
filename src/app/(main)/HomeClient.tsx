@@ -18,6 +18,7 @@ import {
     Send,
     Loader2,
     Settings2,
+    GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import slugify from "@/utils/slugify";
@@ -48,6 +49,7 @@ interface Question {
     $createdAt: string;
     totalAnswers: number;
     totalVotes: number;
+    hasBranches?: boolean;
     author: {
         $id: string;
         name: string;
@@ -828,6 +830,11 @@ function QuestionCard({
                                 {question.totalAnswers}
                             </span>
                             <span>answers</span>
+                            {question.hasBranches && (
+                                <div title="Has branch replies for different setups" className="ml-1 flex items-center text-[#a7c8b3]">
+                                    <GitBranch className="size-3.5" />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

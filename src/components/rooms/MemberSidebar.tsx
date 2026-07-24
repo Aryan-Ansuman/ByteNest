@@ -113,6 +113,7 @@ export default function MemberSidebar({ roomId }: Props) {
                             onToggle={() => toggleSection("online")}
                             onOpenProfile={setProfileMember}
                             baseZIndex={400}
+                            socraticSeekerId={room?.socraticSeekerId ?? null}
                         />
                     )}
                     {muted.length > 0 && (
@@ -128,6 +129,7 @@ export default function MemberSidebar({ roomId }: Props) {
                             onOpenProfile={setProfileMember}
                             accent="rose"
                             baseZIndex={300}
+                            socraticSeekerId={room?.socraticSeekerId ?? null}
                         />
                     )}
                     {away.length > 0 && (
@@ -143,6 +145,7 @@ export default function MemberSidebar({ roomId }: Props) {
                             onOpenProfile={setProfileMember}
                             accent="amber"
                             baseZIndex={200}
+                            socraticSeekerId={room?.socraticSeekerId ?? null}
                         />
                     )}
                     {offline.length > 0 && (
@@ -158,6 +161,7 @@ export default function MemberSidebar({ roomId }: Props) {
                             onOpenProfile={setProfileMember}
                             dimmed
                             baseZIndex={100}
+                            socraticSeekerId={room?.socraticSeekerId ?? null}
                         />
                     )}
                 </div>
@@ -178,7 +182,7 @@ export default function MemberSidebar({ roomId }: Props) {
 
 function MemberSection({
     title, members, isHostFn, currentUserId, iAmHost, roomId,
-    isOpen, onToggle, onOpenProfile, accent, dimmed, baseZIndex = 100,
+    isOpen, onToggle, onOpenProfile, accent, dimmed, baseZIndex = 100, socraticSeekerId,
 }: {
     title: string;
     members: RoomMember[];
@@ -192,6 +196,7 @@ function MemberSection({
     accent?: "rose" | "amber";
     dimmed?: boolean;
     baseZIndex?: number;
+    socraticSeekerId?: string | null;
 }) {
     return (
         <div>
@@ -264,11 +269,16 @@ function MemberSection({
                                     </div>
                                 </div>
 
-                                {/* Badges (YOU / BOT) */}
+                                {/* Badges (YOU / BOT / SEEKER) */}
                                 <div className="shrink-0 flex flex-col items-end gap-1">
                                     {isMe && (
                                         <span className="px-1.5 py-[1px] rounded-[6px] bg-[#a7c8b3]/10 border border-[#a7c8b3]/20 text-[10px] font-[600] text-[#a7c8b3] tracking-wide">
                                             YOU
+                                        </span>
+                                    )}
+                                    {member.userId === socraticSeekerId && (
+                                        <span className="px-1.5 py-[1px] rounded-[6px] bg-amber-500/10 border border-amber-500/20 text-[10px] font-[600] text-amber-500 tracking-wide">
+                                            SEEKER
                                         </span>
                                     )}
                                     {member.isAI && (

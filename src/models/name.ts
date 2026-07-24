@@ -53,6 +53,16 @@ export const REPUTATION_EVENT_TYPES = [
     // TVA — Phase 7: machine-confirmed correctness, weighted above a normal
     // upvote since it isn't a popularity signal.
     "answer_verified",
+    // ADR Questions — Phase 9: participation (+2), smaller than an upvote
+    // since submitting scores is participation, not expertise demonstration.
+    "adr_score_submitted",
+    // ADR Questions — Phase 9: fired for the question author when their
+    // comparison reaches community consensus (+15).
+    "adr_consensus_reached",
+    // Socratic Debugging Mode — seeker completes a Socratic session (+5)
+    "socratic_session_completed",
+    // Socratic Debugging Mode — helper asked at least one question (+2)
+    "socratic_question_asked",
 ] as const;
 
 export type ReputationEventType = (typeof REPUTATION_EVENT_TYPES)[number];
@@ -65,6 +75,10 @@ export const REPUTATION_SOURCE_TYPES = [
     // TVA — sourceId points at the test_runs document, not the answer
     // itself, so a retroactive re-pass creates a distinct, dedupable event.
     "test_run",
+    // ADR Questions — sourceId points at the adr_score_submissions document.
+    "adr_submission",
+    // Socratic Debugging Mode — sourceId is the room or answer document.
+    "room",
 ] as const;
 
 export type ReputationSourceType = (typeof REPUTATION_SOURCE_TYPES)[number];
@@ -121,6 +135,10 @@ export const NOTIFICATION_TYPES = [
     // general (non-line-anchored) answer is posted on a PR question.
     "pr_status_changed",
     "pr_answer_posted",
+    // ADR Questions — Phase 8: fired for the question author when the
+    // consensus-detection worker concludes an ADR (adrStatus -> "concluded").
+    // Payload: { questionId, questionTitle, winningOption, submissionCount }.
+    "adr_consensus_reached",
 ] as const;
 
 export { TECH_ECOSYSTEMS, FRESHNESS_LABELS } from "@/lib/decay/types";
@@ -144,7 +162,7 @@ export const processedWebhookEventsCollection = "processed_webhook_events";
 export const prQuestionMetadataCollection = "pr_question_metadata";
 export const prDiffsBucket = "pr_diffs_bucket";
 
-export const QUESTION_TYPES = ["standard", "pr_linked"] as const;
+export const QUESTION_TYPES = ["standard", "pr_linked", "adr"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export const PR_STATUSES = ["open", "merged", "closed"] as const;
@@ -159,3 +177,43 @@ export const WEBHOOK_REGISTRATION_STATUSES = [
     "failed_other",
 ] as const;
 export type WebhookRegistrationStatus = (typeof WEBHOOK_REGISTRATION_STATUSES)[number];
+
+// ─── Phase 4 — Architecture Decision Record (ADR) Questions ────────────────
+// Decision 1 (adapted): same split as PR-Linked Q&A — `isAdr` boolean lives
+// on `questions` for cheap list filtering, all ADR-specific fields (option
+// names/descriptions, dimension selection, status, submission count) live in
+// the `adr_question_metadata` sidecar (1:1 via questionId) to avoid the same
+// Appwrite attribute/row-size ceiling that justified `pr_question_metadata`.
+export const adrQuestionMetadataCollection = "adr_question_metadata";
+// Decision 3: full-score-card submissions — one document per (questionId,
+// userId), never per-dimension votes. Separate from `votes` entirely.
+export const adrScoreSubmissionsCollection = "adr_score_submissions";
+
+// Decision 2: fixed catalog of 8 standard dimensions. The question author
+// selects 3–8 of these (stored as an ordered JSON array on the metadata
+// sidecar) — never a free-form dimension name, so comparisons stay
+// aggregable across ADR questions.
+export const ADR_DIMENSIONS = [
+    "performance",
+    "scalability",
+    "developer_experience",
+    "ecosystem_maturity",
+    "long_term_maintainability",
+    "security",
+    "learning_curve",
+    "operational_complexity",
+] as const;
+export type AdrDimension = (typeof ADR_DIMENSIONS)[number];
+
+// Decision 5: ADR questions never have a single accepted answer — the
+// aggregated radar chart is the conclusion. "concluded" is set only by the
+// Phase 8 consensus-detection worker, never directly by a user action.
+export const ADR_STATUSES = ["open", "concluded"] as const;
+export type AdrStatus = (typeof ADR_STATUSES)[number];
+
+// Decision 8: self-declared at submission time, drives the client-side
+// expertise-weighted aggregation toggle (novice=1.0x, intermediate=1.5x,
+// expert=2.0x — multipliers live with the aggregation logic in Phase 4,
+// not here, since they're a pure computation concern).
+export const ADR_EXPERTISE_LEVELS = ["novice", "intermediate", "expert"] as const;
+export type AdrExpertiseLevel = (typeof ADR_EXPERTISE_LEVELS)[number];

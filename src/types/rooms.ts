@@ -3,7 +3,7 @@ export type RoomStatus     = "active" | "archived";
 export type SlowMode       = "off" | "5s" | "30s" | "60s";
 export type MemberStatus   = "online" | "away" | "offline" | "muted";
 export type MemberRole     = "host" | "member";
-export type MessageType    = "text" | "code" | "system";
+export type MessageType    = "text" | "code" | "system" | "question";
 export type SessionStatus  = "active" | "ended";
 
 export interface DiscussionRoom {
@@ -23,6 +23,14 @@ export interface DiscussionRoom {
   inviteToken?: string;
   slowMode: SlowMode;
   pinnedMessageId?: string;
+  viewOnly?: boolean;
+  // Socratic Debugging Mode
+  socraticMode: boolean;
+  socraticSeekerId?: string | null;
+  socraticStartedAt?: string | null;
+  // Linked question
+  linkedQuestionId?: string | null;
+  linkedQuestionTitle?: string | null;
 }
 
 export interface RoomMessage {

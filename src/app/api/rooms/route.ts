@@ -6,6 +6,7 @@ import {
     discussionRoomsCollection,
     roomMembersCollection,
     roomMessagesCollection,
+    questionCollection,
 } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
 import { getAvatarColor } from "@/lib/getAvatarColor";
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         const userId = await getAuthenticatedUserId();
         const body = await req.json();
 
-        const { name, description, tags, visibility, maxMembers, slowMode } = body;
+        const { name, description, tags, visibility, maxMembers, slowMode, linkedQuestionId } = body;
 
         if (!name?.trim()) {
             return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -55,6 +56,16 @@ export async function POST(req: NextRequest) {
 
         if (name.trim().length > 100) {
             return NextResponse.json({ error: "Name must be under 100 characters" }, { status: 400 });
+        }
+
+        let linkedQuestionTitle: string | null = null;
+        if (linkedQuestionId) {
+            try {
+                const question = await databases.getDocument(db, questionCollection, linkedQuestionId);
+                linkedQuestionTitle = question.title;
+            } catch {
+                return NextResponse.json({ error: "Linked question not found" }, { status: 404 });
+            }
         }
 
         const user = await users.get(userId);
@@ -79,6 +90,11 @@ export async function POST(req: NextRequest) {
                 activeCodeSessionId: null,
                 inviteToken: visibility === "private" ? generateInviteToken() : null,
                 slowMode: slowMode ?? "off",
+                socraticMode: false,
+                socraticSeekerId: null,
+                socraticStartedAt: null,
+                linkedQuestionId: linkedQuestionId ?? null,
+                linkedQuestionTitle,
             }
         );
 

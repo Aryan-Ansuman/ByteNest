@@ -18,7 +18,7 @@
  *   confirm the vote count they already saw.
  */
 
-import { db, questionCollection, prQuestionMetadataCollection } from "@/models/name";
+import { db, questionCollection, prQuestionMetadataCollection, adrQuestionMetadataCollection } from "@/models/name";
 import { databases, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
 import { Query } from "node-appwrite";
@@ -53,6 +53,21 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             ]);
             if (sidecarDocs.total > 0) {
                 prMetadata = sidecarDocs.documents[0];
+            }
+        } catch {
+            // ignore
+        }
+    }
+
+    let adrMetadata = null;
+    if (question.isAdr) {
+        try {
+            const sidecarDocs = await databases.listDocuments(db, adrQuestionMetadataCollection, [
+                Query.equal("questionId", question.$id),
+                Query.limit(1)
+            ]);
+            if (sidecarDocs.total > 0) {
+                adrMetadata = sidecarDocs.documents[0];
             }
         } catch {
             // ignore
@@ -122,7 +137,7 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
                     | undefined) ?? null,
             smellEvidence: (question.smellEvidence as string | undefined) ?? null,
             // ─── PR-Linked Q&A (Phase 4/5) ────────────────────────────────
-            questionType: (question.isPr ? "pr_linked" : "standard") as "standard" | "pr_linked",
+            questionType: (question.isPr ? "pr_linked" : question.isAdr ? "adr" : "standard") as "standard" | "pr_linked" | "adr",
             prUrl: (prMetadata?.prUrl as string | null | undefined) ?? null,
             prRepoOwner: (prMetadata?.prRepoOwner as string | null | undefined) ?? null,
             prRepoName: (prMetadata?.prRepoName as string | null | undefined) ?? null,
@@ -137,6 +152,13 @@ const Page = async ({ params }: { params: { quesId: string; quesName: string } }
             prMergedAt: (prMetadata?.prMergedAt as string | null | undefined) ?? null,
             prClosedAt: (prMetadata?.prClosedAt as string | null | undefined) ?? null,
             activityAt: (question.activityAt as string | null | undefined) ?? null,
+            // ─── ADR Questions ────────────────────────────────────────────
+            optionA: (adrMetadata?.optionA as string | null | undefined) ?? null,
+            optionB: (adrMetadata?.optionB as string | null | undefined) ?? null,
+            optionADescription: (adrMetadata?.optionADescription as string | null | undefined) ?? null,
+            optionBDescription: (adrMetadata?.optionBDescription as string | null | undefined) ?? null,
+            adrDimensions: (adrMetadata?.adrDimensions as string | null | undefined) ?? null,
+            adrStatus: (adrMetadata?.adrStatus as "open" | "concluded" | null | undefined) ?? null,
         },
         author: {
             $id: author.$id,

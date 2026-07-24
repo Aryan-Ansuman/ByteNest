@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { questionId, answer, authorId, solutionCode, solutionLanguage, diffLineRef, diffLineContext } = await request.json();
+        const { questionId, answer, authorId, solutionCode, solutionLanguage, diffLineRef, diffLineContext, parentAnswerId, condition, branchLabel } = await request.json();
 
         if (authorId !== requesterId) {
             return forbiddenResponse("authorId does not match authenticated user");
@@ -100,11 +100,66 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // ─── Branching Answer Trees — Decision 2, 6, 7 ──────────────────
+        // Only runs when this answer is a branch (parentAnswerId present).
+        // Root answers skip this block entirely and default to depth 0.
+        const MAX_DEPTH = 2;
+        let branchDepth = 0;
+        let resolvedBranchLabel: string | null = null;
+
+        if (typeof parentAnswerId === "string" && parentAnswerId.length > 0) {
+            const trimmedCondition = typeof condition === "string" ? condition.trim() : "";
+            if (trimmedCondition.length === 0) {
+                return NextResponse.json(
+                    { error: "condition is required when creating a branch" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+
+            let parentAnswer: Awaited<ReturnType<typeof databases.getDocument>>;
+            try {
+                parentAnswer = await databases.getDocument(db, answerCollection, parentAnswerId);
+            } catch {
+                return NextResponse.json(
+                    { error: "Parent answer not found" },
+                    { status: 404, headers: rlHeaders }
+                );
+            }
+
+            if (parentAnswer.questionId !== questionId) {
+                return NextResponse.json(
+                    { error: "Branch must belong to the same question as its parent" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+
+            const parentDepth = (parentAnswer.branchDepth as number) ?? 0;
+            if (parentDepth >= MAX_DEPTH) {
+                return NextResponse.json(
+                    { error: "Maximum branch depth reached. This answer cannot have further branches." },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+
+            branchDepth = parentDepth + 1;
+            resolvedBranchLabel =
+                typeof branchLabel === "string" && branchLabel.trim().length > 0
+                    ? branchLabel.trim().slice(0, 100)
+                    : trimmedCondition.slice(0, 100);
+        }
+
         const response = await databases.createDocument(db, answerCollection, ID.unique(), {
             content: sanitized,
             authorId,
             questionId,
             isAccepted: false,
+            // ─── Branching Answer Trees ──────────────────────────────────
+            // Root answers (no parentAnswerId): parentAnswerId/condition/
+            // branchLabel stay null, branchDepth stays 0.
+            parentAnswerId: typeof parentAnswerId === "string" && parentAnswerId.length > 0 ? parentAnswerId : null,
+            condition: branchDepth > 0 ? (condition as string).trim() : null,
+            branchDepth,
+            branchLabel: branchDepth > 0 ? resolvedBranchLabel : null,
             // TVA — solutionCode is separate from the markdown explanation in
             // `content`. Both nullable: most answers won't carry one.
             ...(typeof solutionCode === "string" && solutionCode.trim().length > 0
@@ -120,6 +175,26 @@ export async function POST(request: NextRequest) {
         });
 
         await syncQuestionAnswerMetadata(questionId, response.$createdAt);
+
+        // ─── Branching Answer Trees (Phase 8) ───────────────────────────
+        // Denormalized hint for the /questions list — set once, never
+        // cleared (Phase 0, Decision 8). Fire-and-forget: it's a UI hint,
+        // not a source of truth, so a failed write here should never block
+        // or fail the answer creation response.
+        if (typeof response.branchDepth === "number" && response.branchDepth > 0) {
+            databases
+                .updateDocument(db, questionCollection, questionId, { hasBranches: true })
+                .catch((error: any) => {
+                    const missingAttribute =
+                        /attribute not found|unknown attribute|invalid document structure/i.test(
+                            error?.message ?? ""
+                        ) && /hasBranches/i.test(error?.message ?? "");
+                    if (!missingAttribute) {
+                        console.error("Failed to set hasBranches on question", questionId, error);
+                    }
+                });
+        }
+
         await revalidateQuestionCaches(questionId);
 
         // ── Step 3.4: Trigger skill recalculation on answer posted ──
@@ -235,6 +310,15 @@ export async function PATCH(request: NextRequest) {
             }
 
             question = await databases.getDocument(db, questionCollection, questionId);
+            if (question.isAdr) {
+                return NextResponse.json(
+                    {
+                        error:
+                            "ADR questions do not have accepted answers. The community radar chart is the definitive output.",
+                    },
+                    { status: 400 }
+                );
+            }
             if (question.authorId !== requesterId) {
                 return forbiddenResponse("Only the question author can accept or unaccept answers");
             }
@@ -303,6 +387,34 @@ export async function PATCH(request: NextRequest) {
         });
         await revalidateQuestionCaches(questionId, [question!.title as string]);
 
+        // ─── Branching Answer Trees — Decision 5, 9 ─────────────────────
+        // When the accepted node is a branch, walk up its parent chain
+        // (max 2 hops: depth-2 -> depth-1 -> depth-0) so the client can
+        // highlight the root-to-branch path without a separate fetch.
+        let parentChain: Array<{ $id: string; branchDepth: number; condition: string | null }> = [];
+        if (accept && updated.parentAnswerId) {
+            try {
+                const parent = await databases.getDocument(db, answerCollection, updated.parentAnswerId as string);
+                parentChain.push({
+                    $id: parent.$id,
+                    branchDepth: parent.branchDepth as number,
+                    condition: (parent.condition as string) ?? null,
+                });
+                if (parent.parentAnswerId) {
+                    const grandparent = await databases.getDocument(db, answerCollection, parent.parentAnswerId as string);
+                    parentChain.push({
+                        $id: grandparent.$id,
+                        branchDepth: grandparent.branchDepth as number,
+                        condition: (grandparent.condition as string) ?? null,
+                    });
+                }
+                // Order root-first for the client's path-highlight logic.
+                parentChain.reverse();
+            } catch {
+                // Non-fatal — parent chain is a UI convenience only.
+            }
+        }
+
         const tags = (question!.tags as string[]) ?? [];
         if (tags.length > 0) {
             triggerSkillRecalculation({
@@ -337,7 +449,10 @@ export async function PATCH(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({ data: updated }, { status: 200 });
+        return NextResponse.json(
+            { data: updated, ...(parentChain.length > 0 ? { parentChain } : {}) },
+            { status: 200 }
+        );
     } catch (error: unknown) {
         if (error instanceof Response) return error;
         const e = error as any;
@@ -384,6 +499,21 @@ export async function DELETE(request: NextRequest) {
 
         const authorId   = answer.authorId as string;
         const questionId = answer.questionId as string;
+
+        // ─── Branching Answer Trees — Decision 6 ────────────────────────
+        // Block deletion (not cascade, not orphan-promotion) if this answer
+        // has any branch replies. Checked first — no point fetching votes/
+        // comments for a deletion we're about to reject.
+        const children = await databases.listDocuments(db, answerCollection, [
+            Query.equal("parentAnswerId", answerId),
+            Query.limit(1),
+        ]);
+        if (children.total > 0) {
+            return NextResponse.json(
+                { error: `This answer has ${children.total} branch reply/replies. Delete all branches before deleting the parent.` },
+                { status: 400 }
+            );
+        }
 
         const [votes, comments, questionTags] = await Promise.all([
             listAllDocuments(voteCollection, [

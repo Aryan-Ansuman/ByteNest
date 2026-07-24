@@ -13,6 +13,14 @@ export type VoteStatus = "upvoted" | "downvoted";
 export type AnswerSort = "Oldest" | "Active" | "Votes" | "Freshness";
 export type CommentTargetType = "question" | "answer";
 
+export const MAX_BRANCH_DEPTH = 2;
+
+export interface SubmitAnswerBranchOptions {
+    parentAnswerId: string;
+    condition: string;
+    branchLabel: string;
+}
+
 export interface AppDocument {
     $id: string;
     $createdAt: string;
@@ -58,8 +66,8 @@ export interface QuestionDocument extends AppDocument {
     systemTags?: string[] | null;
     smellAnalysisStatus?: "pending" | "processing" | "complete" | "failed" | "skipped" | null;
     smellEvidence?: string | null;
-    // ─── PR-Linked Q&A (Phase 4) ──────────────────────────────────────
-    questionType?: "standard" | "pr_linked";
+    // ─── PR-Linked Q&A (Phase 4) & ADR (Phase 3+) ───────────────────
+    questionType?: "standard" | "pr_linked" | "adr";
     prUrl?: string | null;
     prRepoOwner?: string | null;
     prRepoName?: string | null;
@@ -74,6 +82,12 @@ export interface QuestionDocument extends AppDocument {
     prMergedAt?: string | null;
     prClosedAt?: string | null;
     activityAt?: string | null;
+    optionA?: string | null;
+    optionB?: string | null;
+    optionADescription?: string | null;
+    optionBDescription?: string | null;
+    adrDimensions?: string | null;
+    adrStatus?: "open" | "concluded" | null;
 }
 
 export type VerificationStatus =
@@ -136,6 +150,13 @@ export interface AnswerDoc extends AppDocument {
     diffLineRef?: string | null;
     /** Snapshot of the diff content around the anchor at answer-creation time. */
     diffLineContext?: string | null;
+    // ─── Branching Answer Trees (Phase 3) ─────────────────────────────
+    parentAnswerId?: string | null;
+    condition?: string | null;
+    branchDepth?: number;
+    branchLabel?: string | null;
+    /** Client-only — assembled by the tree builder, not stored in DB. */
+    children?: AnswerDoc[];
 }
 
 export interface AiSummaryContent {
@@ -238,7 +259,11 @@ interface QuestionDetailContextValue {
     pendingAcceptOverride: { answerId: string } | null;
     confirmAcceptOverride: () => void;
     cancelAcceptOverride: () => void;
-    submitAnswer: (content: string, versionContext?: SubmitAnswerVersionContext) => Promise<boolean>;
+    submitAnswer: (
+        content: string,
+        versionContext?: SubmitAnswerVersionContext,
+        branchOptions?: SubmitAnswerBranchOptions
+    ) => Promise<boolean>;
     /** PR-Linked Q&A (Phase 6) — posts an answer anchored to a specific diff line rather than general. */
     submitLineAnswer: (
         content: string,
@@ -269,6 +294,18 @@ interface QuestionDetailContextValue {
         dynamicPagination?: Partial<AnswerPaginationState>,
         dynamicAcceptedAnswerId?: string | null
     ) => void;
+    // ─── Branching Answer Trees (Phase 3) ──────────────────────────────
+    answerTree: AnswerDoc[];
+    useTreeMode: boolean;
+    navigatorSelections: Set<string>;
+    setNavigatorSelections: (selections: Set<string>) => void;
+    visibleConditions: string[];
+    getBranchCount: (answerId: string) => number;
+    // ─── Phase 7: Accept, Deep-Link, and Sharing ────────────────────────
+    expandedAnswerIds: Set<string>;
+    expandAnswer: (answerId: string) => void;
+    acceptedPathIds: Set<string>;
+    acceptedAnswerId: string | null;
 }
 
 interface ApiErrorShape {
@@ -356,6 +393,91 @@ export function QuestionDetailProvider({
     const [isDeletingQuestion, setIsDeletingQuestion] = React.useState(false);
     const [acceptingAnswerId, setAcceptingAnswerId] = React.useState<string | null>(null);
     const [pendingAcceptOverride, setPendingAcceptOverride] = React.useState<{ answerId: string } | null>(null);
+    
+    // ─── Branching Answer Trees (Phase 3) ──────────────────────────────
+    const [navigatorSelections, setNavigatorSelections] = React.useState<Set<string>>(new Set());
+
+    // ─── Phase 7: Accept, Deep-Link, and Sharing ────────────────────────
+    const [expandedAnswerIds, setExpandedAnswerIds] = React.useState<Set<string>>(new Set());
+
+    const expandAnswer = React.useCallback((answerId: string) => {
+        setExpandedAnswerIds((prev) => {
+            if (prev.has(answerId)) return prev;
+            const next = new Set(prev);
+            next.add(answerId);
+            return next;
+        });
+    }, []);
+
+    // Walks parentAnswerId up to root, expanding every ancestor so a deep
+    // branch is visible without the reader manually opening each level.
+    const expandAncestorChain = React.useCallback(
+        (answerId: string) => {
+            const byId = new Map(answers.documents.map((a) => [a.$id, a]));
+            let current = byId.get(answerId) ?? null;
+            const toExpand: string[] = [];
+            while (current?.parentAnswerId) {
+                toExpand.push(current.parentAnswerId);
+                current = byId.get(current.parentAnswerId) ?? null;
+            }
+            if (toExpand.length === 0) return;
+            setExpandedAnswerIds((prev) => new Set([...Array.from(prev), ...toExpand]));
+        },
+        [answers.documents]
+    );
+
+    // Root -> accepted-branch id chain, used for the left-border highlight path.
+    const acceptedPathIds = React.useMemo(() => {
+        if (!acceptedAnswerId) return new Set<string>();
+        const byId = new Map(answers.documents.map((a) => [a.$id, a]));
+        const path = new Set<string>();
+        let current = byId.get(acceptedAnswerId) ?? null;
+        while (current) {
+            path.add(current.$id);
+            current = current.parentAnswerId ? byId.get(current.parentAnswerId) ?? null : null;
+        }
+        return path;
+    }, [acceptedAnswerId, answers.documents]);
+
+    // Auto-expand + scroll to the accepted answer if it's a branch, once on load.
+    React.useEffect(() => {
+        if (!acceptedAnswerId) return;
+        const accepted = answers.documents.find((a) => a.$id === acceptedAnswerId);
+        if (!accepted?.parentAnswerId) return; // root accepted answers need no expansion
+        expandAncestorChain(accepted.$id);
+        const el = document.getElementById(`answer-${accepted.$id}`);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [acceptedAnswerId]); // run once acceptedAnswerId is first known, not on every answers change
+
+    // Deep-link: on mount, read #answer-{id} and expand/scroll to it if it's a branch.
+    React.useEffect(() => {
+        const hash = window.location.hash; // "#answer-abc123"
+        const match = hash.match(/^#answer-([\w.-]+)$/);
+        if (!match) return;
+        const targetId = match[1];
+        const target = answers.documents.find((a) => a.$id === targetId);
+        if (!target) return; // tree may not be hydrated yet; effect re-runs when answers change
+        if (target.parentAnswerId) expandAncestorChain(target.$id);
+        // rAF ensures the (possibly just-expanded) node is in the DOM before scrolling
+        requestAnimationFrame(() => {
+            document.getElementById(`answer-${targetId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    }, [answers.documents, expandAncestorChain]);
+
+    const useTreeMode = React.useMemo(() => {
+        return answers.documents.some((a) => (a.branchDepth ?? 0) > 0);
+    }, [answers.documents]);
+
+    const visibleConditions = React.useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const answer of answers.documents) {
+            if (answer.condition) {
+                counts.set(answer.condition, (counts.get(answer.condition) ?? 0) + 1);
+            }
+        }
+        return Array.from(counts.keys()).sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
+    }, [answers.documents]);
 
     React.useEffect(() => {
         const channel = `databases.${db}.collections.${questionCollection}.documents.${question.$id}`;
@@ -458,6 +580,10 @@ export function QuestionDetailProvider({
             return (b.freshnessScore ?? 100) - (a.freshnessScore ?? 100);
         });
     }, [displayAnswers, answerSort, getAnswerScore, question.hasTestSuite]);
+
+    const answerTree = React.useMemo(() => {
+        return buildAnswerTree(sortedAnswers);
+    }, [sortedAnswers]);
 
     // bestAnswer is the explicitly accepted one — NOT just the top vote-getter.
     const bestAnswer = React.useMemo(
@@ -900,8 +1026,17 @@ export function QuestionDetailProvider({
 
     // ── Answer CRUD ───────────────────────────────────────────────────────
 
+    const getBranchCount = React.useCallback(
+        (answerId: string) => answers.documents.filter((a) => a.parentAnswerId === answerId).length,
+        [answers.documents]
+    );
+
     const submitAnswer = React.useCallback(
-        async (content: string, versionContext?: SubmitAnswerVersionContext) => {
+        async (
+            content: string,
+            versionContext?: SubmitAnswerVersionContext,
+            branchOptions?: SubmitAnswerBranchOptions
+        ) => {
             if (isDeletingQuestion) {
                 toast("This question is being deleted");
                 return false;
@@ -914,13 +1049,28 @@ export function QuestionDetailProvider({
             const trimmed = content.trim();
             if (!trimmed) return false;
 
+            let branchDepth = 0;
+            let branchLabel: string | null = null;
+            const parentAnswerId = branchOptions?.parentAnswerId;
+            const condition = branchOptions?.condition;
+
+            if (parentAnswerId) {
+                const parent = answers.documents.find(a => a.$id === parentAnswerId);
+                branchDepth = parent ? (parent.branchDepth ?? 0) + 1 : 1;
+                branchLabel = branchOptions?.branchLabel ?? (condition ? condition.trim().substring(0, 100) : null);
+            }
+
             const optimisticId = `optimistic-answer-${crypto.randomUUID()}`;
             const optimisticAnswer = createOptimisticAnswer(
                 trimmed,
                 question.$id,
                 currentUser,
                 optimisticId,
-                versionContext
+                versionContext,
+                parentAnswerId,
+                condition?.trim(),
+                branchDepth,
+                branchLabel
             );
             setAnswers((prev) => ({
                 total: prev.total + 1,
@@ -935,6 +1085,9 @@ export function QuestionDetailProvider({
                         questionId: question.$id,
                         answer: trimmed,
                         authorId: currentUser.$id,
+                        parentAnswerId,
+                        condition,
+                        branchLabel,
                     }),
                 });
 
@@ -967,7 +1120,7 @@ export function QuestionDetailProvider({
                 return false;
             }
         },
-        [currentUser, isDeletingQuestion, promptSignIn, question.$id]
+        [answers.documents, currentUser, isDeletingQuestion, promptSignIn, question.$id]
     );
 
     // ─── PR-Linked Q&A (Phase 6) ────────────────────────────────────────
@@ -1406,6 +1559,16 @@ export function QuestionDetailProvider({
             deleteQuestion,
             hydrateDynamic,
             appendDynamicAnswers,
+            answerTree,
+            useTreeMode,
+            navigatorSelections,
+            setNavigatorSelections,
+            visibleConditions,
+            getBranchCount,
+            expandedAnswerIds,
+            expandAnswer,
+            acceptedPathIds,
+            acceptedAnswerId,
         }),
         [
             question,
@@ -1459,6 +1622,14 @@ export function QuestionDetailProvider({
             closeAnswerComposer,
             hydrateDynamic,
             appendDynamicAnswers,
+            answerTree,
+            useTreeMode,
+            navigatorSelections,
+            visibleConditions,
+            getBranchCount,
+            expandedAnswerIds,
+            expandAnswer,
+            acceptedPathIds,
         ]
     );
 
@@ -1707,7 +1878,11 @@ function createOptimisticAnswer(
     questionId: string,
     user: CurrentUser,
     id: string,
-    versionContext?: SubmitAnswerVersionContext
+    versionContext?: SubmitAnswerVersionContext,
+    parentAnswerId?: string,
+    condition?: string,
+    branchDepth?: number,
+    branchLabel?: string | null
 ): AnswerDoc {
     const now = new Date().toISOString();
     return {
@@ -1732,6 +1907,11 @@ function createOptimisticAnswer(
         freshnessLabel: "fresh",
         stalenessVoteCount: 0,
         verifiedByAuthorAt: null,
+        parentAnswerId: parentAnswerId || null,
+        condition: condition || null,
+        branchDepth: branchDepth || 0,
+        branchLabel: branchLabel || null,
+        children: [],
     };
 }
 
@@ -1748,6 +1928,11 @@ function hydrateAnswer(answer: AnswerDoc, user: CurrentUser): AnswerDoc {
         freshnessLabel: answer.freshnessLabel ?? "fresh",
         stalenessVoteCount: answer.stalenessVoteCount ?? 0,
         verifiedByAuthorAt: answer.verifiedByAuthorAt ?? null,
+        parentAnswerId: answer.parentAnswerId ?? null,
+        condition: answer.condition ?? null,
+        branchDepth: answer.branchDepth ?? 0,
+        branchLabel: answer.branchLabel ?? null,
+        children: answer.children ?? [],
     };
 }
 
@@ -1930,4 +2115,32 @@ function getCommentSubtreeIds(comments: CommentDoc[], rootId: string) {
     }
 
     return ids;
+}
+
+// ─── Branching Answer Trees (Phase 3) ──────────────────────────────────
+function buildAnswerTree(flatAnswers: AnswerDoc[]): AnswerDoc[] {
+    const parentMap = new Map<string, AnswerDoc[]>();
+    const rootAnswers: AnswerDoc[] = [];
+
+    // Initialize all children arrays
+    for (const answer of flatAnswers) {
+        answer.children = [];
+        if (answer.parentAnswerId) {
+            const siblings = parentMap.get(answer.parentAnswerId) ?? [];
+            siblings.push(answer);
+            parentMap.set(answer.parentAnswerId, siblings);
+        } else {
+            rootAnswers.push(answer);
+        }
+    }
+
+    // Attach children to their parents
+    for (const answer of flatAnswers) {
+        const children = parentMap.get(answer.$id);
+        if (children) {
+            answer.children = children;
+        }
+    }
+
+    return rootAnswers;
 }

@@ -9,6 +9,7 @@ import {
     Check,
     Copy,
     Flag,
+    GitBranch,
     MessageCircle,
     Trash2,
     MoreHorizontal,
@@ -21,7 +22,7 @@ import MarkdownPreview from "@/components/MarkdownPreview";
 import { cn } from "@/lib/utils";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import slugify from "@/utils/slugify";
-import { AnswerDoc, useQuestionDetail } from "./QuestionDetailContext";
+import { AnswerDoc, MAX_BRANCH_DEPTH, useQuestionDetail } from "./QuestionDetailContext";
 import CommentsSection from "./CommentsSection";
 import { Avatar, ConfirmDialog } from "./shared";
 import ShareMenu, { copyText } from "./ShareMenu";
@@ -30,17 +31,18 @@ import VersionContextEditor, { EMPTY_VERSION_CONTEXT, type VersionContextValue }
 import FreshnessBadge from "./FreshnessBadge";
 import StalenessReportButton from "./StalenessReportButton";
 import ConfirmStillValidButton from "./ConfirmStillValidButton";
+import BranchCreationForm from "./BranchCreationForm";
 
 // ─── AnswerMoreMenu ───────────────────────────────────────────────────────────
 
 function AnswerMoreMenu({
-    answerId,
+    answer,
     isOwner,
     onDelete,
     onEditVersion,
     disabled = false,
 }: {
-    answerId: string;
+    answer: AnswerDoc;
     isOwner: boolean;
     onDelete: () => void;
     onEditVersion: () => void;
@@ -71,7 +73,11 @@ function AnswerMoreMenu({
 
     const handleCopyLink = async () => {
         setOpen(false);
-        const url = `${window.location.origin}${window.location.pathname}#answer-${answerId}`;
+        const answerId = answer.$id;
+        const base = `${window.location.origin}${window.location.pathname}`;
+        const url = answer.condition
+            ? `${base}?setup=${encodeURIComponent(answer.condition)}#answer-${answerId}`
+            : `${base}#answer-${answerId}`;
         try {
             await copyText(url);
             toast.success("Answer link copied");
@@ -289,6 +295,7 @@ export default function AnswerCard({
         cancelAcceptOverride,
         updateAnswerVersionContext,
         patchAnswerFreshness,
+        getBranchCount,
     } = useQuestionDetail();
 
     const canRetryVerification =
@@ -299,6 +306,12 @@ export default function AnswerCard({
     const [versionEditorOpen, setVersionEditorOpen] = React.useState(false);
     const [versionDraft, setVersionDraft] = React.useState<VersionContextValue>(EMPTY_VERSION_CONTEXT);
     const [isSavingVersion, setIsSavingVersion] = React.useState(false);
+    const [branchFormOpen, setBranchFormOpen] = React.useState(false);
+
+    const branchDepth = answer.branchDepth ?? 0;
+    const canBranch = branchDepth < MAX_BRANCH_DEPTH;
+    const branchCount = getBranchCount(answer.$id);
+    const isRootAnswer = branchDepth === 0;
 
     const questionTags = React.useMemo(
         () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
@@ -376,7 +389,7 @@ export default function AnswerCard({
                     onUpvote={() => voteAnswer(answer.$id, "upvoted")}
                     onDownvote={() => voteAnswer(answer.$id, "downvoted")}
                     isAccepted={answer.isAccepted}
-                    isQuestionAuthor={isQuestionAuthor}
+                    isQuestionAuthor={isQuestionAuthor && question.questionType !== "adr"}
                     onAccept={() => acceptAnswer(answer.$id)}
                     isAccepting={isAccepting}
                     votePending={answerVotePending}
@@ -427,7 +440,7 @@ export default function AnswerCard({
                         )}
 
                         <AnswerMoreMenu
-                            answerId={answer.$id}
+                            answer={answer}
                             isOwner={isAnswerOwner}
                             onDelete={() => setDeleteDialogOpen(true)}
                             onEditVersion={openVersionEditor}
@@ -509,6 +522,19 @@ export default function AnswerCard({
                     )}
                 </div>
 
+                {canBranch && branchCount === 0 && !branchFormOpen && (
+                    <button
+                        type="button"
+                        onClick={() => setBranchFormOpen(true)}
+                        disabled={interactionsDisabled}
+                        className="mt-4 flex w-full items-center gap-2 rounded-xl border border-dashed border-[#a7c8b3]/25 px-3.5 py-2.5 text-left text-xs font-medium text-[#a7c8b3]/70 transition hover:border-[#a7c8b3]/40 hover:text-[#a7c8b3] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <GitBranch className="size-3.5 shrink-0" />
+                        Add a branch for a specific environment or version
+                        <span aria-hidden="true">→</span>
+                    </button>
+                )}
+
                 {/* Action bar */}
                 <div className="mt-5 flex items-center gap-6 text-[13px] font-medium text-zinc-500">
                     <button
@@ -551,6 +577,41 @@ export default function AnswerCard({
                             }
                         />
                     )}
+
+                    {canBranch && (
+                        <button
+                            onClick={() => setBranchFormOpen((v) => !v)}
+                            disabled={interactionsDisabled}
+                            aria-expanded={branchFormOpen}
+                            className={cn(
+                                "flex items-center gap-2 transition disabled:cursor-not-allowed disabled:opacity-50",
+                                branchFormOpen ? "text-[#a7c8b3]" : "hover:text-[#a7c8b3]"
+                            )}
+                        >
+                            <GitBranch className="size-4" />
+                            Add branch
+                            {branchCount > 0 && (
+                                <span className="text-zinc-600">({branchCount})</span>
+                            )}
+                        </button>
+                    )}
+                </div>
+
+                {/* Inline branch creation form */}
+                <div
+                    className={cn(
+                        "grid transition-[grid-template-rows] duration-300 ease-out",
+                        branchFormOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                    )}
+                >
+                    <div className="overflow-hidden">
+                        {branchFormOpen && (
+                            <BranchCreationForm
+                                parentAnswerId={answer.$id}
+                                onDone={() => setBranchFormOpen(false)}
+                            />
+                        )}
+                    </div>
                 </div>
 
                 {/* Discussion thread */}

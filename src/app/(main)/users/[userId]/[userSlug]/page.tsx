@@ -6,13 +6,15 @@ import {
     questionCollection,
     voteCollection,
     commentCollection,
+    adrScoreSubmissionsCollection,
 } from "@/models/name";
 import { Query } from "node-appwrite";
 import React from "react";
 import UserProfileClient from "./UserProfileClient";
+import { getSocraticSessionSummary } from "@/lib/socratic/sessionHistory";
 
 const Page = async ({ params }: { params: { userId: string; userSlug: string } }) => {
-    const [user, questions, answers, votes, comments] = await Promise.all([
+    const [user, questions, answers, votes, comments, adrSubmissions, socraticSessions] = await Promise.all([
         users.get<UserPrefs>(params.userId),
         databases.listDocuments(db, questionCollection, [
             Query.equal("authorId", params.userId),
@@ -34,6 +36,12 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
             Query.orderDesc("$createdAt"),
             Query.limit(10),
         ]),
+        databases.listDocuments(db, adrScoreSubmissionsCollection, [
+            Query.equal("userId", params.userId),
+            Query.orderDesc("$createdAt"),
+            Query.limit(6),
+        ]),
+        getSocraticSessionSummary(params.userId).catch(() => null),
     ]);
 
     // Enrich questions with vote + answer counts
@@ -112,6 +120,33 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
         })
     );
 
+    // Enrich ADR score submissions with the comparison's question context
+    const enrichedAdrSubmissions = await Promise.all(
+        adrSubmissions.documents.map(async (s) => {
+            try {
+                const q = await databases.getDocument(db, questionCollection, s.questionId as string, [
+                    Query.select(["title"]),
+                ]);
+                const adrMetaList = await databases.listDocuments(db, "adr_question_metadata", [
+                    Query.equal("questionId", s.questionId as string),
+                    Query.limit(1)
+                ]);
+                const adrMeta = adrMetaList.documents[0];
+                
+                return {
+                    $id: s.$id,
+                    questionId: s.questionId as string,
+                    questionTitle: q.title as string,
+                    optionA: adrMeta ? (adrMeta.optionA as string) : null,
+                    optionB: adrMeta ? (adrMeta.optionB as string) : null,
+                    submittedAt: (s.submittedAt as string | undefined) ?? s.$createdAt,
+                };
+            } catch {
+                return null;
+            }
+        })
+    );
+
     const profileData = {
         userId: params.userId,
         userSlug: params.userSlug,
@@ -123,9 +158,12 @@ const Page = async ({ params }: { params: { userId: string; userSlug: string } }
         totalQuestions: questions.total,
         totalAnswers: answers.total,
         totalVotes: votes.total,
+        totalAdrContributions: adrSubmissions.total,
         questions: enrichedQuestions,
         answers: enrichedAnswers,
         votes: enrichedVotes.filter(Boolean) as any[],
+        adrContributions: enrichedAdrSubmissions.filter(Boolean) as any[],
+        socraticSessions,
     };
 
     return <UserProfileClient profile={profileData} />;

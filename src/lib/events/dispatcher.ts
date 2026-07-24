@@ -11,6 +11,7 @@ import { processAnalyzeCodeSmells } from "./processors/AnalyzeCodeSmellsProcesso
 import { processLlmSmellValidation } from "./processors/LlmSmellValidationProcessor";
 import { processFetchPrDiff } from "./processors/FetchPrDiffProcessor";
 import { processRefreshPrDiff } from "./processors/RefreshPrDiffProcessor";
+import { processCheckAdrConsensus } from "./processors/CheckAdrConsensusProcessor";
 import { db, questionCollection } from "@/models/name";
 import { databases } from "@/models/server/config";
 
@@ -132,6 +133,11 @@ async function route(eventType: EventType, payload: unknown): Promise<void> {
     case "RefreshPrDiff":
       return processRefreshPrDiff(
         payload as EventPayloadMap["RefreshPrDiff"]
+      );
+
+    case "CheckAdrConsensus":
+      return processCheckAdrConsensus(
+        payload as EventPayloadMap["CheckAdrConsensus"]
       );
 
     default: {

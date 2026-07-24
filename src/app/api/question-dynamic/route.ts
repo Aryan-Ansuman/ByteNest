@@ -135,6 +135,29 @@ export async function GET(request: NextRequest) {
                 comments: { total: answerComments.length, documents: answerComments },
                 upvotesDocuments: { total: 0, documents: [] },
                 downvotesDocuments: { total: 0, documents: [] },
+                // ── Test-Verified Answers ──
+                solutionCode: answer.solutionCode,
+                verificationStatus: answer.verificationStatus,
+                verificationScore: answer.verificationScore,
+                lastVerifiedAt: answer.lastVerifiedAt,
+                // ── Temporal Answer Decay ──
+                versionMin: answer.versionMin,
+                versionMax: answer.versionMax,
+                techPackage: answer.techPackage,
+                techEcosystem: answer.techEcosystem,
+                freshnessScore: answer.freshnessScore,
+                freshnessLabel: answer.freshnessLabel,
+                lastFreshnessCheck: answer.lastFreshnessCheck,
+                stalenessVoteCount: answer.stalenessVoteCount,
+                verifiedByAuthorAt: answer.verifiedByAuthorAt,
+                // ── PR-Linked Q&A ──
+                diffLineRef: answer.diffLineRef,
+                diffLineContext: answer.diffLineContext,
+                // ── Branching Answer Trees ──
+                parentAnswerId: answer.parentAnswerId,
+                condition: answer.condition,
+                branchDepth: answer.branchDepth,
+                branchLabel: answer.branchLabel,
             };
         });
 

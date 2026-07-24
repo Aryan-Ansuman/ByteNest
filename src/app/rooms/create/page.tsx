@@ -19,6 +19,7 @@ import {
     Radio,
     Check,
     AlertCircle,
+    Link2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { DiscussionRoom } from "@/types/rooms";
@@ -105,6 +106,14 @@ export default function CreateRoomPage() {
     const [showTagSuggestions, setShowTagSuggestions] = useState(false);
     const [namePreview, setNamePreview] = useState("");
 
+    // Link to a Question (advanced settings, step 2)
+    const [linkedQuestionId, setLinkedQuestionId] = useState<string | null>(null);
+    const [linkedQuestionTitle, setLinkedQuestionTitle] = useState<string | null>(null);
+    const [questionQuery, setQuestionQuery] = useState("");
+    const [questionSuggestions, setQuestionSuggestions] = useState<{ $id: string; title: string }[]>([]);
+    const [showQuestionSuggestions, setShowQuestionSuggestions] = useState(false);
+    const [searchingQuestions, setSearchingQuestions] = useState(false);
+
     const tagInputRef = useRef<HTMLInputElement>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -148,6 +157,44 @@ export default function CreateRoomPage() {
         (t) => !tags.includes(t) && t.includes(tagInput.toLowerCase())
     ).slice(0, 6);
 
+    // ─── Linked question search-as-you-type ───────────────────────────────────
+
+    useEffect(() => {
+        const query = questionQuery.trim();
+        if (query.length < 2) {
+            setQuestionSuggestions([]);
+            return;
+        }
+
+        const timeout = window.setTimeout(async () => {
+            setSearchingQuestions(true);
+            try {
+                const res = await fetch(`/api/search-suggestions?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                setQuestionSuggestions(data.data ?? []);
+            } catch {
+                setQuestionSuggestions([]);
+            } finally {
+                setSearchingQuestions(false);
+            }
+        }, 300);
+
+        return () => window.clearTimeout(timeout);
+    }, [questionQuery]);
+
+    function selectQuestion(q: { $id: string; title: string }) {
+        setLinkedQuestionId(q.$id);
+        setLinkedQuestionTitle(q.title);
+        setQuestionQuery("");
+        setQuestionSuggestions([]);
+        setShowQuestionSuggestions(false);
+    }
+
+    function unlinkQuestion() {
+        setLinkedQuestionId(null);
+        setLinkedQuestionTitle(null);
+    }
+
     // ─── Submit ────────────────────────────────────────────────────────────────
 
     async function handleSubmit(e: React.FormEvent) {
@@ -168,6 +215,7 @@ export default function CreateRoomPage() {
                     slowMode,
                     maxMembers,
                     tags,
+                    linkedQuestionId,
                 }),
             });
             router.push(`/rooms/${data.room.$id}`);
@@ -590,6 +638,62 @@ export default function CreateRoomPage() {
                                 </div>
                             </div>
 
+                            {/* Linked Question */}
+                            <div className="bg-panel/40 border border-white/5 rounded-2xl p-5">
+                                <SectionHeader
+                                    icon={Link2}
+                                    title="Link to a Question"
+                                    description="Optional. Root causes discovered in this room will automatically be saved as an answer."
+                                />
+                                {linkedQuestionId ? (
+                                    <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-surface p-3">
+                                        <span className="flex-1 min-w-0 truncate text-sm text-tx-secondary">
+                                            {linkedQuestionTitle ?? linkedQuestionId}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={unlinkQuestion}
+                                            className="p-1.5 rounded-lg text-tx-muted hover:text-status-danger hover:bg-status-danger/10 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative">
+                                        <div className="flex items-center gap-2 bg-black/40 border border-white/5 rounded-xl px-3.5 py-2.5 focus-within:border-[#a7c8b3]/40 transition-colors">
+                                            <input
+                                                value={questionQuery}
+                                                onChange={(e) => {
+                                                    setQuestionQuery(e.target.value);
+                                                    setShowQuestionSuggestions(true);
+                                                }}
+                                                onFocus={() => setShowQuestionSuggestions(true)}
+                                                onBlur={() => setTimeout(() => setShowQuestionSuggestions(false), 200)}
+                                                placeholder="Search questions..."
+                                                className="w-full bg-transparent text-sm text-tx placeholder-zinc-600 focus:outline-none"
+                                            />
+                                            {searchingQuestions && (
+                                                <Loader2 className="w-4 h-4 animate-spin text-tx-muted" />
+                                            )}
+                                        </div>
+                                        {showQuestionSuggestions && questionSuggestions.length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-1 bg-panel border border-white/5 rounded-xl p-2 shadow-xl z-50 max-h-60 overflow-y-auto">
+                                                {questionSuggestions.map((q) => (
+                                                    <button
+                                                        key={q.$id}
+                                                        type="button"
+                                                        onMouseDown={(e) => { e.preventDefault(); selectQuestion(q); }}
+                                                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-surface text-tx-secondary hover:text-tx text-sm truncate transition-colors"
+                                                    >
+                                                        {q.title}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Code session note */}
                             <div className="bg-panel/40 border border-white/5 rounded-2xl p-5">
                                 <SectionHeader
@@ -658,6 +762,14 @@ export default function CreateRoomPage() {
                                                     </span>
                                                 ))}
                                             </div>
+                                        </div>
+                                    )}
+                                    {linkedQuestionId && (
+                                        <div className="flex items-start justify-between gap-4 text-sm">
+                                            <span className="text-tx-muted shrink-0">Question</span>
+                                            <span className="text-tx-secondary text-right text-xs truncate max-w-[220px]">
+                                                {linkedQuestionTitle ?? linkedQuestionId}
+                                            </span>
                                         </div>
                                     )}
                                 </div>

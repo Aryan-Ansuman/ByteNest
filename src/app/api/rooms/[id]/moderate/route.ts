@@ -7,10 +7,22 @@ import {
     roomMembersCollection,
     roomMessagesCollection,
     codeSessionsCollection,
+    questionCollection,
 } from "@/models/name";
 import { getAuthenticatedUserId } from "@/lib/auth";
+import { postSystemMessage } from "@/lib/rooms/server";
 
-type Action = "kick" | "mute" | "unmute" | "transfer" | "slow_mode" | "view_only" | "pin" | "unpin";
+type Action =
+    | "kick"
+    | "mute"
+    | "unmute"
+    | "transfer"
+    | "slow_mode"
+    | "view_only"
+    | "pin"
+    | "unpin"
+    | "socratic_mode"
+    | "link_question";
 
 export async function PATCH(
     req: NextRequest,
@@ -20,12 +32,15 @@ export async function PATCH(
         const userId = await getAuthenticatedUserId();
         const { id: roomId } = params;
         const body = await req.json();
-        const { action, targetUserId, slowMode, viewOnly, messageId } = body as {
+        const { action, targetUserId, slowMode, viewOnly, messageId, enabled, seekerId, questionId } = body as {
             action: Action;
             targetUserId?: string;
             slowMode?: string;
             viewOnly?: boolean;
             messageId?: string;
+            enabled?: boolean;
+            seekerId?: string | null;
+            questionId?: string | null;
         };
 
         // Verify requester is the host
@@ -169,6 +184,66 @@ export async function PATCH(
                 await databases.updateDocument(db, discussionRoomsCollection, roomId, {
                     pinnedMessageId: null,
                 });
+                return NextResponse.json({ ok: true });
+            }
+
+            case "socratic_mode": {
+                if (enabled === true) {
+                    if (!seekerId) {
+                        return NextResponse.json({ error: "seekerId is required to start Socratic mode" }, { status: 400 });
+                    }
+                    const seeker = await findMember(seekerId);
+                    if (!seeker) {
+                        return NextResponse.json({ error: "Seeker is not a member of this room" }, { status: 400 });
+                    }
+
+                    await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                        socraticMode: true,
+                        socraticSeekerId: seekerId,
+                        socraticStartedAt: new Date().toISOString(),
+                    });
+
+                    await postSystemMessage(
+                        roomId,
+                        `🔍 Socratic Debugging Mode started. ${seeker.displayName} is the seeker. Helpers: ask questions only — no direct answers. Support the seeker in finding the root cause themselves.`
+                    );
+                    return NextResponse.json({ ok: true });
+                }
+
+                await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                    socraticMode: false,
+                    socraticSeekerId: null,
+                    socraticStartedAt: null,
+                });
+
+                await postSystemMessage(roomId, "Socratic Debugging Mode ended.");
+                return NextResponse.json({ ok: true });
+            }
+
+            case "link_question": {
+                if (questionId) {
+                    let question;
+                    try {
+                        question = await databases.getDocument(db, questionCollection, questionId);
+                    } catch {
+                        return NextResponse.json({ error: "Question not found" }, { status: 404 });
+                    }
+
+                    await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                        linkedQuestionId: questionId,
+                        linkedQuestionTitle: question.title,
+                    });
+
+                    await postSystemMessage(roomId, `This room has been linked to the question: ${question.title}`);
+                    return NextResponse.json({ ok: true });
+                }
+
+                await databases.updateDocument(db, discussionRoomsCollection, roomId, {
+                    linkedQuestionId: null,
+                    linkedQuestionTitle: null,
+                });
+
+                await postSystemMessage(roomId, "Question link removed.");
                 return NextResponse.json({ ok: true });
             }
 

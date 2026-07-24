@@ -7,10 +7,10 @@ import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 import TypingIndicator from "./TypingIndicator";
 import { toast } from "sonner";
-import type { RoomMessage } from "@/types/rooms";
+import type { RoomMessage, DiscussionRoom } from "@/types/rooms";
 import { apiFetch } from "@/lib/api-fetch";
 import PinnedMessageBar from "./PinnedMessageBar";
-import { MessageSquare, ChevronDown, Loader2, ArrowDown, Search, X as XIcon } from "lucide-react";
+import { MessageSquare, ChevronDown, Loader2, ArrowDown, Search, X as XIcon, Brain } from "lucide-react";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -237,6 +237,9 @@ export default function ChatPanel({ roomId }: Props) {
             {/* Pinned message */}
             <PinnedMessageBar roomId={roomId} onJumpTo={handleJumpToMessage} />
 
+            {/* Socratic Debugging Mode session banner */}
+            {room?.socraticMode && <SocraticSessionBanner room={room} />}
+
             {/* Search bar */}
             {showSearch && (
                 <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-[#111113] border-b border-white/5">
@@ -399,6 +402,39 @@ export default function ChatPanel({ roomId }: Props) {
     );
 }
 
+function SocraticSessionBanner({ room }: { room: DiscussionRoom }) {
+    const members = useRoomStore((s) => s.members);
+    const [elapsedMinutes, setElapsedMinutes] = useState(0);
+
+    useEffect(() => {
+        if (!room.socraticStartedAt) return;
+
+        const tick = () => {
+            const startedMs = new Date(room.socraticStartedAt as string).getTime();
+            setElapsedMinutes(Math.max(0, Math.floor((Date.now() - startedMs) / 60000)));
+        };
+
+        tick();
+        const interval = window.setInterval(tick, 30000);
+        return () => window.clearInterval(interval);
+    }, [room.socraticStartedAt]);
+
+    const seekerName = members.find((m) => m.userId === room.socraticSeekerId)?.displayName ?? "the seeker";
+
+    return (
+        <div className="shrink-0 flex items-center gap-2.5 px-4 py-2 bg-amber-500/[0.06] border-b border-amber-500/15">
+            <Brain className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-[12px] text-amber-300">
+                <span className="font-semibold">🔍 Socratic Debugging Mode</span> — {seekerName} is the seeker.
+                Helpers: ask questions only, no direct answers.
+            </span>
+            <span className="ml-auto shrink-0 text-[11px] text-amber-400/70 tabular-nums">
+                {elapsedMinutes} {elapsedMinutes === 1 ? "minute" : "minutes"}
+            </span>
+        </div>
+    );
+}
+
 function EmptyState({ roomName }: { roomName: string }) {
     return (
         <div className="flex flex-col items-center justify-center h-full min-h-[300px] px-6 text-center">
@@ -414,4 +450,3 @@ function EmptyState({ roomName }: { roomName: string }) {
         </div>
     );
 }
-

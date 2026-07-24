@@ -65,6 +65,16 @@ export default async function createQuestionCollection() {
         // distinguish PR questions for list filtering, and all other metadata
         // lives in `pr_question_metadata` sidecar collection.
         databases.createBooleanAttribute(db, questionCollection, "isPr", false, false),
+        // ─── Branching Answer Trees (Phase 8) ───────────────────────────
+        // Denormalized hint set by the answer POST route the moment a
+        // branch (branchDepth > 0) is created under this question. Never
+        // reset to false, even if all branches are later deleted — see
+        // Phase 0, Decision 8. Powers the 🌿 indicator on /questions.
+        databases.createBooleanAttribute(db, questionCollection, "hasBranches", false),
+        // ─── Architecture Decision Record (ADR) Questions (Phase 4) ─────
+        // Decision 1: lightweight flag for list filtering. All heavy ADR
+        // metadata (options, descriptions, dimensions) lives in the sidecar.
+        databases.createBooleanAttribute(db, questionCollection, "isAdr", false, false),
     ]);
     console.log("Question Attributes created");
 
@@ -95,10 +105,16 @@ export default async function createQuestionCollection() {
         databases.createIndex(db, questionCollection, "answers_filter", IndexType.Key, ["totalAnswers"]),
         databases.createIndex(db, questionCollection, "activity_sort", IndexType.Key, ["activityAt"]),
 
+        // ─── Branching Answer Trees (Phase 8) ───────────────────────────
+        databases.createIndex(db, questionCollection, "has_branches_filter", IndexType.Key, ["hasBranches"]),
+
         // ─── Code Smell Auto-Tagger (Phase 5) ───────────────────────────
         databases.createIndex(db, questionCollection, "smell_status_filter", IndexType.Key, ["smellAnalysisStatus"]),
         // databases.createIndex(db, questionCollection, "system_tags_filter", IndexType.Key, ["systemTags"]),
         databases.createIndex(db, questionCollection, "smell_analysis_at_sort", IndexType.Key, ["smellAnalysisAt"]),
+
+        // ─── Architecture Decision Record (ADR) Questions (Phase 4) ─────
+        databases.createIndex(db, questionCollection, "isAdr_filter", IndexType.Key, ["isAdr"]),
         // Composite — the worker's actual queue-drain query: pending/failed
         // jobs ordered by when they were last touched.
         databases.createIndex(

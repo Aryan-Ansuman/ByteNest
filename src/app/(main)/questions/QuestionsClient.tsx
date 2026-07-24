@@ -20,6 +20,8 @@ import {
     Bug,
     Github,
     GitPullRequest,
+    GitBranch,
+    GitCompare,
 } from "lucide-react";
 import { getSmellDefinition } from "@/lib/smells/catalog";
 import { Button } from "@/components/ui/button";
@@ -47,8 +49,13 @@ export interface Question {
     answerFreshnessIndicator?: "fresh" | "outdated" | "none";
     // PR-Linked Q&A — Phase 9: undefined/"standard" renders exactly as
     // before. Only "pr_linked" questions carry a prStatus.
-    questionType?: "standard" | "pr_linked";
+    questionType?: "standard" | "pr_linked" | "adr";
     prStatus?: "open" | "merged" | "closed";
+    hasBranches?: boolean;
+    optionA?: string | null;
+    optionB?: string | null;
+    adrStatus?: "open" | "concluded" | null;
+    adrSubmissionCount?: number | null;
     author: {
         $id: string;
         name: string;
@@ -68,6 +75,9 @@ interface Props {
     activeSystemTag?: string;
     // PR-Linked Q&A — Phase 9.
     prOnly?: boolean;
+    // ADR Questions — Phase 9 sidebar filter
+    adrOnly?: boolean;
+    activeAdrStatus?: "open" | "concluded";
 }
 
 const filters = [
@@ -123,6 +133,9 @@ export default function QuestionsClient({
     nextCursor,
     topSystemTags,
     activeSystemTag,
+    prOnly,
+    adrOnly,
+    activeAdrStatus,
 }: Props) {
     const router = useRouter();
     const pathname = usePathname();
@@ -191,6 +204,20 @@ export default function QuestionsClient({
     const setSystemTagFilter = React.useCallback(
         (smellId: string | undefined) => {
             updateParams({ systemTag: smellId, ...RESET_PAGINATION });
+        },
+        [updateParams]
+    );
+
+    const setAdrFilter = React.useCallback(
+        (enabled: boolean) => {
+            updateParams({ adr: enabled ? "true" : undefined, adrStatus: enabled ? activeAdrStatus : undefined, ...RESET_PAGINATION });
+        },
+        [updateParams, activeAdrStatus]
+    );
+
+    const setAdrStatusFilter = React.useCallback(
+        (status: "open" | "concluded" | undefined) => {
+            updateParams({ adr: "true", adrStatus: status, ...RESET_PAGINATION });
         },
         [updateParams]
     );
@@ -364,6 +391,49 @@ export default function QuestionsClient({
                         </div>
                     </div>
                 )}
+
+                <div className="flex flex-col gap-2 border-t border-white/5 pt-3 xl:flex-row xl:items-center">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                        <GitCompare className="size-3.5 text-[#a7c8b3]/70" />
+                        Comparisons
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            onClick={() => setAdrFilter(!adrOnly)}
+                            className={cn(
+                                "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                                adrOnly
+                                    ? "border-[#a7c8b3]/30 bg-[#a7c8b3]/10 text-[#a7c8b3]"
+                                    : "border-white/5 bg-black/15 text-zinc-500 hover:border-[#a7c8b3]/20 hover:text-[#a7c8b3]/80"
+                            )}
+                        >
+                            ADR Comparisons
+                        </button>
+                        {adrOnly && (
+                            <div className="flex gap-1 rounded-full border border-white/5 bg-black/15 p-0.5">
+                                {(["open", "concluded"] as const).map((status) => {
+                                    const isActive = activeAdrStatus === status;
+                                    return (
+                                        <button
+                                            key={status}
+                                            onClick={() => setAdrStatusFilter(isActive ? undefined : status)}
+                                            className={cn(
+                                                "rounded-full px-2.5 py-0.5 text-xs font-medium capitalize transition",
+                                                isActive
+                                                    ? status === "open"
+                                                        ? "bg-emerald-500/20 text-emerald-300"
+                                                        : "bg-purple-500/20 text-purple-300"
+                                                    : "text-zinc-500 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            {status}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </section>
 
             <section className="relative">
@@ -460,22 +530,36 @@ function FilterTab({
 function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag: string) => string }) {
     const excerpt = markdownToPlainExcerpt(question.content, 150);
     const hiddenTagCount = Math.max(0, question.tags.length - 5);
+    const isAdr = question.questionType === "adr";
 
     return (
         <article className="group flex gap-5 px-5 py-5 transition-colors hover:bg-white/[0.025] sm:gap-6">
             <div className="flex w-[76px] shrink-0 flex-col items-center gap-2 pt-0.5">
                 <Stat value={question.totalVotes} label="votes" kind="votes" />
-                <Stat
-                    value={question.totalAnswers}
-                    label="answers"
-                    kind={question.hasAcceptedAnswer ? "accepted" : "answers"}
-                />
+                {isAdr ? (
+                    <Stat value={question.adrSubmissionCount ?? 0} label="assessments" kind="answers" />
+                ) : (
+                    <Stat
+                        value={question.totalAnswers}
+                        label="answers"
+                        kind={question.hasAcceptedAnswer ? "accepted" : "answers"}
+                    />
+                )}
+                {question.hasBranches && (
+                    <div title="Has branch replies for different setups" className="flex items-center gap-1 text-[11px] font-medium text-[#a7c8b3]">
+                        <GitBranch className="size-3" /> branches
+                    </div>
+                )}
                 <Stat value={question.totalViews} label="views" kind="views" />
             </div>
 
             <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-2">
-                    <FreshnessIndicatorDot indicator={question.answerFreshnessIndicator} />
+                    {isAdr ? (
+                        <GitCompare className="mt-0.5 size-3.5 shrink-0 text-[#a7c8b3]" aria-label="ADR comparison" />
+                    ) : (
+                        <FreshnessIndicatorDot indicator={question.answerFreshnessIndicator} />
+                    )}
                     <Link
                         href={`/questions/${question.$id}/${slugify(question.title)}`}
                         className="text-[15px] font-medium leading-snug text-[#a7c8b3] decoration-[#a7c8b3]/60 underline-offset-4 transition group-hover:text-[#c6e2cf] group-hover:underline"
@@ -483,9 +567,28 @@ function QuestionCard({ question, tagHref }: { question: Question; tagHref: (tag
                         {question.title}
                     </Link>
                     {question.questionType === "pr_linked" && <PrBadge prStatus={question.prStatus} />}
+                    {isAdr && question.adrStatus && (
+                        <span
+                            className={cn(
+                                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize",
+                                question.adrStatus === "concluded"
+                                    ? "border-purple-500/30 bg-purple-500/10 text-purple-300"
+                                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            )}
+                        >
+                            {question.adrStatus}
+                        </span>
+                    )}
                 </div>
 
-                {excerpt && <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">{excerpt}</p>}
+                {isAdr && question.optionA && question.optionB ? (
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">
+                        <span className="text-zinc-300">{question.optionA}</span> vs.{" "}
+                        <span className="text-zinc-300">{question.optionB}</span>
+                    </p>
+                ) : (
+                    excerpt && <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">{excerpt}</p>
+                )}
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
                     {question.tags.slice(0, 5).map((tag) => (

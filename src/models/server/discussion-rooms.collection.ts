@@ -25,6 +25,11 @@ export default async function createDiscussionRoomsCollection() {
         databases.createStringAttribute(db, discussionRoomsCollection, "inviteToken", 64, false),
         databases.createEnumAttribute(db, discussionRoomsCollection, "slowMode", ["off", "5s", "30s", "60s"], true),
         databases.createStringAttribute(db, discussionRoomsCollection, "pinnedMessageId", 36, false),
+        databases.createBooleanAttribute(db, discussionRoomsCollection, "socraticMode", false, false, false),
+        databases.createStringAttribute(db, discussionRoomsCollection, "socraticSeekerId", 36, false),
+        databases.createDatetimeAttribute(db, discussionRoomsCollection, "socraticStartedAt", false),
+        databases.createStringAttribute(db, discussionRoomsCollection, "linkedQuestionId", 36, false),
+        databases.createStringAttribute(db, discussionRoomsCollection, "linkedQuestionTitle", 100, false),
     ]);
     console.log("Discussion Rooms Attributes created");
 

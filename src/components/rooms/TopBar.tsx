@@ -8,7 +8,7 @@ import {
     Globe, Lock, UserPlus, Copy, Check, Command,
     MessageSquare, Code2, Users, Settings, Maximize2, Minimize2,
     MoreHorizontal, Hash, Timer, ChevronRight, ChevronLeft, Radio,
-    XCircle, Zap, Hexagon, History, Search, Activity,
+    XCircle, Zap, Hexagon, History, Search, Activity, Brain,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api-fetch";
@@ -101,6 +101,21 @@ export default function TopBar({
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="text-[14px] font-[700] text-zinc-100 tracking-tight">{room.name}</span>
+                    {room.socraticMode && (
+                        <div
+                            title="Socratic Debugging Mode is active — helpers can only ask questions"
+                            className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25"
+                        >
+                            <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" />
+                            </span>
+                            <Brain className="w-3 h-3 text-amber-400" />
+                            <span className="text-[9px] font-[600] text-amber-400 uppercase tracking-wider">
+                                Socratic Mode
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
 

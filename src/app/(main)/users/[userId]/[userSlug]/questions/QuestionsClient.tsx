@@ -20,6 +20,7 @@ import {
     CheckCircle2,
     FileQuestion,
     Pencil,
+    GitBranch,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,7 @@ export interface QuestionItem {
     totalVotes: number;
     totalAnswers: number;
     hasAcceptedAnswer: boolean;
+    hasBranches?: boolean;
 }
 
 interface Props {
@@ -390,12 +392,17 @@ function QuestionCard({
                         <p className="mt-0.5 text-[10px] opacity-70">votes</p>
                     </div>
 
-                    <div className={cn("rounded-xl border px-3 py-2 text-center", answerColor)}>
+                    <div className={cn("relative rounded-xl border px-3 py-2 text-center", answerColor)}>
                         <div className="flex items-center justify-center gap-1">
                             {question.hasAcceptedAnswer && <CheckCircle2 className="size-3.5" />}
                             <span className="text-base font-bold leading-none">{question.totalAnswers}</span>
                         </div>
                         <p className="mt-0.5 text-[10px] opacity-70">answers</p>
+                        {question.hasBranches && (
+                            <div title="Has branch replies for different setups" className="absolute -bottom-2 -right-2 flex size-5 items-center justify-center rounded-full border border-black bg-[#a7c8b3]/10 text-[#a7c8b3]">
+                                <GitBranch className="size-3" />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -411,6 +418,11 @@ function QuestionCard({
                             <MessageCircle className="size-3" />
                             {question.totalAnswers}
                         </span>
+                        {question.hasBranches && (
+                            <span title="Has branch replies for different setups" className="flex items-center gap-1 rounded-lg border border-[#a7c8b3]/25 bg-[#a7c8b3]/10 px-2 py-1 text-xs text-[#a7c8b3]">
+                                <GitBranch className="size-3" />
+                            </span>
+                        )}
                     </div>
 
                     <Link href={`/questions/${question.$id}/${slugify(question.title)}`}>

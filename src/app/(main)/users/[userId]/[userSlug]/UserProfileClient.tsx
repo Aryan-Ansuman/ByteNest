@@ -27,6 +27,8 @@ import {
     Star,
     TrendingUp,
     Hash,
+    GitCompare,
+    Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +38,7 @@ import { avatars } from "@/models/client/config";
 import slugify from "@/utils/slugify";
 import convertDateToRelativeTime from "@/utils/relativeTime";
 import UserAvatar from "@/components/UserAvatar";
+import type { SocraticSessionSummary } from "@/lib/socratic/sessionHistory";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,15 @@ interface Vote {
     questionTitle: string;
 }
 
+interface AdrContribution {
+    $id: string;
+    questionId: string;
+    questionTitle: string;
+    optionA: string | null;
+    optionB: string | null;
+    submittedAt: string;
+}
+
 interface ProfileData {
     userId: string;
     userSlug: string;
@@ -78,12 +90,15 @@ interface ProfileData {
     totalQuestions: number;
     totalAnswers: number;
     totalVotes: number;
+    totalAdrContributions: number;
     questions: Question[];
     answers: Answer[];
     votes: Vote[];
+    adrContributions: AdrContribution[];
+    socraticSessions: SocraticSessionSummary | null;
 }
 
-type Tab = "overview" | "questions" | "answers" | "votes";
+type Tab = "overview" | "questions" | "answers" | "votes" | "adr";
 
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -91,6 +106,7 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "questions", label: "Questions", icon: <FileQuestion className="size-4" /> },
     { id: "answers", label: "Answers", icon: <MessageSquare className="size-4" /> },
     { id: "votes", label: "Votes", icon: <ThumbsUp className="size-4" /> },
+    { id: "adr", label: "ADR Contributions", icon: <GitCompare className="size-4" /> },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -179,6 +195,11 @@ export default function UserProfileClient({ profile }: { profile: ProfileData })
                     {activeTab === "votes" && (
                         <TabPanel key="votes">
                             <VotesTab votes={profile.votes} total={profile.totalVotes} />
+                        </TabPanel>
+                    )}
+                    {activeTab === "adr" && (
+                        <TabPanel key="adr">
+                            <AdrContributionsTab contributions={profile.adrContributions} total={profile.totalAdrContributions} />
                         </TabPanel>
                     )}
                 </AnimatePresence>
@@ -501,6 +522,72 @@ function OverviewTab({
                     </div>
                 </div>
             )}
+
+            {/* Socratic Debugging Mode sessions */}
+            {profile.socraticSessions && profile.socraticSessions.totalSessions > 0 && (
+                <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.03] p-5 md:col-span-2">
+                    <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-zinc-200">
+                        <Brain className="size-4 text-amber-400" />
+                        Socratic Debugging
+                    </h2>
+                    <p className="text-sm text-zinc-400">
+                        Participated in {profile.socraticSessions.totalSessions}{" "}
+                        {profile.socraticSessions.totalSessions === 1 ? "session" : "sessions"} —{" "}
+                        {profile.socraticSessions.asHelper} as helper, {profile.socraticSessions.asSeeker} as seeker.
+                        {profile.socraticSessions.savedToQnA > 0 && (
+                            <> {profile.socraticSessions.savedToQnA} root cause{" "}
+                            {profile.socraticSessions.savedToQnA === 1 ? "" : "s"} saved to Q&A.</>
+                        )}
+                    </p>
+
+                    <div className="mt-3 space-y-1.5">
+                        {profile.socraticSessions.sessions.slice(0, 5).map((s) => {
+                            const row = (
+                                <>
+                                    <span
+                                        className={cn(
+                                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                                            s.role === "seeker"
+                                                ? "bg-amber-500/10 text-amber-400"
+                                                : "bg-[#a7c8b3]/10 text-[#a7c8b3]"
+                                        )}
+                                    >
+                                        {s.role === "seeker" ? "SEEKER" : "HELPER"}
+                                    </span>
+                                    <span className="text-zinc-500">
+                                        {s.role === "seeker"
+                                            ? s.savedToQnA ? "Root cause saved as an answer" : "Root cause recorded"
+                                            : "Asked a question"}
+                                    </span>
+                                    <span className="ml-auto shrink-0 text-zinc-600">
+                                        {convertDateToRelativeTime(new Date(s.createdAt))}
+                                    </span>
+                                </>
+                            );
+
+                            const rowClasses = "flex items-center gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-1.5 text-xs";
+
+                            // Answer-saved entries don't carry the room ID
+                            // (see lib/socratic/sessionHistory.ts) and we
+                            // don't have the question's slug on hand, so
+                            // they render as a non-clickable row.
+                            return s.roomId ? (
+                                <Link
+                                    key={s.$id}
+                                    href={`/rooms/${s.roomId}`}
+                                    className={cn(rowClasses, "transition hover:border-amber-500/20 hover:bg-amber-500/[0.04]")}
+                                >
+                                    {row}
+                                </Link>
+                            ) : (
+                                <div key={s.$id} className={rowClasses}>
+                                    {row}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -680,6 +767,53 @@ function VotesTab({ votes, total }: { votes: Vote[]; total: number }) {
                                 </p>
                                 <p className="mt-0.5 text-xs text-zinc-600">
                                     {v.type} · {convertDateToRelativeTime(new Date(v.$createdAt))}
+                                </p>
+                            </div>
+                            <ChevronRight className="size-4 shrink-0 text-zinc-700 transition group-hover:text-zinc-400" />
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── ADR Contributions ─────────────────────────────────────────────────────────
+// Phase 9 — a soft signal of engineering breadth: someone who has scored a
+// dozen different technology comparisons has demonstrated deliberate
+// thinking about tradeoffs, distinct from raw answer/vote volume.
+
+function AdrContributionsTab({ contributions, total }: { contributions: AdrContribution[]; total: number }) {
+    return (
+        <div>
+            <p className="mb-4 text-sm text-zinc-500">
+                {total} comparison{total === 1 ? "" : "s"} scored
+            </p>
+
+            {contributions.length === 0 ? (
+                <EmptySlate message="No ADR comparisons scored yet" />
+            ) : (
+                <div className="space-y-2">
+                    {contributions.map((c) => (
+                        <Link
+                            key={c.$id}
+                            href={`/questions/${c.questionId}/${slugify(c.questionTitle)}`}
+                            className="group flex items-center gap-4 rounded-xl border border-white/5 bg-white/[0.025] px-4 py-3 transition hover:border-white/15 hover:bg-white/[0.04]"
+                        >
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-[#a7c8b3]/30 bg-[#a7c8b3]/10 text-[#a7c8b3]">
+                                <GitCompare className="size-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-zinc-300 transition group-hover:text-[#a7c8b3]">
+                                    {c.questionTitle}
+                                </p>
+                                <p className="mt-0.5 truncate text-xs text-zinc-600">
+                                    {c.optionA && c.optionB ? (
+                                        <>
+                                            {c.optionA} vs. {c.optionB} ·{" "}
+                                        </>
+                                    ) : null}
+                                    {convertDateToRelativeTime(new Date(c.submittedAt))}
                                 </p>
                             </div>
                             <ChevronRight className="size-4 shrink-0 text-zinc-700 transition group-hover:text-zinc-400" />

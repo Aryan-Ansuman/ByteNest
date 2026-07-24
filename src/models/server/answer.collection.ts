@@ -71,6 +71,21 @@ export default async function createAnswerCollection() {
         // time, so the answer still displays correctly if the diff is
         // later refreshed (Phase 8) and the original line shifts/vanishes.
         databases.createStringAttribute(db, answerCollection, "diffLineContext", 2000, false),
+        // ─── Branching Answer Trees ──────────────────────────────────────
+        // Decision 1: the tree lives in the answer documents themselves.
+        // Null = root answer. Non-null = $id of the parent answer this is
+        // a branch of. Never changes after creation (no re-parenting).
+        databases.createStringAttribute(db, answerCollection, "parentAnswerId", 50, false),
+        // Decision 7: free-text condition, required (enforced in POST route)
+        // whenever parentAnswerId is set. Null for root answers.
+        databases.createStringAttribute(db, answerCollection, "condition", 200, false),
+        // Decision 2: hard depth cap of 2 (root=0, child=1, grandchild=2).
+        // Stored explicitly so depth-limit checks are a single field read
+        // instead of a recursive parent-chain walk.
+        databases.createIntegerAttribute(db, answerCollection, "branchDepth", false, 0, 3, 0),
+        // Short display label for chips/tabs. Defaults to the first 100
+        // chars of `condition` when not explicitly provided (POST route).
+        databases.createStringAttribute(db, answerCollection, "branchLabel", 100, false),
     ]);
     console.log("Answer Attributes Created");
 
@@ -99,6 +114,15 @@ export default async function createAnswerCollection() {
         // Lets the nightly job efficiently find answers due for reprocessing
         // via cursor pagination ordered by staleness of the last check.
         databases.createIndex(db, answerCollection, "last_freshness_check_sort", IndexType.Key, ["lastFreshnessCheck"]),
+
+        // ─── Branching Answer Trees ──────────────────────────────────────
+        // DELETE guard: "does this answer have children?" — WHERE parentAnswerId = X
+        databases.createIndex(db, answerCollection, "parent_answer_lookup", IndexType.Key, ["parentAnswerId"]),
+        // First-render prioritization: fetch only root answers for a question
+        // via WHERE questionId = X AND parentAnswerId IS NULL.
+        databases.createIndex(db, answerCollection, "question_parent_composite", IndexType.Key, ["questionId", "parentAnswerId"]),
+        // Filtering/sorting by depth (e.g. "show only root answers").
+        databases.createIndex(db, answerCollection, "branch_depth_filter", IndexType.Key, ["branchDepth"]),
     ]);
     console.log("Answer indexes created");
 }

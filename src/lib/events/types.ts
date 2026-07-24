@@ -111,6 +111,10 @@ export type FetchPrDiffPayload = {
 
 export type RefreshPrDiffPayload = FetchPrDiffPayload;
 
+export type CheckAdrConsensusPayload = {
+  questionId: string;
+};
+
 // ─── Discriminated union ──────────────────────────────────────────────────────
 
 export type EventType =
@@ -127,7 +131,8 @@ export type EventType =
   | "AnalyzeCodeSmells"
   | "LlmSmellValidation"
   | "FetchPrDiff"
-  | "RefreshPrDiff";
+  | "RefreshPrDiff"
+  | "CheckAdrConsensus";
 
 export type EventPayloadMap = {
   QuestionDraftUpdated: QuestionDraftUpdatedPayload;
@@ -144,6 +149,7 @@ export type EventPayloadMap = {
   LlmSmellValidation: LlmSmellValidationPayload;
   FetchPrDiff: FetchPrDiffPayload;
   RefreshPrDiff: RefreshPrDiffPayload;
+  CheckAdrConsensus: CheckAdrConsensusPayload;
 };
 
 export type TypedEvent<T extends EventType = EventType> = {

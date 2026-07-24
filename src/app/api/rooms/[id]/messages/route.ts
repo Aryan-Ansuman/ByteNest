@@ -11,6 +11,7 @@ import { getAuthenticatedUserId } from "@/lib/auth";
 import { checkGlobalMessageLimit } from "@/lib/messageLimits";
 import { sanitizeMarkdownSource } from "@/lib/sanitize";
 import { requireRoomMember } from "@/lib/rooms/server";
+import { isInterrogative, getSocraticHint } from "@/lib/socratic/interrogativeCheck";
 
 const SLOW_MODE_MS: Record<string, number> = {
     off: 0,
@@ -120,7 +121,37 @@ export async function POST(
             return NextResponse.json({ error: "You are muted" }, { status: 403 });
         }
 
-        // 4. Slow mode enforcement
+        // 4. Parse + basic validation of body (moved ahead of slow mode so
+        // the Socratic guard below — a higher-priority constraint than
+        // timing — can inspect it first)
+        const { body, type = "text", language, replyToId } = await req.json();
+
+        if (!body?.trim()) {
+            return NextResponse.json({ error: "Empty message" }, { status: 400 });
+        }
+
+        if (body.length > 4000) {
+            return NextResponse.json({ error: "Message too long" }, { status: 400 });
+        }
+
+        // 5. Socratic mode enforcement — helpers (anyone but the
+        // designated seeker) must send interrogative messages only.
+        // Runs after membership/mute checks (so a muted user still gets
+        // the mute error) and before slow mode (a higher-priority
+        // constraint than timing).
+        const isSocraticHelper = room.socraticMode === true && userId !== room.socraticSeekerId;
+
+        if (isSocraticHelper && !isInterrogative(body, type)) {
+            return NextResponse.json(
+                {
+                    error: "Socratic mode active — helpers must ask questions only",
+                    hint: getSocraticHint(body),
+                },
+                { status: 422 }
+            );
+        }
+
+        // 6. Slow mode enforcement
         const slowMs = SLOW_MODE_MS[room.slowMode] ?? 0;
         if (slowMs > 0) {
             const since = new Date(Date.now() - slowMs).toISOString();
@@ -145,21 +176,15 @@ export async function POST(
             }
         }
 
-        // 5. Parse + sanitize body
-        const { body, type = "text", language, replyToId } = await req.json();
-
-        if (!body?.trim()) {
-            return NextResponse.json({ error: "Empty message" }, { status: 400 });
-        }
-
-        if (body.length > 4000) {
-            return NextResponse.json({ error: "Message too long" }, { status: 400 });
-        }
-
         // Code messages are not sanitized (they need raw formatting)
         const cleanBody = type === "code" ? body : sanitizeMarkdownSource(body);
 
-        // 6. Write message + update lastActivityAt atomically
+        // Helper messages during Socratic mode are always tagged "question",
+        // even if the client sent a different type — this guards against a
+        // client-side misclassification bug.
+        const resolvedType = isSocraticHelper ? "question" : type;
+
+        // 7. Write message + update lastActivityAt atomically
         const now = new Date().toISOString();
 
         const [message] = await Promise.all([
@@ -169,7 +194,7 @@ export async function POST(
                 authorName: member.displayName,
                 authorColor: member.avatarColor,
                 body: cleanBody,
-                type,
+                type: resolvedType,
                 language: language ?? null,
                 replyToId: replyToId ?? null,
                 reactions: JSON.stringify({}),

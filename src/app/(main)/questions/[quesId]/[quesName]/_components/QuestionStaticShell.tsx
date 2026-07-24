@@ -31,6 +31,7 @@ import { useAuthStore } from "@/store/Auth";
 import { formatCollectiveName, QuestionDetailProvider } from "./QuestionDetailContext";
 import QuestionHero from "./QuestionHero";
 import PrQuestionView from "./PrQuestionView";
+import AdrQuestionView from "./AdrQuestionView";
 import QuestionSidebar from "./QuestionSidebar";
 import DynamicAnswerSection from "./DynamicAnswerSection";
 import { AnswersSkeleton } from "./ContentTabs";
@@ -52,8 +53,8 @@ interface StaticQuestion {
     systemTags?: string[] | null;
     smellAnalysisStatus?: "pending" | "processing" | "complete" | "failed" | "skipped" | null;
     smellEvidence?: string | null;
-    // ─── PR-Linked Q&A (Phase 4/5) ────────────────────────────────────
-    questionType?: "standard" | "pr_linked";
+    // ─── PR-Linked Q&A (Phase 4/5) & ADR (Phase 3+) ───────────────
+    questionType?: "standard" | "pr_linked" | "adr";
     prUrl?: string | null;
     prRepoOwner?: string | null;
     prRepoName?: string | null;
@@ -68,6 +69,12 @@ interface StaticQuestion {
     prMergedAt?: string | null;
     prClosedAt?: string | null;
     activityAt?: string | null;
+    optionA?: string | null;
+    optionB?: string | null;
+    optionADescription?: string | null;
+    optionBDescription?: string | null;
+    adrDimensions?: string | null;
+    adrStatus?: "open" | "concluded" | null;
 }
 
 interface StaticAuthor {
@@ -145,6 +152,8 @@ export default function QuestionStaticShell({
                         {/* Static: question body, tags, author block, attachment */}
                         {question.questionType === "pr_linked" ? (
                             <PrQuestionView />
+                        ) : question.questionType === "adr" ? (
+                            <AdrQuestionView />
                         ) : (
                             <QuestionHero />
                         )}

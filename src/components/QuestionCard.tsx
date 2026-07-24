@@ -3,6 +3,7 @@
 import React from "react";
 import { BorderBeam } from "./magicui/border-beam";
 import Link from "next/link";
+import { GitBranch } from "lucide-react";
 import { Models } from "appwrite";
 import slugify from "@/utils/slugify";
 import { avatars } from "@/models/client/config";
@@ -27,7 +28,15 @@ const QuestionCard = ({ ques }: { ques: Models.Document }) => {
             <BorderBeam size={height} duration={12} delay={9} />
             <div className="relative shrink-0 text-sm sm:text-right">
                 <p>{ques.totalVotes} votes</p>
-                <p>{ques.totalAnswers} answers</p>
+                <p className="flex items-center gap-1 sm:justify-end">
+                    {ques.totalAnswers} answers
+                    {ques.hasBranches && (
+                        <GitBranch
+                            className="size-3.5 text-[#a7c8b3]"
+                            aria-label="Has branch replies for different setups"
+                        />
+                    )}
+                </p>
             </div>
             <div className="relative w-full">
                 <Link

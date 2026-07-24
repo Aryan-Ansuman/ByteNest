@@ -2,15 +2,31 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { RoomMessage } from "@/types/rooms";
-import { X, Clock, AtSign, Hash, Smile, ArrowUp } from "lucide-react";
+import { X, Clock, AtSign, Hash, Smile, ArrowUp, Brain, HelpCircle, PartyPopper, Loader2 } from "lucide-react";
 import { useRoomStore } from "@/store/roomStore";
 import { useTypingIndicator } from "@/hooks/useTypingIndicator";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-fetch";
+import { toast } from "sonner";
+import slugify from "@/utils/slugify";
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    isInterrogative,
+    getSocraticHint,
+    isFoundItTrigger,
+} from "@/lib/socratic/interrogativeCheck";
 
 interface Props {
     roomId: string;
@@ -53,12 +69,27 @@ export default function MessageInput({
     const [mentionIdx, setMentionIdx]       = useState(0);
     const [mentionAnchorPos, setMentionAnchorPos] = useState<{ top: number; left: number } | null>(null);
 
+    // Socratic Debugging Mode
+    const [messageIsInterrogative, setMessageIsInterrogative] = useState(true);
+    const [showFoundItButton, setShowFoundItButton]           = useState(false);
+    const [showRootCauseModal, setShowRootCauseModal]         = useState(false);
+    const [rootCauseText, setRootCauseText]                   = useState("");
+    const [submittingRootCause, setSubmittingRootCause]       = useState(false);
+
     const textareaRef  = useRef<HTMLTextAreaElement>(null);
     const cooldownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const { startTyping, stopTyping } = useTypingIndicator(roomId);
     const members = useRoomStore((s) => s.members);
     const currentMember = useRoomStore((s) => s.currentMember);
+    const room = useRoomStore((s) => s.room);
+
+    // Derived from the room document — updates automatically via Realtime,
+    // no props needed since this component already reads directly from the
+    // store elsewhere (members, currentMember).
+    const socraticMode = room?.socraticMode ?? false;
+    const isSeeker = socraticMode && room?.socraticSeekerId === currentMember?.userId;
+    const isSocraticHelper = socraticMode && !isSeeker;
 
     // Filter mention candidates — online members except self
     const mentionCandidates = mentionQuery !== null
@@ -110,6 +141,16 @@ export default function MessageInput({
         const q = getMentionQuery(val, cursor);
         setMentionQuery(q);
         setMentionIdx(0);
+
+        // Socratic mode: real-time interrogative check for helpers
+        if (isSocraticHelper) {
+            setMessageIsInterrogative(val.trim().length === 0 ? true : isInterrogative(val, "text"));
+        }
+
+        // Socratic mode: "I found it" detection for the seeker
+        if (isSeeker) {
+            setShowFoundItButton(isFoundItTrigger(val));
+        }
     }
 
     function completeMention(displayName: string) {
@@ -146,6 +187,7 @@ export default function MessageInput({
         if (disabled) return;
         const body = value.trim();
         if (!body || sending || cooldown > 0) return;
+        if (isSocraticHelper && !isInterrogative(body, "text")) return;
 
         setSending(true);
         stopTyping();
@@ -153,12 +195,60 @@ export default function MessageInput({
             await onSend(body, replyTo?.$id);
             setValue("");
             onClearReply();
+            setMessageIsInterrogative(true);
+            setShowFoundItButton(false);
             if (slowModeSeconds > 0) startCooldown(slowModeSeconds);
         } catch (err: any) {
             if (err?.retryAfter) startCooldown(err.retryAfter);
         } finally {
             setSending(false);
             textareaRef.current?.focus();
+        }
+    }
+
+    function openRootCauseModal() {
+        setRootCauseText("");
+        setShowRootCauseModal(true);
+    }
+
+    function closeRootCauseModal() {
+        setShowRootCauseModal(false);
+        setRootCauseText("");
+    }
+
+    async function submitRootCause() {
+        const trimmed = rootCauseText.trim();
+        if (trimmed.length < 20 || submittingRootCause) return;
+
+        setSubmittingRootCause(true);
+        try {
+            const result = await apiFetch<{ ok: boolean; answerId: string | null }>(
+                `/api/rooms/${roomId}/root-cause`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({ rootCause: trimmed }),
+                }
+            );
+
+            setValue("");
+            setShowFoundItButton(false);
+            closeRootCauseModal();
+            toast.success("Root cause saved! Great debugging session 🎉");
+
+            if (result.answerId && room?.linkedQuestionId) {
+                const slug = slugify(room.linkedQuestionTitle ?? "answer");
+                const url = `/questions/${room.linkedQuestionId}/${slug}#answer-${result.answerId}`;
+                toast.success("View your answer →", {
+                    action: {
+                        label: "Open",
+                        onClick: () => window.open(url, "_blank"),
+                    },
+                });
+            }
+        } catch (err: any) {
+            toast.error(err?.message ?? "Failed to submit root cause");
+        } finally {
+            setSubmittingRootCause(false);
         }
     }
 
@@ -210,6 +300,17 @@ export default function MessageInput({
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
+                </div>
+            )}
+
+            {/* Socratic Mode banner — persistent, not dismissible, helpers only */}
+            {isSocraticHelper && (
+                <div
+                    title="While Socratic Debugging Mode is active, helpers can only send interrogative messages — the seeker works out the answer themselves."
+                    className="flex items-center gap-1.5 w-fit px-2.5 py-1 mb-2 rounded-full bg-amber-500/10 border border-amber-500/25 text-[11px] font-medium text-amber-300"
+                >
+                    <Brain className="w-3 h-3" />
+                    🔍 Socratic Mode — ask questions only
                 </div>
             )}
 
@@ -320,21 +421,57 @@ export default function MessageInput({
                             {value.length}/{MAX_CHARS}
                         </span>
 
-                        <button
-                            type="button"
-                            onClick={submit}
-                            disabled={!value.trim() || sending || cooldown > 0 || disabled}
-                            className={cn(
-                                "shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5",
-                                value.trim() && !sending && cooldown === 0
-                                    ? "bg-[#a7c8b3] text-[#08100b] hover:bg-white active:scale-95 shadow-[0_0_10px_rgba(167,200,179,0.3)]"
-                                    : "bg-white/[0.06] text-tx-disabled cursor-not-allowed"
-                            )}
-                        >
-                            <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
-                        </button>
+                        {isSeeker && showFoundItButton ? (
+                            <button
+                                type="button"
+                                onClick={openRootCauseModal}
+                                title="Click to share your root cause and end the session."
+                                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-[#a7c8b3] text-[#08100b] hover:bg-white active:scale-95 transition-all duration-150 hover:-translate-y-0.5 shadow-[0_0_12px_rgba(167,200,179,0.5)] animate-pulse"
+                            >
+                                <PartyPopper className="w-3.5 h-3.5" />
+                                I Found It!
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={submit}
+                                disabled={
+                                    !value.trim() ||
+                                    sending ||
+                                    cooldown > 0 ||
+                                    disabled ||
+                                    (isSocraticHelper && !messageIsInterrogative)
+                                }
+                                title={
+                                    isSocraticHelper && value.trim() && !messageIsInterrogative
+                                        ? "Socratic mode — ask a question, don't give an answer"
+                                        : undefined
+                                }
+                                className={cn(
+                                    "shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all duration-150 hover:-translate-y-0.5",
+                                    isSocraticHelper && value.trim() && !messageIsInterrogative
+                                        ? "bg-amber-500/15 text-amber-400 cursor-not-allowed"
+                                        : value.trim() && !sending && cooldown === 0
+                                            ? "bg-[#a7c8b3] text-[#08100b] hover:bg-white active:scale-95 shadow-[0_0_10px_rgba(167,200,179,0.3)]"
+                                            : "bg-white/[0.06] text-tx-disabled cursor-not-allowed"
+                                )}
+                            >
+                                {isSocraticHelper && value.trim() && !messageIsInterrogative ? (
+                                    <HelpCircle className="w-4 h-4" strokeWidth={2.5} />
+                                ) : (
+                                    <ArrowUp className="w-4 h-4" strokeWidth={2.5} />
+                                )}
+                            </button>
+                        )}
                     </div>
                 </div>
+
+                {/* Socratic mode inline hint */}
+                {isSocraticHelper && value.trim().length > 0 && !messageIsInterrogative && (
+                    <p className="px-4 pb-2 -mt-1 text-[11px] text-amber-400">
+                        Helpers must ask questions. Try: 'Have you checked…?' — {getSocraticHint(value)}
+                    </p>
+                )}
 
                 {/* Slow mode overlay */}
                 {cooldown > 0 && (
@@ -344,6 +481,58 @@ export default function MessageInput({
                     </div>
                 )}
             </div>
+
+            {/* Root cause modal — seeker submits their finding, ends the session */}
+            <Dialog open={showRootCauseModal} onOpenChange={(open) => { if (!open) closeRootCauseModal(); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>🎉 You Found It!</DialogTitle>
+                        <DialogDescription>
+                            What was the root cause? Share your finding with the room and save it as an answer.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-1.5">
+                        <textarea
+                            value={rootCauseText}
+                            onChange={(e) => {
+                                if (e.target.value.length <= 2000) setRootCauseText(e.target.value);
+                            }}
+                            placeholder="It turned out the cache was never invalidated after..."
+                            rows={5}
+                            className="w-full bg-black/30 border border-white/5 rounded-xl px-3.5 py-2.5 text-sm text-tx placeholder-zinc-600 resize-none outline-none focus:border-[#a7c8b3]/40 transition-colors"
+                        />
+                        <div className="flex items-center justify-between text-[11px]">
+                            <span className={rootCauseText.trim().length < 20 ? "text-amber-500" : "text-tx-disabled"}>
+                                {rootCauseText.trim().length < 20
+                                    ? `${20 - rootCauseText.trim().length} more characters needed`
+                                    : "Looks good"}
+                            </span>
+                            <span className="text-tx-disabled tabular-nums">{rootCauseText.length}/2000</span>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <button
+                            type="button"
+                            onClick={closeRootCauseModal}
+                            disabled={submittingRootCause}
+                            className="px-3.5 py-2 rounded-xl border border-zinc-700 text-sm text-tx-secondary hover:bg-surface-hover transition-colors font-medium disabled:opacity-50"
+                        >
+                            Not yet, go back
+                        </button>
+                        <button
+                            type="button"
+                            onClick={submitRootCause}
+                            disabled={rootCauseText.trim().length < 20 || submittingRootCause}
+                            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#a7c8b3] text-[#08100b] text-sm font-semibold hover:bg-white active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {submittingRootCause && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                            Submit Root Cause
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

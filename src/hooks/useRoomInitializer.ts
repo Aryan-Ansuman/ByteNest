@@ -9,7 +9,6 @@ import type { RoomMessage, RoomMember, DiscussionRoom, CodeSession } from "@/typ
  * Uses a ref guard to prevent double-initialization in React strict mode.
  */
 export function useRoomInitializer(roomId: string, inviteToken?: string) {
-    const store = useRoomStore();
     const initializedRef = useRef(false);
     const jwtRef = useRef<string>("");
 
@@ -20,8 +19,8 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
         let aborted = false;
 
         async function initialize() {
-            store.setInitializing(true);
-            store.setInitError(null);
+            useRoomStore.getState().setInitializing(true);
+            useRoomStore.getState().setInitError(null);
 
             try {
                 // Ensure we have a JWT for the cleanup function later
@@ -42,7 +41,7 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
                 );
 
                 if (aborted) return;
-                store.setCurrentMember(joinData.member);
+                useRoomStore.getState().setCurrentMember(joinData.member);
 
                 // 2. Parallel fetch: room data, messages, members
                 const [roomData, messagesData, membersData] = await Promise.all([
@@ -55,13 +54,13 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
 
                 if (aborted) return;
 
-                store.setRoom({
+                useRoomStore.getState().setRoom({
                     ...roomData.room,
                     messageCount: roomData.messageCount ?? roomData.room.messageCount,
                 });
-                store.setMessages(messagesData.messages);
+                useRoomStore.getState().setMessages(messagesData.messages);
                 useRoomStore.getState().setHasMore(messagesData.hasMore);
-                store.setMembers(membersData.members);
+                useRoomStore.getState().setMembers(membersData.members);
 
                 // 3. Fetch code session if active
                 if (roomData.room.activeCodeSessionId) {
@@ -69,21 +68,21 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
                         const sessionData = await apiFetch<{ session: CodeSession }>(
                             `/api/rooms/${roomId}/session/${roomData.room.activeCodeSessionId}`
                         );
-                        if (!aborted) store.setCodeSession(sessionData.session);
+                        if (!aborted) useRoomStore.getState().setCodeSession(sessionData.session);
                     } catch {
                         // Session might have ended between fetches — non-fatal
                     }
                 }
 
-                if (!aborted) store.setInitialized(true);
+                if (!aborted) useRoomStore.getState().setInitialized(true);
             } catch (err) {
                 if (!aborted) {
-                    store.setInitError(
+                    useRoomStore.getState().setInitError(
                         err instanceof Error ? err.message : "Failed to initialize room"
                     );
                 }
             } finally {
-                if (!aborted) store.setInitializing(false);
+                if (!aborted) useRoomStore.getState().setInitializing(false);
             }
         }
 
@@ -111,5 +110,5 @@ export function useRoomInitializer(roomId: string, inviteToken?: string) {
             useRoomStore.getState().resetStore();
             initializedRef.current = false;
         };
-    }, [roomId, inviteToken, store]);
+    }, [roomId, inviteToken]);
 }

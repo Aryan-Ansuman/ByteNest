@@ -7,6 +7,8 @@ import VersionContextEditor, { EMPTY_VERSION_CONTEXT, type VersionContextValue }
 import { cn } from "@/lib/utils";
 import { type AnswerSort, useQuestionDetail } from "./QuestionDetailContext";
 import AnswerCard from "./AnswerCard";
+import AnswerTreeNode from "./AnswerTreeNode";
+import SetupNavigator from "./SetupNavigator";
 import "@uiw/react-md-editor/markdown-editor.css";
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false });
@@ -101,10 +103,17 @@ function AnswersTab({
         answerSort,
         setAnswerSort,
         answerPagination,
+        answerTree,
+        useTreeMode,
+        navigatorSelections,
     } = useQuestionDetail();
     const [draft, setDraft] = React.useState("");
     const [versionContext, setVersionContext] = React.useState<VersionContextValue>(EMPTY_VERSION_CONTEXT);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+    const isAdr = question.questionType === "adr";
+    const adrPlaceholder = `Share your experience with ${question.optionA || "Option A"} or ${question.optionB || "Option B"} in your specific context.`;
+
 
     const questionTags = React.useMemo(
         () => (Array.isArray(question.tags) ? question.tags.filter(Boolean) : []),
@@ -133,6 +142,8 @@ function AnswersTab({
 
     return (
         <div className="space-y-6">
+            <SetupNavigator />
+
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-bold text-zinc-100">{total} Answers</h3>
                 <div className="flex flex-wrap items-center gap-3">
@@ -200,7 +211,7 @@ function AnswersTab({
                                 overflow: "hidden",
                             }}
                             textareaProps={{
-                                placeholder: "Write your answer... Markdown supported.",
+                                placeholder: isAdr ? adrPlaceholder : "Write your answer... Markdown supported.",
                                 disabled: isSubmitting || isDeletingQuestion,
                             }}
                         />
@@ -234,12 +245,31 @@ function AnswersTab({
             )}
 
             <div className="space-y-6">
-                {bestAnswer && <AnswerCard answer={bestAnswer} variant="best" />}
-                {activeCommunityAnswers.map((answer) => (
-                    <AnswerCard key={answer.$id} answer={answer} />
-                ))}
+                {useTreeMode ? (
+                    // ─── Branching Answer Trees — Phase 4 ────────────────
+                    // Root answers with their branch subtrees. Best-answer
+                    // floating and freshness staleness bucketing (below)
+                    // are flat-mode-only concerns for now; the accepted
+                    // node — root or branch — still renders inline with
+                    // its accepted checkmark via AnswerTreeNode itself.
+                    answerTree.map((root) => (
+                        <AnswerTreeNode
+                            key={root.$id}
+                            answer={root}
+                            depth={0}
+                            isNavigatorActive={navigatorSelections.size > 0}
+                        />
+                    ))
+                ) : (
+                    <>
+                        {bestAnswer && <AnswerCard answer={bestAnswer} variant="best" />}
+                        {activeCommunityAnswers.map((answer) => (
+                            <AnswerCard key={answer.$id} answer={answer} />
+                        ))}
+                    </>
+                )}
 
-                {staleCommunityAnswers.length > 0 && (
+                {!useTreeMode && staleCommunityAnswers.length > 0 && (
                     <div className="rounded-xl border border-white/[0.05] bg-white/[0.02]">
                         {!staleExpanded ? (
                             <button
@@ -292,7 +322,7 @@ function AnswersTab({
                             No answers yet
                         </h4>
                         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-500">
-                            Share what worked, explain the tradeoffs, or ask for one missing detail.
+                            {isAdr ? adrPlaceholder : "Share what worked, explain the tradeoffs, or ask for one missing detail."}
                         </p>
                         <button
                             type="button"

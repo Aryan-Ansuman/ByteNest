@@ -8,6 +8,8 @@ import {
     voteCollection,
     commentCollection,
     prQuestionMetadataCollection,
+    adrQuestionMetadataCollection,
+    ADR_DIMENSIONS,
 } from "@/models/name";
 import { databases, storage, users } from "@/models/server/config";
 import { UserPrefs } from "@/store/Auth";
@@ -154,6 +156,12 @@ export async function POST(request: NextRequest) {
             prBaseRef,
             prHeadRef,
             prAuthorGithubHandle,
+            // ─── ADR Questions (Phase 3) ──────────────────────────────
+            optionA,
+            optionB,
+            optionADescription,
+            optionBDescription,
+            adrDimensions,
         } = await request.json();
 
         if (authorId !== requesterId) {
@@ -161,6 +169,7 @@ export async function POST(request: NextRequest) {
         }
 
         const isPrLinked = questionType === "pr_linked";
+        const isAdr = questionType === "adr";
 
         // Sanitize user-supplied markdown content before persisting
         const sanitizedTitle   = sanitizeTitleSource(title ?? "").slice(0, 100);
@@ -191,6 +200,46 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        let sanitizedAdrDimensions: string[] = [];
+        if (isAdr) {
+            const sanitizedOptionA = sanitizeTitleSource(optionA ?? "").slice(0, 100);
+            const sanitizedOptionB = sanitizeTitleSource(optionB ?? "").slice(0, 100);
+            if (sanitizedOptionA.length < 2 || sanitizedOptionB.length < 2) {
+                return NextResponse.json(
+                    { error: "Both option names are required" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+
+            // adrDimensions is a *required* attribute on adr_question_metadata —
+            // without this check a malformed/missing value makes the sidecar
+            // createDocument call below fail (silently, wrapped in try/catch),
+            // leaving an isAdr:true question with no metadata at all.
+            let parsedDimensions: unknown;
+            try {
+                parsedDimensions = JSON.parse(adrDimensions ?? "[]");
+            } catch {
+                return NextResponse.json(
+                    { error: "adrDimensions must be a JSON array" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+            if (
+                !Array.isArray(parsedDimensions) ||
+                parsedDimensions.length < 3 ||
+                parsedDimensions.length > 8 ||
+                !parsedDimensions.every(
+                    (d) => typeof d === "string" && (ADR_DIMENSIONS as readonly string[]).includes(d)
+                )
+            ) {
+                return NextResponse.json(
+                    { error: "Select 3–8 valid dimensions for the ADR comparison" },
+                    { status: 400, headers: rlHeaders }
+                );
+            }
+            sanitizedAdrDimensions = parsedDimensions as string[];
+        }
+
         const docData: Record<string, unknown> = {
             title: sanitizedTitle,
             content: sanitizedContent,
@@ -208,6 +257,7 @@ export async function POST(request: NextRequest) {
                 ? { testCode, testLanguage, testFramework }
                 : {}),
             isPr: isPrLinked,
+            isAdr: isAdr,
         };
         if (attachmentId) docData.attachmentId = attachmentId;
 
@@ -243,6 +293,32 @@ export async function POST(request: NextRequest) {
                 console.error(`[question/POST] Failed to create sidecar metadata for PR question ${response.$id}:`, err);
                 // The main question is already created, so we shouldn't throw 500.
                 // It will be broken/orphaned but the UI will show it gracefully if fields are missing.
+            }
+        }
+
+        if (isAdr) {
+            try {
+                await databases.createDocument(
+                    db,
+                    adrQuestionMetadataCollection,
+                    response.$id,
+                    {
+                        questionId: response.$id,
+                        optionA: sanitizeTitleSource(optionA ?? "").slice(0, 100),
+                        optionB: sanitizeTitleSource(optionB ?? "").slice(0, 100),
+                        optionADescription: optionADescription
+                            ? sanitizeMarkdownSource(optionADescription).slice(0, 500)
+                            : null,
+                        optionBDescription: optionBDescription
+                            ? sanitizeMarkdownSource(optionBDescription).slice(0, 500)
+                            : null,
+                        adrDimensions: JSON.stringify(sanitizedAdrDimensions),
+                        adrStatus: "open",
+                        adrSubmissionCount: 0,
+                    }
+                );
+            } catch (err) {
+                console.error(`[question/POST] Failed to create sidecar metadata for ADR question ${response.$id}:`, err);
             }
         }
 

@@ -47,8 +47,9 @@ function extractPrimaryFields<T extends EventType>(
     // the SAME content should coalesce.
     AnalyzeCodeSmells:     ["questionId", "contentHash"],
     LlmSmellValidation:    ["questionId", "contentHash"],
-    FetchPrDiff:           ["questionId"],
-    RefreshPrDiff:         ["questionId"],
+    FetchPrDiff:           ["questionId", "prNumber"],
+    RefreshPrDiff:         ["questionId", "prNumber"],
+    CheckAdrConsensus:     ["questionId"],
   };
 
   const fields = fieldMap[eventType];

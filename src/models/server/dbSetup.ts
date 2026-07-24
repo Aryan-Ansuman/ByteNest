@@ -32,6 +32,7 @@ import createFreshnessNotificationsCollection from "./freshness-notifications.co
 import createFreshnessSnapshotsCollection from "./freshness-snapshots.collection";
 import createNotificationsCollection from "./notifications.collection";
 import { databases } from "./config";
+import { IndexType } from "node-appwrite";
 import { freshnessNotificationsCollection, freshnessSnapshotsCollection, notificationsCollection, smellFeedbackCollection, smellAccuracySnapshotsCollection } from "../name";
 import createSmellFeedbackCollection from "./smell-feedback.collection";
 import createSmellAccuracySnapshotsCollection from "./smell-accuracy-snapshots.collection";
@@ -40,7 +41,9 @@ import { githubWebhookRegistrationsCollection, prQuestionMetadataCollection, pro
 import createGithubWebhookRegistrationsCollection from "./github-webhook-registrations.collection";
 import createPrQuestionMetadataCollection from "./pr-question-metadata.collection";
 import createProcessedWebhookEventsCollection from "./processed-webhook-events.collection";
-
+import { adrQuestionMetadataCollection, adrScoreSubmissionsCollection } from "../name";
+import createAdrQuestionMetadataCollection from "./adr-question-metadata.collection";
+import createAdrScoreSubmissionsCollection from "./adr-score-submissions.collection";
 export default async function getOrCreateDB(){
   try {
     await databases.get(db)
@@ -154,6 +157,37 @@ export default async function getOrCreateDB(){
       console.log(`Creating collection ${webhookSecretStateCollection}`);
       await createWebhookSecretStateCollection();
     }
+
+    // N+6. ADR Questions — adr_question_metadata
+    try {
+      await databases.getCollection(db, adrQuestionMetadataCollection);
+      // Collection already exists — ensure newer indexes (added after initial
+      // ship) are present too, since collection creation is skipped here.
+      await Promise.all(
+        [
+          { key: "option_a_fulltext", type: IndexType.Fulltext, attrs: ["optionA"] },
+          { key: "option_b_fulltext", type: IndexType.Fulltext, attrs: ["optionB"] },
+        ].map(async ({ key, type, attrs }) => {
+          try {
+            await databases.getIndex(db, adrQuestionMetadataCollection, key);
+          } catch {
+            console.log(`Creating index ${key} on ${adrQuestionMetadataCollection}`);
+            await databases.createIndex(db, adrQuestionMetadataCollection, key, type, attrs);
+          }
+        })
+      );
+    } catch (error) {
+      console.log(`Creating collection ${adrQuestionMetadataCollection}`);
+      await createAdrQuestionMetadataCollection();
+    }
+
+    // N+7. ADR Questions — adr_score_submissions
+    try {
+      await databases.getCollection(db, adrScoreSubmissionsCollection);
+    } catch (error) {
+      console.log(`Creating collection ${adrScoreSubmissionsCollection}`);
+      await createAdrScoreSubmissionsCollection();
+    }
   } catch (error) {
     try {
       await databases.create(db, db)
@@ -204,6 +238,8 @@ export default async function getOrCreateDB(){
         createProcessedWebhookEventsCollection(),
         createGithubWebhookRegistrationsCollection(),
         createWebhookSecretStateCollection(),
+        createAdrQuestionMetadataCollection(),
+        createAdrScoreSubmissionsCollection(),
       ])
       console.log("Collection created")
       console.log("Database connected")

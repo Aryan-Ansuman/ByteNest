@@ -35,6 +35,12 @@ interface AnswerDoc {
     // ─── PR-Linked Q&A (Phase 6) ──────────────────────────────────────
     diffLineRef?: string | null;
     diffLineContext?: string | null;
+    // ─── Branching Answer Trees (Phase 3) ─────────────────────────────
+    parentAnswerId?: string | null;
+    condition?: string | null;
+    branchDepth?: number;
+    branchLabel?: string | null;
+    children?: any[];
 }
 
 interface CommentDoc {
